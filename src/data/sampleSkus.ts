@@ -1,0 +1,39 @@
+import type { SkuItem } from '../types';
+import { hydrateSku } from '../utils/calculations';
+
+export const sampleSkus: SkuItem[] = [
+  hydrateSku({
+    id: 'sample-1',
+    sku: 'SKU-1001',
+    productName: '收纳盒 30L',
+    englishName: 'Storage Box 30L',
+    manufacturerName: '宁波家居用品厂',
+    shopName: '亚马逊美国店',
+    buyerName: '张三',
+    purchasePrice: 18.5,
+    cartonLengthCm: 60,
+    cartonWidthCm: 45,
+    cartonHeightCm: 50,
+    unitsPerCarton: 12,
+    totalQuantity: 0,
+    totalCbm: 0,
+    note: '示例数据，可删除',
+  }),
+  hydrateSku({
+    id: 'sample-2',
+    sku: 'SKU-2001',
+    productName: '厨房置物架',
+    englishName: 'Kitchen Rack',
+    manufacturerName: '义乌厨具工厂',
+    shopName: 'TikTok 英国店',
+    buyerName: '李四',
+    purchasePrice: 26,
+    cartonLengthCm: 72,
+    cartonWidthCm: 38,
+    cartonHeightCm: 42,
+    unitsPerCarton: 8,
+    totalQuantity: 0,
+    totalCbm: 0,
+    note: '示例数据，可删除',
+  }),
+];

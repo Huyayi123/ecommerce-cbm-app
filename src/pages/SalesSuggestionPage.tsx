@@ -1,0 +1,155 @@
+import type { ChangeEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from '../types';
+import { parseSalesFile } from '../utils/fileParsers';
+import { round } from '../utils/number';
+
+type Props = {
+  skuItems: SkuItem[];
+  purchaseRecords: PurchaseRecord[];
+  onSendToCalculator: (rows: PurchaseRow[], fileName: string) => void;
+  canEditData?: boolean;
+  onSuggestionsSave?: (rows: SalesSuggestionRow[]) => void;
+};
+
+export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, onSuggestionsSave }: Props) {
+  const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
+  const [fileName, setFileName] = useState('');
+  const [stockMonths, setStockMonths] = useState(2);
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const rows = await parseSalesFile(file);
+    setSalesRows(rows);
+    setFileName(file.name);
+    event.target.value = '';
+  }
+
+  const suggestions = useMemo<SalesSuggestionRow[]>(() => {
+    const skuMap = new Map(skuItems.map((item) => [item.sku.trim().toUpperCase(), item]));
+    const inTransitBySku = new Map<string, number>();
+
+    for (const record of purchaseRecords) {
+      if (record.status !== 'in_transit') continue;
+      const key = record.sku.trim().toUpperCase();
+      inTransitBySku.set(key, (inTransitBySku.get(key) ?? 0) + record.purchaseQuantity);
+    }
+
+    return salesRows.map((row) => {
+      const key = row.sku.trim().toUpperCase();
+      const skuItem = skuMap.get(key);
+      const monthlySales = row.purchaseQuantity ?? 0;
+      const targetQuantity = round(monthlySales * stockMonths, 2);
+      const inTransitQuantity = inTransitBySku.get(key) ?? 0;
+      const suggestedQuantity = Math.max(round(targetQuantity - inTransitQuantity, 2), 0);
+      const estimatedCartons =
+        skuItem && skuItem.unitsPerCarton > 0 ? round(suggestedQuantity / skuItem.unitsPerCarton, 2) : null;
+      const estimatedCbm =
+        skuItem && estimatedCartons !== null && skuItem.cartonCbm > 0
+          ? round(estimatedCartons * skuItem.cartonCbm, 4)
+          : skuItem && skuItem.unitCbm > 0
+            ? round(suggestedQuantity * skuItem.unitCbm, 4)
+            : null;
+      const messages: string[] = [];
+
+      if (!row.sku.trim()) messages.push('SKU 为空');
+      if (!skuItem && row.sku.trim()) messages.push('未录入 SKU 资料');
+
+      return {
+        rowId: row.rowId,
+        sku: row.sku,
+        productName: skuItem?.productName ?? '',
+        shopName: skuItem?.shopName ?? '',
+        manufacturerName: skuItem?.manufacturerName ?? '',
+        buyerName: skuItem?.buyerName ?? '',
+        monthlySales,
+        stockMonths,
+        targetQuantity,
+        inTransitQuantity,
+        suggestedQuantity,
+        unitsPerCarton: skuItem?.unitsPerCarton ?? null,
+        estimatedCartons,
+        estimatedCbm,
+        messages,
+      };
+    });
+  }, [purchaseRecords, salesRows, skuItems, stockMonths]);
+
+  useEffect(() => {
+    if (salesRows.length > 0) onSuggestionsSave?.(suggestions);
+  }, [onSuggestionsSave, salesRows.length, suggestions]);
+
+  function sendToCalculator() {
+    const rows = suggestions
+      .filter((row) => row.suggestedQuantity > 0 && row.messages.length === 0)
+      .map((row, index) => ({
+        rowId: `${Date.now()}-suggestion-${index}`,
+        rowNumber: index + 2,
+        sku: row.sku,
+        purchaseQuantity: row.suggestedQuantity,
+        raw: { source: 'sales-suggestion', monthlySales: row.monthlySales, stockMonths: row.stockMonths },
+      }));
+
+    if (canEditData && rows.length > 0) onSendToCalculator(rows, fileName ? `采购建议：${fileName}` : '采购建议');
+  }
+
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <div>
+          <h2>月销量生成采购建议</h2>
+          <p>根据月销量、备货月数和当前海运在途库存计算建议采购数量。</p>
+        </div>
+        <div className="export-actions">
+          <label className="file-button">
+            上传月销量
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} />
+          </label>
+          <button className="primary" type="button" onClick={sendToCalculator} disabled={!canEditData || suggestions.every((row) => row.suggestedQuantity <= 0 || row.messages.length > 0)}>
+            发送到装柜计算
+          </button>
+        </div>
+      </div>
+
+      <div className="suggestion-controls">
+        <label>
+          备货月数
+          <input type="number" min="0" step="0.5" value={stockMonths} onChange={(event) => setStockMonths(Number(event.target.value))} />
+        </label>
+        <span>{fileName ? `当前文件：${fileName}` : '表头支持 SKU、月销量、销售数量、销量、salesQuantity'}</span>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th><th>产品名称</th><th>店铺</th><th>厂家名</th><th>采购人</th><th>月销量</th><th>备货月数</th><th>目标备货数量</th><th>海运在途数量</th><th>建议采购数量</th><th>每箱数量</th><th>预计箱数</th><th>预计 CBM</th><th>状态/备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            {suggestions.map((row) => (
+              <tr key={row.rowId} className={row.messages.length > 0 ? 'error-row' : ''}>
+                <td>{row.sku || '-'}</td>
+                <td>{row.productName || '-'}</td>
+                <td>{row.shopName || '-'}</td>
+                <td>{row.manufacturerName || '-'}</td>
+                <td>{row.buyerName || '-'}</td>
+                <td>{row.monthlySales}</td>
+                <td>{row.stockMonths}</td>
+                <td>{row.targetQuantity}</td>
+                <td>{row.inTransitQuantity}</td>
+                <td>{row.suggestedQuantity}</td>
+                <td>{row.unitsPerCarton ?? '-'}</td>
+                <td>{row.estimatedCartons ?? '-'}</td>
+                <td>{row.estimatedCbm?.toFixed(4) ?? '-'}</td>
+                <td>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</td>
+              </tr>
+            ))}
+            {suggestions.length === 0 && <tr><td colSpan={14} className="empty">上传月销量表后生成采购建议。</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}

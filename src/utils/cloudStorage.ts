@@ -1,0 +1,326 @@
+import { supabase } from '../lib/supabase';
+import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, PurchaseStatus, SalesSuggestionRow, SkuItem, UserRole } from '../types';
+import { hydrateSku } from './calculations';
+
+type SkuRow = {
+  id: string;
+  sku: string;
+  product_name: string | null;
+  english_name: string | null;
+  manufacturer_name: string | null;
+  shop_name: string | null;
+  buyer_name: string | null;
+  purchase_price: number | null;
+  carton_length_cm: number | null;
+  carton_width_cm: number | null;
+  carton_height_cm: number | null;
+  units_per_carton: number | null;
+  total_quantity: number | null;
+  total_cbm: number | null;
+  note: string | null;
+};
+
+type PurchaseRecordRow = {
+  id: string;
+  manufacturer_name: string | null;
+  sku: string;
+  product_name: string | null;
+  shop_name: string | null;
+  buyer_name: string | null;
+  purchase_quantity: number | null;
+  purchase_price: number | null;
+  total_amount: number | null;
+  purchase_date: string | null;
+  estimated_arrival_date: string | null;
+  status: PurchaseStatus;
+  total_cbm: number | null;
+  note: string | null;
+};
+
+type ContainerRow = {
+  id: string;
+  row_number: number | null;
+  sku: string | null;
+  purchase_quantity: number | null;
+  raw: Record<string, unknown> | null;
+};
+
+type AuditLogRow = {
+  id: string;
+  actor_id: string;
+  actor_email: string;
+  actor_role: UserRole;
+  action: AuditAction;
+  entity_type: AuditLog['entityType'];
+  entity_id: string;
+  summary: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
+function requireSupabase() {
+  if (!supabase) throw new Error('Supabase is not configured');
+  return supabase;
+}
+
+function mapSkuRow(row: SkuRow): SkuItem {
+  return hydrateSku({
+    id: row.id,
+    sku: row.sku,
+    productName: row.product_name ?? '',
+    englishName: row.english_name ?? '',
+    manufacturerName: row.manufacturer_name ?? '',
+    shopName: row.shop_name ?? '',
+    buyerName: row.buyer_name ?? '',
+    purchasePrice: Number(row.purchase_price ?? 0),
+    cartonLengthCm: Number(row.carton_length_cm ?? 0),
+    cartonWidthCm: Number(row.carton_width_cm ?? 0),
+    cartonHeightCm: Number(row.carton_height_cm ?? 0),
+    unitsPerCarton: Number(row.units_per_carton ?? 0),
+    totalQuantity: Number(row.total_quantity ?? 0),
+    totalCbm: Number(row.total_cbm ?? 0),
+    note: row.note ?? '',
+  });
+}
+
+function toSkuRow(item: SkuItem): SkuRow {
+  return {
+    id: item.id,
+    sku: item.sku,
+    product_name: item.productName,
+    english_name: item.englishName,
+    manufacturer_name: item.manufacturerName,
+    shop_name: item.shopName,
+    buyer_name: item.buyerName,
+    purchase_price: item.purchasePrice,
+    carton_length_cm: item.cartonLengthCm,
+    carton_width_cm: item.cartonWidthCm,
+    carton_height_cm: item.cartonHeightCm,
+    units_per_carton: item.unitsPerCarton,
+    total_quantity: item.totalQuantity,
+    total_cbm: item.totalCbm,
+    note: item.note,
+  };
+}
+
+function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
+  return {
+    id: row.id,
+    manufacturerName: row.manufacturer_name ?? '',
+    sku: row.sku,
+    productName: row.product_name ?? '',
+    shopName: row.shop_name ?? '',
+    buyerName: row.buyer_name ?? '',
+    purchaseQuantity: Number(row.purchase_quantity ?? 0),
+    purchasePrice: Number(row.purchase_price ?? 0),
+    totalAmount: Number(row.total_amount ?? 0),
+    purchaseDate: row.purchase_date ?? '',
+    estimatedArrivalDate: row.estimated_arrival_date ?? '',
+    status: row.status,
+    totalCbm: Number(row.total_cbm ?? 0),
+    note: row.note ?? '',
+  };
+}
+
+function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
+  return {
+    id: record.id,
+    manufacturer_name: record.manufacturerName,
+    sku: record.sku,
+    product_name: record.productName,
+    shop_name: record.shopName,
+    buyer_name: record.buyerName,
+    purchase_quantity: record.purchaseQuantity,
+    purchase_price: record.purchasePrice,
+    total_amount: record.totalAmount,
+    purchase_date: record.purchaseDate,
+    estimated_arrival_date: record.estimatedArrivalDate,
+    status: record.status,
+    total_cbm: record.totalCbm,
+    note: record.note,
+  };
+}
+
+function mapContainerRow(row: ContainerRow): PurchaseRow {
+  return {
+    rowId: row.id,
+    rowNumber: Number(row.row_number ?? 0),
+    sku: row.sku ?? '',
+    purchaseQuantity: row.purchase_quantity,
+    raw: row.raw ?? {},
+  };
+}
+
+function toContainerRow(row: PurchaseRow): ContainerRow {
+  return {
+    id: row.rowId,
+    row_number: row.rowNumber,
+    sku: row.sku,
+    purchase_quantity: row.purchaseQuantity,
+    raw: row.raw,
+  };
+}
+
+export async function fetchProfile(userId: string, email: string): Promise<AppProfile> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('profiles')
+    .select('id,email,role,display_name')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    return { id: userId, email, role: 'viewer', displayName: email };
+  }
+
+  return {
+    id: data.id,
+    email: data.email ?? email,
+    role: (data.role ?? 'viewer') as UserRole,
+    displayName: data.display_name ?? data.email ?? email,
+  };
+}
+
+export async function fetchSkuItems(): Promise<SkuItem[]> {
+  const { data, error } = await requireSupabase().from('sku_items').select('*').order('manufacturer_name');
+  if (error) throw error;
+  return (data ?? []).map((row) => mapSkuRow(row as SkuRow));
+}
+
+export async function replaceSkuItems(items: SkuItem[]): Promise<void> {
+  const client = requireSupabase();
+  const remote = await fetchSkuItems();
+  const nextIds = new Set(items.map((item) => item.id));
+  const deleteIds = remote.map((item) => item.id).filter((id) => !nextIds.has(id));
+
+  if (items.length > 0) {
+    const { error } = await client.from('sku_items').upsert(items.map(toSkuRow));
+    if (error) throw error;
+  }
+  if (deleteIds.length > 0) {
+    const { error } = await client.from('sku_items').delete().in('id', deleteIds);
+    if (error) throw error;
+  }
+}
+
+export async function fetchPurchaseRecords(): Promise<PurchaseRecord[]> {
+  const { data, error } = await requireSupabase().from('purchase_records').select('*').order('purchase_date', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row) => mapPurchaseRecord(row as PurchaseRecordRow));
+}
+
+export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise<void> {
+  const client = requireSupabase();
+  const remote = await fetchPurchaseRecords();
+  const nextIds = new Set(records.map((record) => record.id));
+  const deleteIds = remote.map((record) => record.id).filter((id) => !nextIds.has(id));
+
+  if (records.length > 0) {
+    const { error } = await client.from('purchase_records').upsert(records.map(toPurchaseRecordRow));
+    if (error) throw error;
+  }
+  if (deleteIds.length > 0) {
+    const { error } = await client.from('purchase_records').delete().in('id', deleteIds);
+    if (error) throw error;
+  }
+}
+
+export async function fetchContainerRows(): Promise<PurchaseRow[]> {
+  const { data, error } = await requireSupabase().from('container_rows').select('*').order('row_number');
+  if (error) throw error;
+  return (data ?? []).map((row) => mapContainerRow(row as ContainerRow));
+}
+
+export async function replaceContainerRows(rows: PurchaseRow[]): Promise<void> {
+  const client = requireSupabase();
+  const { error: deleteError } = await client.from('container_rows').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (deleteError) throw deleteError;
+  if (rows.length === 0) return;
+  const { error } = await client.from('container_rows').insert(rows.map(toContainerRow));
+  if (error) throw error;
+}
+
+export async function replaceSalesSuggestions(rows: SalesSuggestionRow[]): Promise<void> {
+  const client = requireSupabase();
+  const { error: deleteError } = await client.from('sales_suggestions').delete().neq('id', 'never-match');
+  if (deleteError) throw deleteError;
+  if (rows.length === 0) return;
+
+  const { error } = await client.from('sales_suggestions').insert(
+    rows.map((row) => ({
+      id: row.rowId,
+      sku: row.sku,
+      product_name: row.productName,
+      shop_name: row.shopName,
+      manufacturer_name: row.manufacturerName,
+      buyer_name: row.buyerName,
+      monthly_sales: row.monthlySales,
+      stock_months: row.stockMonths,
+      target_quantity: row.targetQuantity,
+      in_transit_quantity: row.inTransitQuantity,
+      suggested_quantity: row.suggestedQuantity,
+      units_per_carton: row.unitsPerCarton,
+      estimated_cartons: row.estimatedCartons,
+      estimated_cbm: row.estimatedCbm,
+      messages: row.messages,
+    })),
+  );
+  if (error) throw error;
+}
+
+function mapAuditLog(row: AuditLogRow): AuditLog {
+  return {
+    id: row.id,
+    actorId: row.actor_id,
+    actorEmail: row.actor_email,
+    actorRole: row.actor_role,
+    action: row.action,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    summary: row.summary,
+    metadata: row.metadata ?? {},
+    createdAt: row.created_at,
+  };
+}
+
+export async function fetchAuditLogs(): Promise<AuditLog[]> {
+  const { data, error } = await requireSupabase()
+    .from('audit_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(300);
+  if (error) throw error;
+  return (data ?? []).map((row) => mapAuditLog(row as AuditLogRow));
+}
+
+export async function createAuditLog(input: Omit<AuditLog, 'id' | 'createdAt'>): Promise<void> {
+  const { error } = await requireSupabase().from('audit_logs').insert({
+    id: crypto.randomUUID(),
+    actor_id: input.actorId,
+    actor_email: input.actorEmail,
+    actor_role: input.actorRole,
+    action: input.action,
+    entity_type: input.entityType,
+    entity_id: input.entityId,
+    summary: input.summary,
+    metadata: input.metadata,
+  });
+  if (error) throw error;
+}
+
+export function subscribeToSharedTables(onChange: () => void): () => void {
+  if (!supabase) return () => undefined;
+  const client = supabase;
+  const channel = client
+    .channel('shared-data')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sku_items' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_records' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'container_rows' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, onChange)
+    .subscribe();
+
+  return () => {
+    void client.removeChannel(channel);
+  };
+}
