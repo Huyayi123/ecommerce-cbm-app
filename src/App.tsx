@@ -52,35 +52,56 @@ function App() {
 
   async function loadCloudData() {
     if (!supabase) return;
-    const [nextSkuItems, nextPurchaseRows, nextPurchaseRecords, nextAuditLogs, nextProfiles] = await Promise.all([
+    const results = await Promise.allSettled([
       fetchSkuItems(),
       fetchContainerRows(),
       fetchPurchaseRecords(),
       fetchAuditLogs(),
       fetchProfiles(),
     ]);
-    setSkuItems(nextSkuItems);
-    setPurchaseRows(nextPurchaseRows);
-    setPurchaseRecords(nextPurchaseRecords);
-    setAuditLogs(nextAuditLogs);
-    setProfiles(nextProfiles);
+    const errors = results
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map((result) => formatErrorMessage(result.reason));
+
+    if (results[0].status === 'fulfilled') setSkuItems(results[0].value);
+    if (results[1].status === 'fulfilled') setPurchaseRows(results[1].value);
+    if (results[2].status === 'fulfilled') setPurchaseRecords(results[2].value);
+    if (results[3].status === 'fulfilled') setAuditLogs(results[3].value);
+    if (results[4].status === 'fulfilled') setProfiles(results[4].value);
+
+    if (errors.length > 0) {
+      console.error('云端数据加载失败', errors);
+      setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
+    }
   }
 
   async function loadSession() {
-    if (!supabase) {
-      setAuthReady(true);
-      return;
-    }
+    try {
+      if (!supabase) {
+        setAuthReady(true);
+        return;
+      }
 
-    const { data } = await supabase.auth.getSession();
-    const user = data.session?.user;
-    if (user) {
-      setProfile(await fetchProfile(user.id, user.email ?? ''));
-      await loadCloudData();
-    } else {
-      setProfile(null);
+      const { data } = await supabase.auth.getSession();
+      const user = data.session?.user;
+      if (user) {
+        try {
+          setProfile(await fetchProfile(user.id, user.email ?? ''));
+        } catch (error) {
+          console.error(error);
+          setProfile({ id: user.id, email: user.email ?? '', role: 'viewer', displayName: user.email ?? '', buyerName: '' });
+          setStatusMessage(`账号资料加载失败：${formatErrorMessage(error)}`);
+        }
+        await loadCloudData();
+      } else {
+        setProfile(null);
+      }
+    } catch (error) {
+      console.error(error);
+      setStatusMessage(`登录会话加载失败：${formatErrorMessage(error)}`);
+    } finally {
+      setAuthReady(true);
     }
-    setAuthReady(true);
   }
 
   useEffect(() => {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
 type Props = {
-  onAuthed: () => void;
+  onAuthed: () => void | Promise<void>;
 };
 
 export function AuthPanel({ onAuthed }: Props) {
@@ -22,14 +22,21 @@ export function AuthPanel({ onAuthed }: Props) {
         ? await supabase.auth.signInWithPassword({ email, password })
         : await supabase.auth.signUp({ email, password });
 
-    setLoading(false);
     if (result.error) {
+      setLoading(false);
       setMessage(result.error.message);
       return;
     }
 
-    setMessage(mode === 'sign-up' ? '注册成功，请按 Supabase 邮件设置确认策略登录。' : '登录成功');
-    onAuthed();
+    try {
+      setMessage(mode === 'sign-up' ? '注册成功，请按 Supabase 邮件设置确认策略登录。' : '登录成功，正在加载数据...');
+      await onAuthed();
+    } catch (error) {
+      console.error(error);
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (!isSupabaseConfigured) {
