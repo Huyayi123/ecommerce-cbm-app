@@ -16,12 +16,16 @@ export function calcUnitCbm(cartonCbm: number, unitsPerCarton: number): number {
 
 export function hydrateSku(item: Omit<SkuItem, 'cartonCbm' | 'unitCbm'>): SkuItem {
   const cartonCbm = calcCartonCbm(item.cartonLengthCm, item.cartonWidthCm, item.cartonHeightCm);
+  const unitCbmFromManual = item.manualUnitCbm > 0 ? round(item.manualUnitCbm, 8) : 0;
   const unitCbmFromTotal = item.totalQuantity > 0 && item.totalCbm > 0 ? round(item.totalCbm / item.totalQuantity, 8) : 0;
   const unitCbmFromCarton = calcUnitCbm(cartonCbm, item.unitsPerCarton);
+  const unitCbm = unitCbmFromManual || unitCbmFromTotal || unitCbmFromCarton;
+  const cbmSource = unitCbmFromManual ? 'imported' : unitCbmFromTotal ? 'total' : unitCbmFromCarton ? 'carton' : 'missing';
   return {
     ...item,
     cartonCbm,
-    unitCbm: unitCbmFromCarton || unitCbmFromTotal,
+    unitCbm,
+    cbmSource,
   };
 }
 

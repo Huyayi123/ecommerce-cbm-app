@@ -36,13 +36,23 @@ create table if not exists public.sku_items (
   units_per_carton numeric default 0,
   total_quantity numeric default 0,
   total_cbm numeric default 0,
-  note text,
+  manual_unit_cbm numeric default 0,
+  cbm_source text default 'missing',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.sku_items
 add column if not exists purchase_price numeric default 0;
+
+alter table public.sku_items
+add column if not exists manual_unit_cbm numeric default 0;
+
+alter table public.sku_items
+add column if not exists cbm_source text default 'missing';
+
+alter table public.sku_items
+drop column if exists note;
 
 create table if not exists public.purchase_records (
   id text primary key,

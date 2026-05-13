@@ -13,9 +13,11 @@ export type SkuItem = {
   unitsPerCarton: number;
   totalQuantity: number;
   totalCbm: number;
+  manualUnitCbm: number;
+  cbmSource: 'imported' | 'total' | 'carton' | 'missing';
   cartonCbm: number;
   unitCbm: number;
-  note: string;
+  updatedAt: string;
 };
 
 export type PurchaseRow = {
@@ -120,4 +122,20 @@ export type AuditLog = {
   summary: string;
   metadata: Record<string, unknown>;
   createdAt: string;
+};
+
+export type SkuImportPreviewRow = {
+  rowNumber: number;
+  item: SkuItem | null;
+  action: 'create' | 'update' | 'fail';
+  errors: string[];
+};
+
+export type SkuImportPreview = {
+  fileName: string;
+  headers: string[];
+  recognizedFields: Array<{ field: string; header: string }>;
+  unrecognizedHeaders: string[];
+  missingRequiredFields: string[];
+  rows: SkuImportPreviewRow[];
 };

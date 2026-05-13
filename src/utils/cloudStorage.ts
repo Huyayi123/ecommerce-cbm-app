@@ -17,7 +17,9 @@ type SkuRow = {
   units_per_carton: number | null;
   total_quantity: number | null;
   total_cbm: number | null;
-  note: string | null;
+  manual_unit_cbm: number | null;
+  cbm_source: SkuItem['cbmSource'] | null;
+  updated_at: string | null;
 };
 
 type PurchaseRecordRow = {
@@ -79,7 +81,9 @@ function mapSkuRow(row: SkuRow): SkuItem {
     unitsPerCarton: Number(row.units_per_carton ?? 0),
     totalQuantity: Number(row.total_quantity ?? 0),
     totalCbm: Number(row.total_cbm ?? 0),
-    note: row.note ?? '',
+    manualUnitCbm: Number(row.manual_unit_cbm ?? 0),
+    cbmSource: row.cbm_source ?? 'missing',
+    updatedAt: row.updated_at ?? '',
   });
 }
 
@@ -99,7 +103,9 @@ function toSkuRow(item: SkuItem): SkuRow {
     units_per_carton: item.unitsPerCarton,
     total_quantity: item.totalQuantity,
     total_cbm: item.totalCbm,
-    note: item.note,
+    manual_unit_cbm: item.manualUnitCbm,
+    cbm_source: item.cbmSource,
+    updated_at: item.updatedAt || new Date().toISOString(),
   };
 }
 

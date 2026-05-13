@@ -26,7 +26,9 @@ export function loadSkuItems(): SkuItem[] {
         unitsPerCarton: Number(item.unitsPerCarton ?? 0),
         totalQuantity: Number(item.totalQuantity ?? 0),
         totalCbm: Number(item.totalCbm ?? 0),
-        note: String(item.note ?? ''),
+        manualUnitCbm: Number(item.manualUnitCbm ?? item.unitCbm ?? 0),
+        cbmSource: item.cbmSource ?? 'missing',
+        updatedAt: String(item.updatedAt ?? new Date().toISOString()),
       }),
     );
   } catch {

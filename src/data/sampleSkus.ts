@@ -17,7 +17,9 @@ export const sampleSkus: SkuItem[] = [
     unitsPerCarton: 12,
     totalQuantity: 0,
     totalCbm: 0,
-    note: '示例数据，可删除',
+    manualUnitCbm: 0,
+    cbmSource: 'missing',
+    updatedAt: new Date().toISOString(),
   }),
   hydrateSku({
     id: 'sample-2',
@@ -34,6 +36,8 @@ export const sampleSkus: SkuItem[] = [
     unitsPerCarton: 8,
     totalQuantity: 0,
     totalCbm: 0,
-    note: '示例数据，可删除',
+    manualUnitCbm: 0,
+    cbmSource: 'missing',
+    updatedAt: new Date().toISOString(),
   }),
 ];

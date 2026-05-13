@@ -381,6 +381,156 @@ button.danger,
   border-radius: 8px;
 }
 
+.sku-table-wrap {
+  max-height: 620px;
+}
+
+.sku-table th,
+.sku-table td {
+  background-clip: padding-box;
+}
+
+.sticky-col {
+  position: sticky;
+  z-index: 2;
+  background: #ffffff;
+}
+
+th.sticky-col {
+  z-index: 4;
+  background: #edf3f6;
+}
+
+.sticky-col-1 {
+  left: 0;
+  min-width: 110px;
+  max-width: 110px;
+}
+
+.sticky-col-2 {
+  left: 110px;
+  min-width: 140px;
+  max-width: 140px;
+}
+
+.sticky-col-3 {
+  left: 250px;
+  min-width: 220px;
+  max-width: 220px;
+  box-shadow: 1px 0 0 #dce4ea;
+}
+
+.sku-table th:nth-child(4),
+.sku-table td:nth-child(4) {
+  max-width: 120px;
+  min-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sku-table .sticky-col {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.column-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #e1e8ee;
+  border-radius: 8px;
+  background: #f8fafb;
+  font-size: 13px;
+}
+
+.sku-search {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.sku-search label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(420px, 100%);
+  color: #51606c;
+  font-size: 13px;
+}
+
+.sku-search input {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #cbd6df;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.sku-search span {
+  color: #5f6d78;
+  font-size: 14px;
+  padding-bottom: 8px;
+}
+
+.column-settings label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.import-preview {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid #dce4ea;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.preview-grid div {
+  padding: 10px;
+  border: 1px solid #e1e8ee;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.preview-grid p {
+  margin: 6px 0 0;
+  color: #4f5f6b;
+  font-size: 13px;
+  white-space: normal;
+}
+
+.small-table table {
+  min-width: 900px;
+}
+
+.detail-row {
+  background: #f8fafb;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 10px 16px;
+  white-space: normal;
+}
+
+.wide-detail {
+  grid-column: span 4;
+}
+
 .inline-notice {
   margin-top: 12px;
   padding: 10px 12px;
