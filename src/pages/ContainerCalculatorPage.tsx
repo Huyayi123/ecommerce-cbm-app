@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PurchaseUploader } from '../components/PurchaseUploader';
 import { ResultsTable } from '../components/ResultsTable';
 import { SummaryCards } from '../components/SummaryCards';
@@ -54,13 +54,24 @@ export function ContainerCalculatorPage({
   canEditData = true,
 }: Props) {
   const [duplicateMessage, setDuplicateMessage] = useState('');
-  const calculationRows = useMemo(() => calculateRows(purchaseRows, skuItems), [purchaseRows, skuItems]);
+  const [workingRows, setWorkingRows] = useState<PurchaseRow[]>(purchaseRows);
+  const calculationRows = useMemo(() => calculateRows(workingRows, skuItems), [workingRows, skuItems]);
   const summary = useMemo(() => summarize(calculationRows), [calculationRows]);
   const errorCount = calculationRows.filter((row) => row.status === 'error').length;
   const savableCount = calculationRows.filter((row) => row.status !== 'error' && row.purchaseQuantity && row.purchaseQuantity > 0).length;
 
+  useEffect(() => {
+    setWorkingRows(purchaseRows);
+  }, [purchaseRows]);
+
   function updatePurchaseQuantity(rowId: string, quantity: number | null) {
-    onRowsChange(purchaseRows.map((row) => (row.rowId === rowId ? { ...row, purchaseQuantity: quantity } : row)));
+    setWorkingRows((current) => current.map((row) => (row.rowId === rowId ? { ...row, purchaseQuantity: quantity } : row)));
+  }
+
+  function recalculateQuantities(changes: Record<string, number | null>) {
+    setWorkingRows((current) =>
+      current.map((row) => (row.rowId in changes ? { ...row, purchaseQuantity: changes[row.rowId] } : row)),
+    );
   }
 
   function normalizeRows(rows: PurchaseRow[]): { rows: PurchaseRow[]; conflicts: string[] } {
@@ -103,6 +114,7 @@ export function ContainerCalculatorPage({
         onLoaded={(rows, name) => {
           const normalized = normalizeRows(rows);
           setDuplicateMessage(rows.length !== normalized.rows.length ? '已自动合并重复 SKU 的采购数量' : '');
+          setWorkingRows(normalized.rows);
           onRowsChange(normalized.rows);
           onFileNameChange(name);
         }}
@@ -126,6 +138,7 @@ export function ContainerCalculatorPage({
         rows={calculationRows}
         fileName={fileName}
         onQuantityChange={updatePurchaseQuantity}
+        onRecalculate={recalculateQuantities}
       />
     </>
   );

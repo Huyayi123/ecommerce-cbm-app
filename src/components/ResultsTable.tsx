@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { CalculationRow } from '../types';
 import { exportResults } from '../utils/exporters';
 
@@ -5,10 +6,46 @@ type Props = {
   rows: CalculationRow[];
   fileName: string;
   onQuantityChange: (rowId: string, quantity: number | null) => void;
+  onRecalculate: (changes: Record<string, number | null>) => void;
 };
 
-export function ResultsTable({ rows, fileName, onQuantityChange }: Props) {
+function parseQuantity(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  const quantity = Number(trimmed);
+  return Number.isFinite(quantity) ? quantity : null;
+}
+
+export function ResultsTable({ rows, fileName, onQuantityChange, onRecalculate }: Props) {
+  const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
   const totalPurchaseAmount = rows.reduce((sum, row) => sum + (row.totalAmount ?? 0), 0);
+
+  useEffect(() => {
+    setDraftQuantities((current) => {
+      const rowIds = new Set(rows.map((row) => row.rowId));
+      const next = Object.fromEntries(Object.entries(current).filter(([rowId]) => rowIds.has(rowId)));
+      return next;
+    });
+  }, [rows]);
+
+  function commitQuantity(rowId: string) {
+    if (!(rowId in draftQuantities)) return;
+    const quantity = parseQuantity(draftQuantities[rowId]);
+    setDraftQuantities((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+    onQuantityChange(rowId, quantity);
+  }
+
+  function commitAllQuantities() {
+    const changes = Object.fromEntries(
+      Object.entries(draftQuantities).map(([rowId, value]) => [rowId, parseQuantity(value)]),
+    );
+    setDraftQuantities({});
+    onRecalculate(changes);
+  }
 
   return (
     <section className="panel">
@@ -21,6 +58,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange }: Props) {
           </p>
         </div>
         <div className="export-actions">
+          <button type="button" onClick={commitAllQuantities} disabled={rows.length === 0}>重新计算</button>
           <button type="button" onClick={() => exportResults(rows, 'xlsx')} disabled={rows.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportResults(rows, 'csv')} disabled={rows.length === 0}>导出 CSV</button>
         </div>
@@ -54,13 +92,18 @@ export function ResultsTable({ rows, fileName, onQuantityChange }: Props) {
                 <td>
                   <input
                     className="quantity-input"
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     min="0"
-                    value={row.purchaseQuantity ?? ''}
+                    value={draftQuantities[row.rowId] ?? String(row.purchaseQuantity ?? '')}
                     onChange={(event) => {
-                      const value = event.target.value.trim();
-                      const quantity = Number(value);
-                      onQuantityChange(row.rowId, value === '' || !Number.isFinite(quantity) ? null : quantity);
+                      setDraftQuantities((current) => ({ ...current, [row.rowId]: event.target.value }));
+                    }}
+                    onBlur={() => commitQuantity(row.rowId)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.currentTarget.blur();
+                      }
                     }}
                   />
                 </td>
