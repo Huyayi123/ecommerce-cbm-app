@@ -16,6 +16,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
   display_name text,
+  buyer_name text,
   role public.app_role not null default 'viewer',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -61,6 +62,9 @@ add column if not exists box_height_cm numeric default 0;
 alter table public.sku_items
 add column if not exists notes text;
 
+alter table public.profiles
+add column if not exists buyer_name text;
+
 alter table public.sku_items
 add column if not exists cbm_source text default 'missing';
 
@@ -98,19 +102,47 @@ create table if not exists public.purchase_records (
   manufacturer_name text,
   sku text not null,
   product_name text,
+  english_name text,
   shop_name text,
   buyer_name text,
+  assigned_buyer_name text,
+  assigned_buyer_email text,
   purchase_quantity numeric not null default 0,
   purchase_price numeric not null default 0,
   total_amount numeric not null default 0,
   purchase_date date,
   estimated_arrival_date date,
-  status public.purchase_status not null default 'in_transit',
+  status text not null default 'pending',
+  unit_cbm numeric not null default 0,
   total_cbm numeric not null default 0,
   note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.purchase_records
+add column if not exists english_name text;
+
+alter table public.purchase_records
+add column if not exists assigned_buyer_name text;
+
+alter table public.purchase_records
+add column if not exists assigned_buyer_email text;
+
+alter table public.purchase_records
+add column if not exists unit_cbm numeric not null default 0;
+
+alter table public.purchase_records
+alter column status type text using status::text;
+
+alter table public.purchase_records
+alter column status set default 'pending';
+
+create index if not exists purchase_records_assigned_buyer_email_idx
+on public.purchase_records (assigned_buyer_email);
+
+create index if not exists purchase_records_status_idx
+on public.purchase_records (status);
 
 create table if not exists public.container_rows (
   id text primary key,
@@ -228,6 +260,12 @@ create policy "profiles admin update" on public.profiles
 for update to authenticated
 using (public.is_admin())
 with check (public.is_admin());
+
+drop policy if exists "profiles update own binding" on public.profiles;
+create policy "profiles update own binding" on public.profiles
+for update to authenticated
+using (id = auth.uid())
+with check (id = auth.uid());
 
 drop policy if exists "shared select sku" on public.sku_items;
 create policy "shared select sku" on public.sku_items for select to authenticated using (true);

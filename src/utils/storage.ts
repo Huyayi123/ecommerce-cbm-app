@@ -77,8 +77,8 @@ export function savePurchaseRows(rows: PurchaseRow[]): void {
 }
 
 function purchaseStatus(value: unknown): PurchaseStatus {
-  if (value === 'arrived' || value === 'cancelled' || value === 'in_transit') return value;
-  return 'in_transit';
+  if (value === 'pending' || value === 'ordered' || value === 'arrived' || value === 'cancelled' || value === 'in_transit') return value;
+  return 'pending';
 }
 
 export function loadPurchaseRecords(): PurchaseRecord[] {
@@ -96,14 +96,18 @@ export function loadPurchaseRecords(): PurchaseRecord[] {
         manufacturerName: String(record.manufacturerName ?? ''),
         sku: String(record.sku ?? ''),
         productName: String(record.productName ?? ''),
+        englishName: String(record.englishName ?? ''),
         shopName: String(record.shopName ?? ''),
         buyerName: String(record.buyerName ?? ''),
+        assignedBuyerName: String(record.assignedBuyerName ?? record.buyerName ?? ''),
+        assignedBuyerEmail: String(record.assignedBuyerEmail ?? ''),
         purchaseQuantity: quantity,
         purchasePrice: price,
         totalAmount: quantity * price,
         purchaseDate: String(record.purchaseDate ?? new Date().toISOString().slice(0, 10)),
         estimatedArrivalDate: String(record.estimatedArrivalDate ?? ''),
         status: purchaseStatus(record.status),
+        unitCbm: nullableNumber(record.unitCbm) ?? 0,
         totalCbm: nullableNumber(record.totalCbm) ?? 0,
         note: String(record.note ?? ''),
       };

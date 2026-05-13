@@ -32,7 +32,7 @@ export type PurchaseRow = {
   raw: Record<string, unknown>;
 };
 
-export type PurchaseStatus = 'in_transit' | 'arrived' | 'cancelled';
+export type PurchaseStatus = 'pending' | 'ordered' | 'in_transit' | 'arrived' | 'cancelled';
 export type UserRole = 'admin' | 'buyer' | 'viewer';
 export type AuditAction =
   | 'sku_created'
@@ -50,6 +50,7 @@ export type AppProfile = {
   email: string;
   role: UserRole;
   displayName: string;
+  buyerName: string;
 };
 
 export type PurchaseRecord = {
@@ -57,14 +58,18 @@ export type PurchaseRecord = {
   manufacturerName: string;
   sku: string;
   productName: string;
+  englishName: string;
   shopName: string;
   buyerName: string;
+  assignedBuyerName: string;
+  assignedBuyerEmail: string;
   purchaseQuantity: number;
   purchasePrice: number;
   totalAmount: number;
   purchaseDate: string;
   estimatedArrivalDate: string;
   status: PurchaseStatus;
+  unitCbm: number;
   totalCbm: number;
   note: string;
 };

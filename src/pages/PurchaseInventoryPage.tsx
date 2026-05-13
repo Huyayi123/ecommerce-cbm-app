@@ -15,6 +15,8 @@ type Props = {
 type DraftRecord = Omit<PurchaseRecord, 'totalAmount'>;
 
 const statusLabels: Record<PurchaseStatus, string> = {
+  pending: '待采购',
+  ordered: '已下单',
   in_transit: '海运在途',
   arrived: '已到货',
   cancelled: '已取消',
@@ -25,13 +27,17 @@ const emptyDraft: DraftRecord = {
   manufacturerName: '',
   sku: '',
   productName: '',
+  englishName: '',
   shopName: '',
   buyerName: '',
+  assignedBuyerName: '',
+  assignedBuyerEmail: '',
   purchaseQuantity: 0,
   purchasePrice: 0,
   purchaseDate: new Date().toISOString().slice(0, 10),
   estimatedArrivalDate: '',
-  status: 'in_transit',
+  status: 'pending',
+  unitCbm: 0,
   totalCbm: 0,
   note: '',
 };
@@ -40,6 +46,7 @@ function withTotalAmount(record: DraftRecord): PurchaseRecord {
   return {
     ...record,
     totalAmount: round(record.purchaseQuantity * record.purchasePrice, 2),
+    totalCbm: record.totalCbm || round(record.purchaseQuantity * record.unitCbm, 4),
   };
 }
 
@@ -66,7 +73,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
     manufacturerName: '',
     shopName: '',
     buyerName: '',
-    status: 'in_transit' as PurchaseStatus | 'all',
+    status: 'all' as PurchaseStatus | 'all',
     sku: '',
     purchaseDateFrom: '',
     purchaseDateTo: '',
@@ -111,6 +118,8 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
       productName: item?.productName ?? current.productName,
       shopName: item?.shopName ?? current.shopName,
       buyerName: item?.buyerName ?? current.buyerName,
+      assignedBuyerName: item?.buyerName ?? current.assignedBuyerName,
+      englishName: item?.englishName ?? current.englishName,
       totalCbm: calcRecordCbm(item, current.purchaseQuantity) || current.totalCbm,
     }));
   }
@@ -146,13 +155,17 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
       manufacturerName: record.manufacturerName,
       sku: record.sku,
       productName: record.productName,
+      englishName: record.englishName,
       shopName: record.shopName,
       buyerName: record.buyerName,
+      assignedBuyerName: record.assignedBuyerName,
+      assignedBuyerEmail: record.assignedBuyerEmail,
       purchaseQuantity: record.purchaseQuantity,
       purchasePrice: record.purchasePrice,
       purchaseDate: record.purchaseDate,
       estimatedArrivalDate: record.estimatedArrivalDate,
       status: record.status,
+      unitCbm: record.unitCbm,
       totalCbm: record.totalCbm,
       note: record.note,
     });
@@ -211,7 +224,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
           <label>厂家名<select value={filters.manufacturerName} onChange={(event) => setFilters({ ...filters, manufacturerName: event.target.value })}><option value="">全部</option>{uniqueValues(records, 'manufacturerName').map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>店铺<select value={filters.shopName} onChange={(event) => setFilters({ ...filters, shopName: event.target.value })}><option value="">全部</option>{uniqueValues(records, 'shopName').map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>采购人<select value={filters.buyerName} onChange={(event) => setFilters({ ...filters, buyerName: event.target.value })}><option value="">全部</option>{uniqueValues(records, 'buyerName').map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label>状态<select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value as PurchaseStatus | 'all' })}><option value="in_transit">海运在途</option><option value="arrived">已到货</option><option value="cancelled">已取消</option><option value="all">全部历史</option></select></label>
+          <label>状态<select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value as PurchaseStatus | 'all' })}><option value="pending">待采购</option><option value="ordered">已下单</option><option value="in_transit">海运在途</option><option value="arrived">已到货</option><option value="cancelled">已取消</option><option value="all">全部历史</option></select></label>
           <label>SKU 搜索<input value={filters.sku} onChange={(event) => setFilters({ ...filters, sku: event.target.value })} /></label>
           <label>采购日期起<input type="date" value={filters.purchaseDateFrom} onChange={(event) => setFilters({ ...filters, purchaseDateFrom: event.target.value })} /></label>
           <label>采购日期止<input type="date" value={filters.purchaseDateTo} onChange={(event) => setFilters({ ...filters, purchaseDateTo: event.target.value })} /></label>
@@ -223,14 +236,20 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
           <label>厂家名<input value={draft.manufacturerName} onChange={(event) => patchDraft('manufacturerName', event.target.value)} /></label>
           <label>SKU<input value={draft.sku} onChange={(event) => fillFromSku(event.target.value)} /></label>
           <label>产品名称<input value={draft.productName} onChange={(event) => patchDraft('productName', event.target.value)} /></label>
+          <label>英文名称<input value={draft.englishName} onChange={(event) => patchDraft('englishName', event.target.value)} /></label>
           <label>店铺<input value={draft.shopName} onChange={(event) => patchDraft('shopName', event.target.value)} /></label>
-          <label>采购人<input value={draft.buyerName} onChange={(event) => patchDraft('buyerName', event.target.value)} /></label>
+          <label>采购人<input value={draft.assignedBuyerName || draft.buyerName} onChange={(event) => {
+            patchDraft('buyerName', event.target.value);
+            patchDraft('assignedBuyerName', event.target.value);
+          }} /></label>
+          <label>采购人邮箱<input value={draft.assignedBuyerEmail} onChange={(event) => patchDraft('assignedBuyerEmail', event.target.value)} /></label>
           <label>采购数量<input type="number" min="0" value={draft.purchaseQuantity} onChange={(event) => updateDraftQuantity(Number(event.target.value))} /></label>
           <label>采购单价<input type="number" min="0" step="0.01" value={draft.purchasePrice} onChange={(event) => patchDraft('purchasePrice', Number(event.target.value))} /></label>
           <label>总金额<input value={round(draft.purchaseQuantity * draft.purchasePrice, 2)} readOnly /></label>
           <label>采购日期<input type="date" value={draft.purchaseDate} onChange={(event) => patchDraft('purchaseDate', event.target.value)} /></label>
           <label>预计到货日期<input type="date" value={draft.estimatedArrivalDate} onChange={(event) => patchDraft('estimatedArrivalDate', event.target.value)} /></label>
-          <label>状态<select value={draft.status} onChange={(event) => patchDraft('status', event.target.value as PurchaseStatus)}><option value="in_transit">海运在途</option><option value="arrived">已到货</option><option value="cancelled">已取消</option></select></label>
+          <label>单品CBM<input type="number" min="0" step="0.00000001" value={draft.unitCbm} onChange={(event) => patchDraft('unitCbm', Number(event.target.value))} /></label>
+          <label>状态<select value={draft.status} onChange={(event) => patchDraft('status', event.target.value as PurchaseStatus)}><option value="pending">待采购</option><option value="ordered">已下单</option><option value="in_transit">海运在途</option><option value="arrived">已到货</option><option value="cancelled">已取消</option></select></label>
           <label className="wide">备注<input value={draft.note} onChange={(event) => patchDraft('note', event.target.value)} /></label>
           <div className="form-actions">
             <button className="primary" type="button" onClick={saveRecord} disabled={!draft.sku.trim()}>{editingId ? '保存修改' : '新增采购记录'}</button>
@@ -242,7 +261,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
           <table>
             <thead>
               <tr>
-                <th>选择</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>总金额</th><th>采购日期</th><th>预计到货日期</th><th>状态</th><th>总 CBM</th><th>备注</th><th>操作</th>
+                <th>选择</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>店铺</th><th>采购人</th><th>采购人邮箱</th><th>采购数量</th><th>采购单价</th><th>总金额</th><th>采购日期</th><th>预计到货日期</th><th>状态</th><th>单品CBM</th><th>总 CBM</th><th>备注</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -253,13 +272,15 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
                   <td>{record.sku}</td>
                   <td>{record.productName}</td>
                   <td>{record.shopName}</td>
-                  <td>{record.buyerName}</td>
+                  <td>{record.assignedBuyerName || record.buyerName}</td>
+                  <td>{record.assignedBuyerEmail}</td>
                   <td>{record.purchaseQuantity}</td>
                   <td>{record.purchasePrice}</td>
                   <td>{record.totalAmount.toFixed(2)}</td>
                   <td>{record.purchaseDate}</td>
                   <td>{record.estimatedArrivalDate}</td>
                   <td>{statusLabels[record.status]}</td>
+                  <td>{record.unitCbm.toFixed(8)}</td>
                   <td>{record.totalCbm.toFixed(4)}</td>
                   <td>{record.note}</td>
                   <td className="row-actions">
@@ -268,7 +289,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
                   </td>
                 </tr>
               ))}
-              {filteredRecords.length === 0 && <tr><td colSpan={15} className="empty">暂无采购记录。</td></tr>}
+              {filteredRecords.length === 0 && <tr><td colSpan={17} className="empty">暂无采购记录。</td></tr>}
             </tbody>
           </table>
         </div>

@@ -31,14 +31,18 @@ function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
       manufacturerName: row.manufacturerName,
       sku: row.sku,
       productName: row.productName,
+      englishName: row.englishName,
       shopName: row.shopName,
       buyerName: row.buyerName,
+      assignedBuyerName: row.buyerName,
+      assignedBuyerEmail: '',
       purchaseQuantity: row.purchaseQuantity ?? 0,
       purchasePrice: row.purchasePrice ?? 0,
       totalAmount: round((row.purchaseQuantity ?? 0) * (row.purchasePrice ?? 0), 2),
       purchaseDate: today.toISOString().slice(0, 10),
       estimatedArrivalDate: addDays(today, 30),
-      status: 'in_transit',
+      status: 'pending',
+      unitCbm: row.unitCbm ?? 0,
       totalCbm: row.totalCbm ?? 0,
       note: '',
     }));
@@ -103,6 +107,11 @@ export function ContainerCalculatorPage({
   function saveAsPurchaseRecords() {
     if (!canEditData) return;
     const records = toPurchaseRecords(calculationRows);
+    const missing = records.filter((record) => !record.assignedBuyerEmail.trim()).map((record) => record.sku || record.productName).filter(Boolean);
+    if (missing.length > 0) {
+      const ok = window.confirm(`以下 SKU 未绑定采购人邮箱，保存后无法显示在个人采购订单中：\n${missing.join('\n')}\n\n是否继续保存？`);
+      if (!ok) return;
+    }
     if (records.length > 0) onRecordsCreate(records);
   }
 

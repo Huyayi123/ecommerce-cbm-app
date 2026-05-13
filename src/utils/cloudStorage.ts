@@ -11,12 +11,16 @@ type PurchaseRecordRow = {
   product_name: string | null;
   shop_name: string | null;
   buyer_name: string | null;
+  assigned_buyer_name: string | null;
+  assigned_buyer_email: string | null;
   purchase_quantity: number | null;
   purchase_price: number | null;
   total_amount: number | null;
   purchase_date: string | null;
   estimated_arrival_date: string | null;
   status: PurchaseStatus;
+  english_name: string | null;
+  unit_cbm: number | null;
   total_cbm: number | null;
   note: string | null;
 };
@@ -126,12 +130,16 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     productName: row.product_name ?? '',
     shopName: row.shop_name ?? '',
     buyerName: row.buyer_name ?? '',
+    assignedBuyerName: row.assigned_buyer_name ?? row.buyer_name ?? '',
+    assignedBuyerEmail: row.assigned_buyer_email ?? '',
+    englishName: row.english_name ?? '',
     purchaseQuantity: Number(row.purchase_quantity ?? 0),
     purchasePrice: Number(row.purchase_price ?? 0),
     totalAmount: Number(row.total_amount ?? 0),
     purchaseDate: row.purchase_date ?? '',
     estimatedArrivalDate: row.estimated_arrival_date ?? '',
     status: row.status,
+    unitCbm: Number(row.unit_cbm ?? 0),
     totalCbm: Number(row.total_cbm ?? 0),
     note: row.note ?? '',
   };
@@ -145,12 +153,16 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     product_name: record.productName,
     shop_name: record.shopName,
     buyer_name: record.buyerName,
+    assigned_buyer_name: record.assignedBuyerName,
+    assigned_buyer_email: record.assignedBuyerEmail,
     purchase_quantity: record.purchaseQuantity,
     purchase_price: record.purchasePrice,
     total_amount: record.totalAmount,
     purchase_date: record.purchaseDate,
     estimated_arrival_date: record.estimatedArrivalDate,
     status: record.status,
+    english_name: record.englishName,
+    unit_cbm: record.unitCbm,
     total_cbm: record.totalCbm,
     note: record.note,
   };
@@ -186,13 +198,13 @@ export async function fetchProfile(userId: string, email: string): Promise<AppPr
   const client = requireSupabase();
   const { data, error } = await client
     .from('profiles')
-    .select('id,email,role,display_name')
+    .select('id,email,role,display_name,buyer_name')
     .eq('id', userId)
     .maybeSingle();
 
   if (error) throwSupabaseError(error);
   if (!data) {
-    return { id: userId, email, role: 'viewer', displayName: email };
+    return { id: userId, email, role: 'viewer', displayName: email, buyerName: '' };
   }
 
   return {
@@ -200,7 +212,34 @@ export async function fetchProfile(userId: string, email: string): Promise<AppPr
     email: data.email ?? email,
     role: (data.role ?? 'viewer') as UserRole,
     displayName: data.display_name ?? data.email ?? email,
+    buyerName: data.buyer_name ?? '',
   };
+}
+
+export async function fetchProfiles(): Promise<AppProfile[]> {
+  const { data, error } = await requireSupabase()
+    .from('profiles')
+    .select('id,email,role,display_name,buyer_name')
+    .order('email');
+  if (error) throwSupabaseError(error);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    email: row.email,
+    role: (row.role ?? 'viewer') as UserRole,
+    displayName: row.display_name ?? row.email,
+    buyerName: row.buyer_name ?? '',
+  }));
+}
+
+export async function updateProfileBinding(profile: AppProfile): Promise<void> {
+  const { error } = await requireSupabase()
+    .from('profiles')
+    .update({
+      display_name: profile.displayName,
+      buyer_name: profile.buyerName,
+    })
+    .eq('id', profile.id);
+  if (error) throwSupabaseError(error);
 }
 
 export async function fetchSkuItems(): Promise<SkuItem[]> {

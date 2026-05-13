@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { AuthPanel } from './components/AuthPanel';
 import { LocalStorageMigration } from './components/LocalStorageMigration';
+import { ProfileBinding } from './components/ProfileBinding';
 import { SkuManager } from './components/SkuManager';
 import { sampleSkus } from './data/sampleSkus';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { ContainerCalculatorPage } from './pages/ContainerCalculatorPage';
+import { MyPurchaseOrdersPage } from './pages/MyPurchaseOrdersPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
 import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, SkuItem } from './types';
@@ -13,6 +15,7 @@ import {
   fetchAuditLogs,
   fetchContainerRows,
   fetchProfile,
+  fetchProfiles,
   fetchPurchaseRecords,
   fetchSkuItems,
   replaceContainerRows,
@@ -20,16 +23,18 @@ import {
   replaceSalesSuggestions,
   replaceSkuItems,
   subscribeToSharedTables,
+  updateProfileBinding,
 } from './utils/cloudStorage';
 import { formatErrorMessage } from './utils/errors';
 import { canDelete, canEdit } from './utils/permissions';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'suggestions';
+type PageKey = 'sku' | 'calculator' | 'inventory' | 'my-orders' | 'suggestions';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'sku', label: 'SKU 资料库' },
   { key: 'calculator', label: '装柜计算' },
   { key: 'inventory', label: '采购 / 在途库存' },
+  { key: 'my-orders', label: '我的采购订单' },
   { key: 'suggestions', label: '月销量采购建议' },
 ];
 
@@ -40,22 +45,25 @@ function App() {
   const [skuItems, setSkuItems] = useState<SkuItem[]>([]);
   const [purchaseRows, setPurchaseRows] = useState<PurchaseRow[]>([]);
   const [purchaseRecords, setPurchaseRecords] = useState<PurchaseRecord[]>([]);
+  const [profiles, setProfiles] = useState<AppProfile[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [fileName, setFileName] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
 
   async function loadCloudData() {
     if (!supabase) return;
-    const [nextSkuItems, nextPurchaseRows, nextPurchaseRecords, nextAuditLogs] = await Promise.all([
+    const [nextSkuItems, nextPurchaseRows, nextPurchaseRecords, nextAuditLogs, nextProfiles] = await Promise.all([
       fetchSkuItems(),
       fetchContainerRows(),
       fetchPurchaseRecords(),
       fetchAuditLogs(),
+      fetchProfiles(),
     ]);
     setSkuItems(nextSkuItems);
     setPurchaseRows(nextPurchaseRows);
     setPurchaseRecords(nextPurchaseRecords);
     setAuditLogs(nextAuditLogs);
+    setProfiles(nextProfiles);
   }
 
   async function loadSession() {
@@ -87,6 +95,7 @@ function App() {
         setPurchaseRows([]);
         setPurchaseRecords([]);
         setAuditLogs([]);
+        setProfiles([]);
         return;
       }
       void fetchProfile(user.id, user.email ?? '').then(setProfile);
@@ -133,8 +142,22 @@ function App() {
   }
 
   async function appendPurchaseRecords(records: PurchaseRecord[]) {
-    await persistPurchaseRecords([...records, ...purchaseRecords]);
+    await persistPurchaseRecords([...assignBuyerEmails(records), ...purchaseRecords]);
     setActivePage('inventory');
+  }
+
+  function buyerEmailForName(name: string): string {
+    const normalized = name.trim().toLowerCase();
+    if (!normalized) return '';
+    return profiles.find((item) => item.buyerName.trim().toLowerCase() === normalized)?.email ?? '';
+  }
+
+  function assignBuyerEmails(records: PurchaseRecord[]): PurchaseRecord[] {
+    return records.map((record) => ({
+      ...record,
+      assignedBuyerName: record.assignedBuyerName || record.buyerName,
+      assignedBuyerEmail: record.assignedBuyerEmail || buyerEmailForName(record.assignedBuyerName || record.buyerName),
+    }));
   }
 
   async function writeAudit(action: AuditAction, entityType: AuditLog['entityType'], entityId: string, summary: string, metadata: Record<string, unknown> = {}) {
@@ -273,6 +296,13 @@ function App() {
     await supabase?.auth.signOut();
   }
 
+  async function saveProfileBinding(nextProfile: AppProfile) {
+    await updateProfileBinding(nextProfile);
+    setProfile(nextProfile);
+    setProfiles((current) => current.map((item) => (item.id === nextProfile.id ? nextProfile : item)));
+    await loadCloudData();
+  }
+
   if (!authReady) {
     return <main className="app-shell"><section className="panel">正在连接云端...</section></main>;
   }
@@ -313,6 +343,8 @@ function App() {
 
       <LocalStorageMigration role={profile.role} onImport={importLocalStorageData} />
 
+      <ProfileBinding profile={profile} onSave={saveProfileBinding} />
+
       {statusMessage && <div className="inline-notice">{statusMessage}</div>}
 
       {activePage === 'sku' && (
@@ -332,7 +364,7 @@ function App() {
           onRecordsCreate={(records) => {
             void appendPurchaseRecords(records).then(() => setStatusMessage(`已保存 ${records.length} 条采购记录`));
           }}
-          canEditData={editable}
+          canEditData={true}
         />
       )}
 
@@ -344,6 +376,14 @@ function App() {
           onChange={(records) => void persistPurchaseRecords(records)}
           canEditData={editable}
           canDeleteData={deletable}
+        />
+      )}
+
+      {activePage === 'my-orders' && (
+        <MyPurchaseOrdersPage
+          records={purchaseRecords}
+          profile={profile}
+          onChange={persistPurchaseRecords}
         />
       )}
 
