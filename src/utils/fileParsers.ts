@@ -2,14 +2,17 @@ import * as XLSX from 'xlsx';
 import type { PurchaseRow, SkuImportPreview, SkuImportPreviewRow, SkuItem } from '../types';
 import { findMatchingSkuItem } from './calculations';
 import { toNumber } from './number';
-import { findSkuHeader, pickSkuExcelField, SKU_FIELD_ALIASES, skuExcelRowToFrontend, type SkuFrontendField } from './skuFieldMapping';
+import {
+  findSkuHeader,
+  normalizeHeader,
+  pickSkuExcelField,
+  SKU_FIELD_ALIASES,
+  skuExcelRowToFrontend,
+  type SkuFrontendField,
+} from './skuFieldMapping';
 
 const PURCHASE_QUANTITY_HEADERS = ['采购数量', '数量', 'qty', 'Qty', 'QTY', 'purchaseQuantity'];
 const SALES_QUANTITY_HEADERS = ['月销量', '销售数量', '销量', '销售件数', 'monthlySales', 'salesQuantity'];
-
-function normalizeHeader(value: string): string {
-  return value.replace(/\s+/g, '').trim().toLowerCase();
-}
 
 function buildHeaderMap(headers: string[]): Map<string, string> {
   const headerMap = new Map<string, string>();
@@ -33,8 +36,49 @@ function pickField(row: Record<string, unknown>, headers: string[], aliases: rea
   return header ? row[header] : undefined;
 }
 
-function readRows(buffer: ArrayBuffer): { headers: string[]; rows: Record<string, unknown>[] } {
-  const workbook = XLSX.read(buffer, { type: 'array' });
+function splitCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+    if (char === '"' && next === '"') {
+      current += '"';
+      index += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      cells.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function scoreCsvText(text: string): number {
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? '';
+  const headers = splitCsvLine(firstLine).map((header) => header.replace(/^\uFEFF/, '').trim());
+  const aliasValues = Object.values(SKU_FIELD_ALIASES).flat().map(normalizeHeader);
+  return headers.reduce((score, header) => score + (aliasValues.includes(normalizeHeader(header)) ? 1 : 0), 0);
+}
+
+function decodeCsv(buffer: ArrayBuffer): string {
+  const candidates = [
+    new TextDecoder('utf-8').decode(buffer),
+    new TextDecoder('gb18030').decode(buffer),
+  ];
+
+  return candidates.sort((left, right) => scoreCsvText(right) - scoreCsvText(left))[0];
+}
+
+function readRows(buffer: ArrayBuffer, fileName: string): { headers: string[]; rows: Record<string, unknown>[] } {
+  const isCsv = /\.csv$/i.test(fileName);
+  const workbook = isCsv ? XLSX.read(decodeCsv(buffer), { type: 'string' }) : XLSX.read(buffer, { type: 'array' });
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) return { headers: [], rows: [] };
 
@@ -51,7 +95,7 @@ function readRows(buffer: ArrayBuffer): { headers: string[]; rows: Record<string
 }
 
 export async function parsePurchaseFile(file: File): Promise<PurchaseRow[]> {
-  const { headers, rows } = readRows(await file.arrayBuffer());
+  const { headers, rows } = readRows(await file.arrayBuffer(), file.name);
 
   return rows.map((row, index) => {
     const skuValue = pickSkuExcelField(row, headers, 'sku');
@@ -74,7 +118,7 @@ export async function parsePurchaseFile(file: File): Promise<PurchaseRow[]> {
 }
 
 export async function parseSalesFile(file: File): Promise<PurchaseRow[]> {
-  const { headers, rows } = readRows(await file.arrayBuffer());
+  const { headers, rows } = readRows(await file.arrayBuffer(), file.name);
 
   return rows.map((row, index) => {
     const skuValue = pickSkuExcelField(row, headers, 'sku');
@@ -125,7 +169,7 @@ function parseSkuRow(row: Record<string, unknown>, headers: string[], rowNumber:
 }
 
 export async function previewSkuFile(file: File, existingItems: SkuItem[]): Promise<SkuImportPreview> {
-  const { headers, rows } = readRows(await file.arrayBuffer());
+  const { headers, rows } = readRows(await file.arrayBuffer(), file.name);
   const recognized = recognizedFieldMap(headers);
   const recognizedHeaders = new Set(Array.from(recognized.values()));
   const missingRequiredFields = recognized.has('sku') || recognized.has('productName') || recognized.has('englishName')

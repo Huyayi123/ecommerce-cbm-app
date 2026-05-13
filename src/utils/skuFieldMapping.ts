@@ -6,7 +6,7 @@ export const SKU_FIELD_ALIASES = {
   manufacturerName: ['厂家名', '厂家', '供应商', 'manufacturer_name'],
   sku: ['SKU', 'sku', '货号', '产品编码', '商品编码', '条码'],
   productName: ['产品名称', '品名', '中文名称', 'product_name'],
-  englishName: ['英文名称', 'English Name', 'english_name'],
+  englishName: ['英文名称', '英文名', 'English Name', 'english_name'],
   purchasePrice: ['采购单价', '单价', '成本价', 'purchase_price'],
   manualUnitCbm: ['单品CBM', '单品 CBM', 'unit_cbm', '单个体积'],
   totalCbm: ['总CBM', '总 CBM', 'total_cbm'],
