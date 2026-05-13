@@ -24,6 +24,9 @@ export type PurchaseRow = {
   rowId: string;
   rowNumber: number;
   sku: string;
+  productName: string;
+  englishName: string;
+  manufacturerName: string;
   purchaseQuantity: number | null;
   raw: Record<string, unknown>;
 };

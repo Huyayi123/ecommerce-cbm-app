@@ -1,7 +1,7 @@
 import { Fragment, type ChangeEvent } from 'react';
 import { useMemo, useState } from 'react';
 import type { SkuImportPreview, SkuItem } from '../types';
-import { hydrateSku } from '../utils/calculations';
+import { findMatchingSkuItem, getSkuMatchKey, hydrateSku } from '../utils/calculations';
 import { exportSkuItems } from '../utils/exporters';
 import { previewSkuFile } from '../utils/fileParsers';
 
@@ -130,7 +130,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
   }
 
   function saveItem() {
-    if (!canEditData || !draft.sku.trim()) return;
+    if (!canEditData || (!draft.sku.trim() && !draft.productName.trim() && !draft.englishName.trim())) return;
     const item = hydrateSku({
       ...draft,
       id: editingId ?? crypto.randomUUID(),
@@ -166,8 +166,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
 
   function confirmImport() {
     if (!importPreview) return;
-    const existingBySku = new Map(items.map((item) => [item.sku.trim().toUpperCase(), item]));
-    const mergedBySku = new Map(items.map((item) => [item.sku.trim().toUpperCase(), item]));
+    const mergedByKey = new Map(items.map((item) => [getSkuMatchKey(item) || item.id, item]));
     let createdCount = 0;
     let updatedCount = 0;
     let failedCount = 0;
@@ -177,18 +176,20 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
         failedCount += 1;
         continue;
       }
-      const key = row.item.sku.trim().toUpperCase();
-      const existing = existingBySku.get(key);
+      const existing = findMatchingSkuItem(row.item, Array.from(mergedByKey.values()));
+      const key = getSkuMatchKey(row.item) || row.item.id;
       if (existing) {
         updatedCount += 1;
-        mergedBySku.set(key, { ...row.item, id: existing.id, updatedAt: new Date().toISOString() });
+        const existingKey = getSkuMatchKey(existing) || existing.id;
+        mergedByKey.delete(existingKey);
+        mergedByKey.set(key, { ...row.item, id: existing.id, updatedAt: new Date().toISOString() });
       } else {
         createdCount += 1;
-        mergedBySku.set(key, { ...row.item, updatedAt: new Date().toISOString() });
+        mergedByKey.set(key, { ...row.item, updatedAt: new Date().toISOString() });
       }
     }
 
-    onChange(Array.from(mergedBySku.values()));
+    onChange(Array.from(mergedByKey.values()));
     setImportMessage(`导入完成：新增 ${createdCount} 条，更新 ${updatedCount} 条，失败 ${failedCount} 条`);
     setImportPreview(null);
   }
@@ -289,7 +290,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
           <span>来源：{sourceLabel(calculated.cbmSource)}</span>
         </div>
         {canEditData && <div className="form-actions">
-          <button className="primary" type="button" onClick={saveItem} disabled={!draft.sku.trim()}>{editingId ? '保存修改' : '新增 SKU'}</button>
+          <button className="primary" type="button" onClick={saveItem} disabled={!draft.sku.trim() && !draft.productName.trim() && !draft.englishName.trim()}>{editingId ? '保存修改' : '新增 SKU'}</button>
           <button type="button" onClick={resetForm}>清空</button>
         </div>}
       </div>

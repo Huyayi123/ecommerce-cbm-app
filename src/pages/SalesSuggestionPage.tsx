@@ -87,6 +87,9 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         rowId: `${Date.now()}-suggestion-${index}`,
         rowNumber: index + 2,
         sku: row.sku,
+        productName: row.productName,
+        englishName: '',
+        manufacturerName: row.manufacturerName,
         purchaseQuantity: row.suggestedQuantity,
         raw: { source: 'sales-suggestion', monthlySales: row.monthlySales, stockMonths: row.stockMonths },
       }));

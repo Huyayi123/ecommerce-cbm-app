@@ -23,7 +23,7 @@ create table if not exists public.profiles (
 
 create table if not exists public.sku_items (
   id text primary key,
-  sku text not null unique,
+  sku text,
   product_name text,
   english_name text,
   manufacturer_name text,
@@ -54,6 +54,12 @@ add column if not exists cbm_source text default 'missing';
 alter table public.sku_items
 drop column if exists note;
 
+alter table public.sku_items
+alter column sku drop not null;
+
+alter table public.sku_items
+drop constraint if exists sku_items_sku_key;
+
 create table if not exists public.purchase_records (
   id text primary key,
   manufacturer_name text,
@@ -77,10 +83,22 @@ create table if not exists public.container_rows (
   id text primary key,
   row_number integer,
   sku text,
+  product_name text,
+  english_name text,
+  manufacturer_name text,
   purchase_quantity numeric,
   raw jsonb default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
+
+alter table public.container_rows
+add column if not exists product_name text;
+
+alter table public.container_rows
+add column if not exists english_name text;
+
+alter table public.container_rows
+add column if not exists manufacturer_name text;
 
 create table if not exists public.sales_suggestions (
   id text primary key,

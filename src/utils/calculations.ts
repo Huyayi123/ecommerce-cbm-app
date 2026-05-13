@@ -29,13 +29,50 @@ export function hydrateSku(item: Omit<SkuItem, 'cartonCbm' | 'unitCbm'>): SkuIte
   };
 }
 
-export function calculateRows(purchases: PurchaseRow[], skuItems: SkuItem[]): CalculationRow[] {
-  const skuMap = new Map(skuItems.map((item) => [item.sku.trim().toUpperCase(), item]));
+function normalizeMatchValue(value: string): string {
+  return value.trim().replace(/\s+/g, '').toUpperCase();
+}
 
+type SkuMatchInput = Pick<SkuItem, 'sku' | 'productName' | 'englishName' | 'manufacturerName'>;
+
+export function getSkuMatchKey(input: SkuMatchInput): string {
+  const skuKey = normalizeMatchValue(input.sku);
+  if (skuKey) {
+    return `sku:${skuKey}`;
+  }
+
+  const manufacturerKey = normalizeMatchValue(input.manufacturerName);
+  const productNameKey = normalizeMatchValue(input.productName);
+  if (productNameKey && manufacturerKey) {
+    return `product:${productNameKey}:${manufacturerKey}`;
+  }
+
+  const englishNameKey = normalizeMatchValue(input.englishName);
+  if (englishNameKey && manufacturerKey) {
+    return `english:${englishNameKey}:${manufacturerKey}`;
+  }
+
+  return '';
+}
+
+export function findMatchingSkuItem(input: SkuMatchInput, skuItems: SkuItem[]): SkuItem | undefined {
+  const key = getSkuMatchKey(input);
+  if (!key) return undefined;
+  return skuItems.find((item) => getSkuMatchKey(item) === key);
+}
+
+function hasIdentity(input: Pick<PurchaseRow, 'sku' | 'productName' | 'englishName'>): boolean {
+  return Boolean(input.sku.trim() || input.productName.trim() || input.englishName.trim());
+}
+
+function hasOnlyCbmWarning(messages: string[]): boolean {
+  return messages.length > 0 && messages.every((message) => message === '缺少CBM资料');
+}
+
+export function calculateRows(purchases: PurchaseRow[], skuItems: SkuItem[]): CalculationRow[] {
   return purchases.map((purchase) => {
     const messages: string[] = [];
-    const normalizedSku = purchase.sku.trim().toUpperCase();
-    const skuItem = skuMap.get(normalizedSku);
+    const skuItem = findMatchingSkuItem(purchase, skuItems);
 
     const quantityValid =
       purchase.purchaseQuantity === null ||
@@ -44,12 +81,12 @@ export function calculateRows(purchases: PurchaseRow[], skuItems: SkuItem[]): Ca
         ? false
         : true;
 
-    if (!skuItem && purchase.sku.trim()) {
-      messages.push('SKU未录入资料库');
+    if (!skuItem) {
+      messages.push(purchase.sku.trim() ? 'SKU未录入资料库' : '未匹配到SKU资料库');
     }
 
-    if (!purchase.sku.trim()) {
-      messages.push('SKU为空');
+    if (!hasIdentity(purchase)) {
+      messages.push('SKU、产品名称、英文名称至少填写一个');
     }
 
     if (!quantityValid) {
@@ -68,13 +105,7 @@ export function calculateRows(purchases: PurchaseRow[], skuItems: SkuItem[]): Ca
     const hasValidUnitCbm = unitCbm > 0;
 
     if (skuItem && !hasValidUnitCbm) {
-      if (skuItem.unitsPerCarton <= 0) {
-        messages.push('每箱数量错误，无法计算单品CBM');
-      }
-
-      if (skuItem.cartonLengthCm <= 0 || skuItem.cartonWidthCm <= 0 || skuItem.cartonHeightCm <= 0) {
-        messages.push('缺少包装尺寸，无法计算CBM');
-      }
+      messages.push('缺少CBM资料');
     }
 
     const totalCbm = skuItem && quantityValid && hasValidUnitCbm
@@ -91,7 +122,7 @@ export function calculateRows(purchases: PurchaseRow[], skuItems: SkuItem[]): Ca
     return {
       rowId: purchase.rowId,
       rowNumber: purchase.rowNumber,
-      sku: purchase.sku,
+      sku: skuItem?.sku || purchase.sku,
       manufacturerName: skuItem?.manufacturerName ?? '',
       productName: skuItem?.productName ?? '',
       englishName: skuItem?.englishName ?? '',
@@ -102,7 +133,9 @@ export function calculateRows(purchases: PurchaseRow[], skuItems: SkuItem[]): Ca
       totalAmount,
       unitCbm: skuItem?.unitCbm ?? null,
       totalCbm,
-      status: messages.length > 0 ? 'error' : totalCbm && totalCbm > 0 ? 'ok' : 'warning',
+      status: messages.length === 0
+        ? totalCbm && totalCbm > 0 ? 'ok' : 'warning'
+        : hasOnlyCbmWarning(messages) ? 'warning' : 'error',
       messages,
     };
   });

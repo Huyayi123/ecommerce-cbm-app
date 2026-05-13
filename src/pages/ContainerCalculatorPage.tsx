@@ -3,7 +3,7 @@ import { PurchaseUploader } from '../components/PurchaseUploader';
 import { ResultsTable } from '../components/ResultsTable';
 import { SummaryCards } from '../components/SummaryCards';
 import type { CalculationRow, PurchaseRecord, PurchaseRow, SkuItem } from '../types';
-import { calculateRows, summarize } from '../utils/calculations';
+import { calculateRows, getSkuMatchKey, summarize } from '../utils/calculations';
 import { round } from '../utils/number';
 
 type Props = {
@@ -25,7 +25,7 @@ function addDays(date: Date, days: number): string {
 function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
   const today = new Date();
   return rows
-    .filter((row) => row.status !== 'error' && row.sku && row.purchaseQuantity && row.purchaseQuantity > 0)
+    .filter((row) => row.status !== 'error' && (row.sku || row.productName || row.englishName) && row.purchaseQuantity && row.purchaseQuantity > 0)
     .map((row) => ({
       id: crypto.randomUUID(),
       manufacturerName: row.manufacturerName,
@@ -65,14 +65,18 @@ export function ContainerCalculatorPage({
 
   function normalizeRows(rows: PurchaseRow[]): { rows: PurchaseRow[]; conflicts: string[] } {
     const merged = new Map<string, PurchaseRow>();
+    const passthrough: PurchaseRow[] = [];
 
     for (const row of rows) {
-      const skuKey = row.sku.trim().toUpperCase();
-      if (!skuKey) continue;
+      const key = getSkuMatchKey(row);
+      if (!key) {
+        passthrough.push(row);
+        continue;
+      }
 
-      const existing = merged.get(skuKey);
+      const existing = merged.get(key);
       if (!existing) {
-        merged.set(skuKey, { ...row });
+        merged.set(key, { ...row });
         continue;
       }
       existing.purchaseQuantity = (existing.purchaseQuantity ?? 0) + (row.purchaseQuantity ?? 0);
@@ -80,7 +84,7 @@ export function ContainerCalculatorPage({
     }
 
     return {
-      rows: Array.from(merged.values()).map((row, index) => ({ ...row, rowNumber: index + 2 })),
+      rows: [...Array.from(merged.values()), ...passthrough].map((row, index) => ({ ...row, rowNumber: index + 2 })),
       conflicts: [],
     };
   }

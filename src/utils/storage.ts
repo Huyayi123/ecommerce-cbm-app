@@ -60,6 +60,9 @@ export function loadPurchaseRows(): PurchaseRow[] {
       rowId: String(row.rowId ?? crypto.randomUUID()),
       rowNumber: Number(row.rowNumber ?? index + 2),
       sku: String(row.sku ?? ''),
+      productName: String(row.productName ?? ''),
+      englishName: String(row.englishName ?? ''),
+      manufacturerName: String(row.manufacturerName ?? ''),
       purchaseQuantity: nullableNumber(row.purchaseQuantity),
       raw: typeof row.raw === 'object' && row.raw !== null ? row.raw : {},
     }));

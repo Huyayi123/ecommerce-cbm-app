@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { PurchaseRow, SkuImportPreview, SkuImportPreviewRow, SkuItem } from '../types';
-import { hydrateSku } from './calculations';
+import { findMatchingSkuItem, hydrateSku } from './calculations';
 import { toNumber } from './number';
 
 const FIELD_ALIASES = {
@@ -73,12 +73,18 @@ export async function parsePurchaseFile(file: File): Promise<PurchaseRow[]> {
 
   return rows.map((row, index) => {
     const skuValue = pickField(row, headers, FIELD_ALIASES.sku);
+    const productNameValue = pickField(row, headers, FIELD_ALIASES.productName);
+    const englishNameValue = pickField(row, headers, FIELD_ALIASES.englishName);
+    const manufacturerNameValue = pickField(row, headers, FIELD_ALIASES.manufacturerName);
     const qtyValue = pickField(row, headers, PURCHASE_QUANTITY_HEADERS);
 
     return {
       rowId: `${Date.now()}-${index}`,
       rowNumber: index + 2,
       sku: skuValue === undefined || skuValue === null ? '' : String(skuValue).trim(),
+      productName: productNameValue === undefined || productNameValue === null ? '' : String(productNameValue).trim(),
+      englishName: englishNameValue === undefined || englishNameValue === null ? '' : String(englishNameValue).trim(),
+      manufacturerName: manufacturerNameValue === undefined || manufacturerNameValue === null ? '' : String(manufacturerNameValue).trim(),
       purchaseQuantity: toNumber(qtyValue),
       raw: row,
     };
@@ -96,6 +102,9 @@ export async function parseSalesFile(file: File): Promise<PurchaseRow[]> {
       rowId: `${Date.now()}-sales-${index}`,
       rowNumber: index + 2,
       sku: skuValue === undefined || skuValue === null ? '' : String(skuValue).trim(),
+      productName: '',
+      englishName: '',
+      manufacturerName: '',
       purchaseQuantity: toNumber(salesValue),
       raw: row,
     };
@@ -111,8 +120,11 @@ function recognizedFieldMap(headers: string[]): Map<SkuField, string> {
   return recognized;
 }
 
-function parseSkuRow(row: Record<string, unknown>, headers: string[], rowNumber: number, existingSkuKeys: Set<string>): SkuImportPreviewRow {
+function parseSkuRow(row: Record<string, unknown>, headers: string[], rowNumber: number, existingItems: SkuItem[]): SkuImportPreviewRow {
   const sku = String(pickField(row, headers, FIELD_ALIASES.sku) ?? '').trim();
+  const productName = String(pickField(row, headers, FIELD_ALIASES.productName) ?? '').trim();
+  const englishName = String(pickField(row, headers, FIELD_ALIASES.englishName) ?? '').trim();
+  const manufacturerName = String(pickField(row, headers, FIELD_ALIASES.manufacturerName) ?? '').trim();
   const errors: string[] = [];
   const manualUnitCbm = toNumber(pickField(row, headers, FIELD_ALIASES.manualUnitCbm)) ?? 0;
   const totalCbm = toNumber(pickField(row, headers, FIELD_ALIASES.totalCbm)) ?? 0;
@@ -122,10 +134,7 @@ function parseSkuRow(row: Record<string, unknown>, headers: string[], rowNumber:
   const cartonHeightCm = toNumber(pickField(row, headers, FIELD_ALIASES.cartonHeightCm)) ?? 0;
   const unitsPerCarton = toNumber(pickField(row, headers, FIELD_ALIASES.unitsPerCarton)) ?? 0;
 
-  if (!sku) errors.push('SKU 为空');
-  if (manualUnitCbm <= 0 && !(totalCbm > 0 && totalQuantity > 0) && !(cartonLengthCm > 0 && cartonWidthCm > 0 && cartonHeightCm > 0 && unitsPerCarton > 0)) {
-    errors.push('缺少单品CBM，且无法通过总CBM/总数量或箱规计算');
-  }
+  if (!sku && !productName && !englishName) errors.push('SKU、产品名称、英文名称至少填写一个');
 
   if (errors.length > 0) {
     return { rowNumber, item: null, action: 'fail', errors };
@@ -134,9 +143,9 @@ function parseSkuRow(row: Record<string, unknown>, headers: string[], rowNumber:
   const item = hydrateSku({
     id: crypto.randomUUID(),
     sku,
-    productName: String(pickField(row, headers, FIELD_ALIASES.productName) ?? '').trim(),
-    englishName: String(pickField(row, headers, FIELD_ALIASES.englishName) ?? '').trim(),
-    manufacturerName: String(pickField(row, headers, FIELD_ALIASES.manufacturerName) ?? '').trim(),
+    productName,
+    englishName,
+    manufacturerName,
     shopName: String(pickField(row, headers, FIELD_ALIASES.shopName) ?? '').trim(),
     buyerName: String(pickField(row, headers, FIELD_ALIASES.buyerName) ?? '').trim(),
     purchasePrice: toNumber(pickField(row, headers, FIELD_ALIASES.purchasePrice)) ?? 0,
@@ -154,7 +163,7 @@ function parseSkuRow(row: Record<string, unknown>, headers: string[], rowNumber:
   return {
     rowNumber,
     item,
-    action: existingSkuKeys.has(sku.toUpperCase()) ? 'update' : 'create',
+    action: findMatchingSkuItem(item, existingItems) ? 'update' : 'create',
     errors: [],
   };
 }
@@ -163,8 +172,9 @@ export async function previewSkuFile(file: File, existingItems: SkuItem[]): Prom
   const { headers, rows } = readRows(await file.arrayBuffer());
   const recognized = recognizedFieldMap(headers);
   const recognizedHeaders = new Set(Array.from(recognized.values()));
-  const missingRequiredFields = recognized.has('sku') ? [] : ['SKU'];
-  const existingSkuKeys = new Set(existingItems.map((item) => item.sku.trim().toUpperCase()));
+  const missingRequiredFields = recognized.has('sku') || recognized.has('productName') || recognized.has('englishName')
+    ? []
+    : ['SKU/产品名称/英文名称'];
 
   return {
     fileName: file.name,
@@ -174,7 +184,7 @@ export async function previewSkuFile(file: File, existingItems: SkuItem[]): Prom
     missingRequiredFields,
     rows: missingRequiredFields.length > 0
       ? []
-      : rows.map((row, index) => parseSkuRow(row, headers, index + 2, existingSkuKeys)),
+      : rows.map((row, index) => parseSkuRow(row, headers, index + 2, existingItems)),
   };
 }
 

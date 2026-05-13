@@ -4,7 +4,7 @@ import { hydrateSku } from './calculations';
 
 type SkuRow = {
   id: string;
-  sku: string;
+  sku: string | null;
   product_name: string | null;
   english_name: string | null;
   manufacturer_name: string | null;
@@ -43,6 +43,9 @@ type ContainerRow = {
   id: string;
   row_number: number | null;
   sku: string | null;
+  product_name: string | null;
+  english_name: string | null;
+  manufacturer_name: string | null;
   purchase_quantity: number | null;
   raw: Record<string, unknown> | null;
 };
@@ -68,7 +71,7 @@ function requireSupabase() {
 function mapSkuRow(row: SkuRow): SkuItem {
   return hydrateSku({
     id: row.id,
-    sku: row.sku,
+    sku: row.sku ?? '',
     productName: row.product_name ?? '',
     englishName: row.english_name ?? '',
     manufacturerName: row.manufacturer_name ?? '',
@@ -90,7 +93,7 @@ function mapSkuRow(row: SkuRow): SkuItem {
 function toSkuRow(item: SkuItem): SkuRow {
   return {
     id: item.id,
-    sku: item.sku,
+    sku: item.sku.trim() || null,
     product_name: item.productName,
     english_name: item.englishName,
     manufacturer_name: item.manufacturerName,
@@ -152,6 +155,9 @@ function mapContainerRow(row: ContainerRow): PurchaseRow {
     rowId: row.id,
     rowNumber: Number(row.row_number ?? 0),
     sku: row.sku ?? '',
+    productName: row.product_name ?? '',
+    englishName: row.english_name ?? '',
+    manufacturerName: row.manufacturer_name ?? '',
     purchaseQuantity: row.purchase_quantity,
     raw: row.raw ?? {},
   };
@@ -162,6 +168,9 @@ function toContainerRow(row: PurchaseRow): ContainerRow {
     id: row.rowId,
     row_number: row.rowNumber,
     sku: row.sku,
+    product_name: row.productName,
+    english_name: row.englishName,
+    manufacturer_name: row.manufacturerName,
     purchase_quantity: row.purchaseQuantity,
     raw: row.raw,
   };
