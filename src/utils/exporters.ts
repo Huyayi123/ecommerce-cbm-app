@@ -52,6 +52,7 @@ export function exportSkuItems(items: SkuItem[], format: ExportFormat): void {
       宽cm: item.cartonWidthCm,
       高cm: item.cartonHeightCm,
       每箱数量: item.unitsPerCarton,
+      备注: item.notes,
     })),
   );
   const workbook = XLSX.utils.book_new();

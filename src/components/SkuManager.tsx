@@ -24,7 +24,7 @@ type ColumnKey =
 
 type Props = {
   items: SkuItem[];
-  onChange: (items: SkuItem[]) => void;
+  onChange: (items: SkuItem[]) => void | Promise<void>;
   canEditData?: boolean;
   canDeleteData?: boolean;
 };
@@ -72,6 +72,7 @@ const emptyDraft: DraftSku = {
   totalQuantity: 0,
   totalCbm: 0,
   manualUnitCbm: 0,
+  notes: '',
   cbmSource: 'missing',
   updatedAt: '',
 };
@@ -93,6 +94,7 @@ function toDraft(item: SkuItem): DraftSku {
     totalQuantity: item.totalQuantity,
     totalCbm: item.totalCbm,
     manualUnitCbm: item.manualUnitCbm,
+    notes: item.notes,
     cbmSource: item.cbmSource,
     updatedAt: item.updatedAt,
   };
@@ -129,7 +131,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
     setEditingId(null);
   }
 
-  function saveItem() {
+  async function saveItem() {
     if (!canEditData || (!draft.sku.trim() && !draft.productName.trim() && !draft.englishName.trim())) return;
     const item = hydrateSku({
       ...draft,
@@ -138,12 +140,18 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
       updatedAt: new Date().toISOString(),
     });
 
-    if (editingId) {
-      onChange(items.map((existing) => (existing.id === editingId ? item : existing)));
-    } else {
-      onChange([item, ...items]);
+    try {
+      if (editingId) {
+        await onChange(items.map((existing) => (existing.id === editingId ? item : existing)));
+      } else {
+        await onChange([item, ...items]);
+      }
+      setImportMessage(editingId ? 'SKU 已保存' : 'SKU 已新增');
+      resetForm();
+    } catch (error) {
+      console.error(error);
+      setImportMessage(`保存失败：${error instanceof Error ? error.message : String(error)}`);
     }
-    resetForm();
   }
 
   function editItem(item: SkuItem) {
@@ -151,10 +159,16 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
     setEditingId(item.id);
   }
 
-  function deleteItem(id: string) {
+  async function deleteItem(id: string) {
     if (!canDeleteData) return;
-    onChange(items.filter((item) => item.id !== id));
-    if (editingId === id) resetForm();
+    try {
+      await onChange(items.filter((item) => item.id !== id));
+      if (editingId === id) resetForm();
+      setImportMessage('SKU 已删除');
+    } catch (error) {
+      console.error(error);
+      setImportMessage(`删除失败：${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async function previewImport(event: ChangeEvent<HTMLInputElement>) {
@@ -164,7 +178,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
     event.target.value = '';
   }
 
-  function confirmImport() {
+  async function confirmImport() {
     if (!importPreview) return;
     const mergedByKey = new Map(items.map((item) => [getSkuMatchKey(item) || item.id, item]));
     let createdCount = 0;
@@ -189,9 +203,14 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
       }
     }
 
-    onChange(Array.from(mergedByKey.values()));
-    setImportMessage(`导入完成：新增 ${createdCount} 条，更新 ${updatedCount} 条，失败 ${failedCount} 条`);
-    setImportPreview(null);
+    try {
+      await onChange(Array.from(mergedByKey.values()));
+      setImportMessage(`导入完成：新增 ${createdCount} 条，更新 ${updatedCount} 条，失败 ${failedCount} 条`);
+      setImportPreview(null);
+    } catch (error) {
+      console.error(error);
+      setImportMessage(`导入失败：${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   function toggleColumn(key: ColumnKey) {

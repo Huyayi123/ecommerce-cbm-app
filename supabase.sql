@@ -30,13 +30,14 @@ create table if not exists public.sku_items (
   shop_name text,
   buyer_name text,
   purchase_price numeric default 0,
-  carton_length_cm numeric default 0,
-  carton_width_cm numeric default 0,
-  carton_height_cm numeric default 0,
+  unit_cbm numeric default 0,
+  box_length_cm numeric default 0,
+  box_width_cm numeric default 0,
+  box_height_cm numeric default 0,
   units_per_carton numeric default 0,
   total_quantity numeric default 0,
   total_cbm numeric default 0,
-  manual_unit_cbm numeric default 0,
+  notes text,
   cbm_source text default 'missing',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -46,13 +47,45 @@ alter table public.sku_items
 add column if not exists purchase_price numeric default 0;
 
 alter table public.sku_items
-add column if not exists manual_unit_cbm numeric default 0;
+add column if not exists unit_cbm numeric default 0;
+
+alter table public.sku_items
+add column if not exists box_length_cm numeric default 0;
+
+alter table public.sku_items
+add column if not exists box_width_cm numeric default 0;
+
+alter table public.sku_items
+add column if not exists box_height_cm numeric default 0;
+
+alter table public.sku_items
+add column if not exists notes text;
 
 alter table public.sku_items
 add column if not exists cbm_source text default 'missing';
 
 alter table public.sku_items
 drop column if exists note;
+
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'sku_items' and column_name = 'manual_unit_cbm'
+  ) then
+    update public.sku_items set unit_cbm = coalesce(nullif(unit_cbm, 0), manual_unit_cbm, 0);
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'sku_items' and column_name = 'carton_length_cm'
+  ) then
+    update public.sku_items
+    set
+      box_length_cm = coalesce(nullif(box_length_cm, 0), carton_length_cm, 0),
+      box_width_cm = coalesce(nullif(box_width_cm, 0), carton_width_cm, 0),
+      box_height_cm = coalesce(nullif(box_height_cm, 0), carton_height_cm, 0);
+  end if;
+end $$;
 
 alter table public.sku_items
 alter column sku drop not null;

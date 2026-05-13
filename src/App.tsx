@@ -103,9 +103,12 @@ function App() {
   }, [profile]);
 
   async function persistSkuItems(nextItems: SkuItem[]) {
-    await logSkuChanges(skuItems, nextItems);
-    setSkuItems(nextItems);
     await replaceSkuItems(nextItems);
+    setSkuItems(nextItems);
+    void logSkuChanges(skuItems, nextItems).catch((error) => {
+      console.error(error);
+      setStatusMessage(`SKU 已保存，但操作记录写入失败：${error instanceof Error ? error.message : String(error)}`);
+    });
   }
 
   async function persistPurchaseRows(nextRows: PurchaseRow[]) {
@@ -314,7 +317,7 @@ function App() {
       {activePage === 'sku' && (
         <>
           {editable && <button type="button" onClick={() => void loadSamples()}>载入示例 SKU</button>}
-          <SkuManager items={skuItems} onChange={(items) => void persistSkuItems(items)} canEditData={editable} canDeleteData={deletable} />
+          <SkuManager items={skuItems} onChange={persistSkuItems} canEditData={editable} canDeleteData={deletable} />
         </>
       )}
 

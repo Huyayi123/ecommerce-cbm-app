@@ -27,6 +27,7 @@ export function loadSkuItems(): SkuItem[] {
         totalQuantity: Number(item.totalQuantity ?? 0),
         totalCbm: Number(item.totalCbm ?? 0),
         manualUnitCbm: Number(item.manualUnitCbm ?? item.unitCbm ?? 0),
+        notes: String(item.notes ?? item.note ?? ''),
         cbmSource: item.cbmSource ?? 'missing',
         updatedAt: String(item.updatedAt ?? new Date().toISOString()),
       }),

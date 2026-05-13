@@ -1,26 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, PurchaseStatus, SalesSuggestionRow, SkuItem, UserRole } from '../types';
-import { hydrateSku } from './calculations';
-
-type SkuRow = {
-  id: string;
-  sku: string | null;
-  product_name: string | null;
-  english_name: string | null;
-  manufacturer_name: string | null;
-  shop_name: string | null;
-  buyer_name: string | null;
-  purchase_price: number | null;
-  carton_length_cm: number | null;
-  carton_width_cm: number | null;
-  carton_height_cm: number | null;
-  units_per_carton: number | null;
-  total_quantity: number | null;
-  total_cbm: number | null;
-  manual_unit_cbm: number | null;
-  cbm_source: SkuItem['cbmSource'] | null;
-  updated_at: string | null;
-};
+import { frontendSkuToSupabase, supabaseSkuToFrontend, type SupabaseSkuRow } from './skuFieldMapping';
 
 type PurchaseRecordRow = {
   id: string;
@@ -63,34 +43,43 @@ type AuditLogRow = {
   created_at: string;
 };
 
+type LegacySkuRow = {
+  id: string;
+  sku: string | null;
+  product_name: string;
+  english_name: string;
+  manufacturer_name: string;
+  shop_name: string;
+  buyer_name: string;
+  purchase_price: number;
+  carton_length_cm: number;
+  carton_width_cm: number;
+  carton_height_cm: number;
+  units_per_carton: number;
+  total_quantity: number;
+  total_cbm: number;
+  manual_unit_cbm: number;
+  cbm_source: SkuItem['cbmSource'];
+  updated_at: string;
+};
+
 function requireSupabase() {
   if (!supabase) throw new Error('Supabase is not configured');
   return supabase;
 }
 
-function mapSkuRow(row: SkuRow): SkuItem {
-  return hydrateSku({
-    id: row.id,
-    sku: row.sku ?? '',
-    productName: row.product_name ?? '',
-    englishName: row.english_name ?? '',
-    manufacturerName: row.manufacturer_name ?? '',
-    shopName: row.shop_name ?? '',
-    buyerName: row.buyer_name ?? '',
-    purchasePrice: Number(row.purchase_price ?? 0),
-    cartonLengthCm: Number(row.carton_length_cm ?? 0),
-    cartonWidthCm: Number(row.carton_width_cm ?? 0),
-    cartonHeightCm: Number(row.carton_height_cm ?? 0),
-    unitsPerCarton: Number(row.units_per_carton ?? 0),
-    totalQuantity: Number(row.total_quantity ?? 0),
-    totalCbm: Number(row.total_cbm ?? 0),
-    manualUnitCbm: Number(row.manual_unit_cbm ?? 0),
-    cbmSource: row.cbm_source ?? 'missing',
-    updatedAt: row.updated_at ?? '',
-  });
+function throwSupabaseError(error: unknown): never {
+  console.error(error);
+  throw error;
 }
 
-function toSkuRow(item: SkuItem): SkuRow {
+function isMissingColumnError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const payload = error as { code?: string; message?: string };
+  return payload.code === 'PGRST204' || /column|schema cache/i.test(payload.message ?? '');
+}
+
+function frontendSkuToLegacySupabase(item: SkuItem): LegacySkuRow {
   return {
     id: item.id,
     sku: item.sku.trim() || null,
@@ -106,7 +95,7 @@ function toSkuRow(item: SkuItem): SkuRow {
     units_per_carton: item.unitsPerCarton,
     total_quantity: item.totalQuantity,
     total_cbm: item.totalCbm,
-    manual_unit_cbm: item.manualUnitCbm,
+    manual_unit_cbm: item.unitCbm || item.manualUnitCbm,
     cbm_source: item.cbmSource,
     updated_at: item.updatedAt || new Date().toISOString(),
   };
@@ -184,7 +173,7 @@ export async function fetchProfile(userId: string, email: string): Promise<AppPr
     .eq('id', userId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   if (!data) {
     return { id: userId, email, role: 'viewer', displayName: email };
   }
@@ -199,8 +188,8 @@ export async function fetchProfile(userId: string, email: string): Promise<AppPr
 
 export async function fetchSkuItems(): Promise<SkuItem[]> {
   const { data, error } = await requireSupabase().from('sku_items').select('*').order('manufacturer_name');
-  if (error) throw error;
-  return (data ?? []).map((row) => mapSkuRow(row as SkuRow));
+  if (error) throwSupabaseError(error);
+  return (data ?? []).map((row) => supabaseSkuToFrontend(row as SupabaseSkuRow));
 }
 
 export async function replaceSkuItems(items: SkuItem[]): Promise<void> {
@@ -210,18 +199,23 @@ export async function replaceSkuItems(items: SkuItem[]): Promise<void> {
   const deleteIds = remote.map((item) => item.id).filter((id) => !nextIds.has(id));
 
   if (items.length > 0) {
-    const { error } = await client.from('sku_items').upsert(items.map(toSkuRow));
-    if (error) throw error;
+    const { error } = await client.from('sku_items').upsert(items.map(frontendSkuToSupabase), { onConflict: 'id' });
+    if (error) {
+      console.error(error);
+      if (!isMissingColumnError(error)) throw error;
+      const { error: legacyError } = await client.from('sku_items').upsert(items.map(frontendSkuToLegacySupabase), { onConflict: 'id' });
+      if (legacyError) throwSupabaseError(legacyError);
+    }
   }
   if (deleteIds.length > 0) {
     const { error } = await client.from('sku_items').delete().in('id', deleteIds);
-    if (error) throw error;
+    if (error) throwSupabaseError(error);
   }
 }
 
 export async function fetchPurchaseRecords(): Promise<PurchaseRecord[]> {
   const { data, error } = await requireSupabase().from('purchase_records').select('*').order('purchase_date', { ascending: false });
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return (data ?? []).map((row) => mapPurchaseRecord(row as PurchaseRecordRow));
 }
 
@@ -233,33 +227,33 @@ export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise
 
   if (records.length > 0) {
     const { error } = await client.from('purchase_records').upsert(records.map(toPurchaseRecordRow));
-    if (error) throw error;
+    if (error) throwSupabaseError(error);
   }
   if (deleteIds.length > 0) {
     const { error } = await client.from('purchase_records').delete().in('id', deleteIds);
-    if (error) throw error;
+    if (error) throwSupabaseError(error);
   }
 }
 
 export async function fetchContainerRows(): Promise<PurchaseRow[]> {
   const { data, error } = await requireSupabase().from('container_rows').select('*').order('row_number');
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return (data ?? []).map((row) => mapContainerRow(row as ContainerRow));
 }
 
 export async function replaceContainerRows(rows: PurchaseRow[]): Promise<void> {
   const client = requireSupabase();
   const { error: deleteError } = await client.from('container_rows').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  if (deleteError) throw deleteError;
+  if (deleteError) throwSupabaseError(deleteError);
   if (rows.length === 0) return;
   const { error } = await client.from('container_rows').insert(rows.map(toContainerRow));
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
 }
 
 export async function replaceSalesSuggestions(rows: SalesSuggestionRow[]): Promise<void> {
   const client = requireSupabase();
   const { error: deleteError } = await client.from('sales_suggestions').delete().neq('id', 'never-match');
-  if (deleteError) throw deleteError;
+  if (deleteError) throwSupabaseError(deleteError);
   if (rows.length === 0) return;
 
   const { error } = await client.from('sales_suggestions').insert(
@@ -281,7 +275,7 @@ export async function replaceSalesSuggestions(rows: SalesSuggestionRow[]): Promi
       messages: row.messages,
     })),
   );
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
 }
 
 function mapAuditLog(row: AuditLogRow): AuditLog {
@@ -305,7 +299,7 @@ export async function fetchAuditLogs(): Promise<AuditLog[]> {
     .select('*')
     .order('created_at', { ascending: false })
     .limit(300);
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return (data ?? []).map((row) => mapAuditLog(row as AuditLogRow));
 }
 
@@ -321,7 +315,7 @@ export async function createAuditLog(input: Omit<AuditLog, 'id' | 'createdAt'>):
     summary: input.summary,
     metadata: input.metadata,
   });
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
 }
 
 export function subscribeToSharedTables(onChange: () => void): () => void {

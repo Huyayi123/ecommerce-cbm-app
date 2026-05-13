@@ -1,26 +1,8 @@
 import * as XLSX from 'xlsx';
 import type { PurchaseRow, SkuImportPreview, SkuImportPreviewRow, SkuItem } from '../types';
-import { findMatchingSkuItem, hydrateSku } from './calculations';
+import { findMatchingSkuItem } from './calculations';
 import { toNumber } from './number';
-
-const FIELD_ALIASES = {
-  sku: ['SKU', 'sku', '货号', '产品编码', '商品编码', '条码'],
-  productName: ['产品名称', '品名', '中文名称', 'product_name'],
-  englishName: ['英文名称', 'English Name', 'english_name'],
-  manufacturerName: ['厂家名', '厂家', '供应商', 'manufacturer_name'],
-  shopName: ['店铺', '店铺名', 'shop_name'],
-  buyerName: ['采购人', '买手', 'buyer_name'],
-  purchasePrice: ['采购单价', '单价', '成本价', 'purchase_price'],
-  manualUnitCbm: ['单品CBM', '单品 CBM', 'unit_cbm', '单个体积'],
-  totalCbm: ['总CBM', '总 CBM', 'total_cbm'],
-  totalQuantity: ['总数量', '数量', 'total_quantity'],
-  cartonLengthCm: ['长cm', '长 cm', '长', 'box_length_cm'],
-  cartonWidthCm: ['宽cm', '宽 cm', '宽', 'box_width_cm'],
-  cartonHeightCm: ['高cm', '高 cm', '高', 'box_height_cm'],
-  unitsPerCarton: ['每箱数量', '装箱数', '箱规', 'units_per_carton'],
-} as const;
-
-type SkuField = keyof typeof FIELD_ALIASES;
+import { findSkuHeader, pickSkuExcelField, SKU_FIELD_ALIASES, skuExcelRowToFrontend, type SkuFrontendField } from './skuFieldMapping';
 
 const PURCHASE_QUANTITY_HEADERS = ['采购数量', '数量', 'qty', 'Qty', 'QTY', 'purchaseQuantity'];
 const SALES_QUANTITY_HEADERS = ['月销量', '销售数量', '销量', '销售件数', 'monthlySales', 'salesQuantity'];
@@ -72,10 +54,10 @@ export async function parsePurchaseFile(file: File): Promise<PurchaseRow[]> {
   const { headers, rows } = readRows(await file.arrayBuffer());
 
   return rows.map((row, index) => {
-    const skuValue = pickField(row, headers, FIELD_ALIASES.sku);
-    const productNameValue = pickField(row, headers, FIELD_ALIASES.productName);
-    const englishNameValue = pickField(row, headers, FIELD_ALIASES.englishName);
-    const manufacturerNameValue = pickField(row, headers, FIELD_ALIASES.manufacturerName);
+    const skuValue = pickSkuExcelField(row, headers, 'sku');
+    const productNameValue = pickSkuExcelField(row, headers, 'productName');
+    const englishNameValue = pickSkuExcelField(row, headers, 'englishName');
+    const manufacturerNameValue = pickSkuExcelField(row, headers, 'manufacturerName');
     const qtyValue = pickField(row, headers, PURCHASE_QUANTITY_HEADERS);
 
     return {
@@ -95,7 +77,7 @@ export async function parseSalesFile(file: File): Promise<PurchaseRow[]> {
   const { headers, rows } = readRows(await file.arrayBuffer());
 
   return rows.map((row, index) => {
-    const skuValue = pickField(row, headers, FIELD_ALIASES.sku);
+    const skuValue = pickSkuExcelField(row, headers, 'sku');
     const salesValue = pickField(row, headers, SALES_QUANTITY_HEADERS);
 
     return {
@@ -111,28 +93,20 @@ export async function parseSalesFile(file: File): Promise<PurchaseRow[]> {
   });
 }
 
-function recognizedFieldMap(headers: string[]): Map<SkuField, string> {
-  const recognized = new Map<SkuField, string>();
-  for (const field of Object.keys(FIELD_ALIASES) as SkuField[]) {
-    const header = findHeader(headers, FIELD_ALIASES[field]);
+function recognizedFieldMap(headers: string[]): Map<SkuFrontendField, string> {
+  const recognized = new Map<SkuFrontendField, string>();
+  for (const field of Object.keys(SKU_FIELD_ALIASES) as SkuFrontendField[]) {
+    const header = findSkuHeader(headers, field);
     if (header) recognized.set(field, header);
   }
   return recognized;
 }
 
 function parseSkuRow(row: Record<string, unknown>, headers: string[], rowNumber: number, existingItems: SkuItem[]): SkuImportPreviewRow {
-  const sku = String(pickField(row, headers, FIELD_ALIASES.sku) ?? '').trim();
-  const productName = String(pickField(row, headers, FIELD_ALIASES.productName) ?? '').trim();
-  const englishName = String(pickField(row, headers, FIELD_ALIASES.englishName) ?? '').trim();
-  const manufacturerName = String(pickField(row, headers, FIELD_ALIASES.manufacturerName) ?? '').trim();
+  const sku = String(pickSkuExcelField(row, headers, 'sku') ?? '').trim();
+  const productName = String(pickSkuExcelField(row, headers, 'productName') ?? '').trim();
+  const englishName = String(pickSkuExcelField(row, headers, 'englishName') ?? '').trim();
   const errors: string[] = [];
-  const manualUnitCbm = toNumber(pickField(row, headers, FIELD_ALIASES.manualUnitCbm)) ?? 0;
-  const totalCbm = toNumber(pickField(row, headers, FIELD_ALIASES.totalCbm)) ?? 0;
-  const totalQuantity = toNumber(pickField(row, headers, FIELD_ALIASES.totalQuantity)) ?? 0;
-  const cartonLengthCm = toNumber(pickField(row, headers, FIELD_ALIASES.cartonLengthCm)) ?? 0;
-  const cartonWidthCm = toNumber(pickField(row, headers, FIELD_ALIASES.cartonWidthCm)) ?? 0;
-  const cartonHeightCm = toNumber(pickField(row, headers, FIELD_ALIASES.cartonHeightCm)) ?? 0;
-  const unitsPerCarton = toNumber(pickField(row, headers, FIELD_ALIASES.unitsPerCarton)) ?? 0;
 
   if (!sku && !productName && !englishName) errors.push('SKU、产品名称、英文名称至少填写一个');
 
@@ -140,25 +114,7 @@ function parseSkuRow(row: Record<string, unknown>, headers: string[], rowNumber:
     return { rowNumber, item: null, action: 'fail', errors };
   }
 
-  const item = hydrateSku({
-    id: crypto.randomUUID(),
-    sku,
-    productName,
-    englishName,
-    manufacturerName,
-    shopName: String(pickField(row, headers, FIELD_ALIASES.shopName) ?? '').trim(),
-    buyerName: String(pickField(row, headers, FIELD_ALIASES.buyerName) ?? '').trim(),
-    purchasePrice: toNumber(pickField(row, headers, FIELD_ALIASES.purchasePrice)) ?? 0,
-    manualUnitCbm,
-    totalCbm,
-    totalQuantity,
-    cartonLengthCm,
-    cartonWidthCm,
-    cartonHeightCm,
-    unitsPerCarton,
-    cbmSource: 'missing',
-    updatedAt: new Date().toISOString(),
-  });
+  const item = skuExcelRowToFrontend(row, headers);
 
   return {
     rowNumber,

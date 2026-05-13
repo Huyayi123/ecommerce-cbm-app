@@ -14,6 +14,7 @@ export type SkuItem = {
   totalQuantity: number;
   totalCbm: number;
   manualUnitCbm: number;
+  notes: string;
   cbmSource: 'imported' | 'total' | 'carton' | 'missing';
   cartonCbm: number;
   unitCbm: number;
