@@ -60,7 +60,6 @@ type LegacySkuRow = {
   total_quantity: number;
   total_cbm: number;
   manual_unit_cbm: number;
-  cbm_source: SkuItem['cbmSource'];
   updated_at: string;
 };
 
@@ -97,7 +96,6 @@ function frontendSkuToLegacySupabase(item: SkuItem): LegacySkuRow {
     total_quantity: item.totalQuantity,
     total_cbm: item.totalCbm,
     manual_unit_cbm: item.unitCbm || item.manualUnitCbm,
-    cbm_source: item.cbmSource,
     updated_at: item.updatedAt || new Date().toISOString(),
   };
 }

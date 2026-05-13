@@ -39,7 +39,7 @@ export type SupabaseSkuRow = {
   box_height_cm: number | null;
   units_per_carton: number | null;
   notes: string | null;
-  cbm_source: SkuItem['cbmSource'] | null;
+  cbm_source?: SkuItem['cbmSource'] | null;
   updated_at: string | null;
   carton_length_cm?: number | null;
   carton_width_cm?: number | null;
@@ -106,7 +106,6 @@ export function frontendSkuToSupabase(item: SkuItem): SupabaseSkuRow {
     box_height_cm: item.cartonHeightCm,
     units_per_carton: item.unitsPerCarton,
     notes: item.notes,
-    cbm_source: item.cbmSource,
     updated_at: item.updatedAt || new Date().toISOString(),
   };
 }
