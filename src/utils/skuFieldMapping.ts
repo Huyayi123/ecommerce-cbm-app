@@ -3,7 +3,7 @@ import { hydrateSku } from './calculations';
 import { toNumber } from './number';
 
 export const SKU_FIELD_ALIASES = {
-  manufacturerName: ['厂家名', '厂家', '供应商', 'manufacturer_name'],
+  manufacturerName: ['厂家名', '厂家名称', '厂家', '供应商', '供应商名称', 'manufacturer_name'],
   sku: ['SKU', 'sku', '货号', '产品编码', '商品编码', '条码'],
   productName: ['产品名称', '品名', '中文名称', 'product_name'],
   englishName: ['英文名称', '英文名', 'English Name', 'english_name'],
@@ -48,7 +48,7 @@ export type SupabaseSkuRow = {
 };
 
 export function normalizeHeader(value: string): string {
-  return value.replace(/\s+/g, '').trim().toLowerCase();
+  return value.replace(/^\uFEFF/, '').replace(/\s+/g, '').trim().toLowerCase();
 }
 
 export function findSkuHeader(headers: string[], field: SkuFrontendField): string | undefined {

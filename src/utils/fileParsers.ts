@@ -88,7 +88,9 @@ function fillMergedCells(worksheet: XLSX.WorkSheet): void {
     for (let row = merge.s.r; row <= merge.e.r; row += 1) {
       for (let col = merge.s.c; col <= merge.e.c; col += 1) {
         const targetAddress = XLSX.utils.encode_cell({ r: row, c: col });
-        if (!worksheet[targetAddress]) {
+        const targetCell = worksheet[targetAddress];
+        const isEmpty = !targetCell || targetCell.v === undefined || targetCell.v === null || String(targetCell.v).trim() === '';
+        if (isEmpty) {
           worksheet[targetAddress] = { ...sourceCell };
         }
       }
