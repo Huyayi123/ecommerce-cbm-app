@@ -145,7 +145,10 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
       if (editingId) {
         await onChange(items.map((existing) => (existing.id === editingId ? item : existing)));
       } else {
-        await onChange([item, ...items]);
+        const existing = findMatchingSkuItem(item, items);
+        await onChange(existing
+          ? items.map((current) => (current.id === existing.id ? { ...item, id: existing.id } : current))
+          : [item, ...items]);
       }
       setImportMessage(editingId ? 'SKU 已保存' : 'SKU 已新增');
       resetForm();

@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, PurchaseStatus, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
+import { getSkuMatchKey } from './calculations';
 import { frontendSkuToSupabase, supabaseSkuToFrontend, type SupabaseSkuRow } from './skuFieldMapping';
 
 type PurchaseRecordRow = {
@@ -100,6 +101,23 @@ function frontendSkuToLegacySupabase(item: SkuItem): LegacySkuRow {
   };
 }
 
+function mergeSkuItemsForSave(items: SkuItem[], remote: SkuItem[]): SkuItem[] {
+  const remoteByKey = new Map(remote.map((item) => [getSkuMatchKey(item) || item.id, item]));
+  const merged = new Map<string, SkuItem>();
+
+  for (const item of items) {
+    const key = getSkuMatchKey(item) || item.id;
+    const remoteItem = remoteByKey.get(key);
+    merged.set(key, {
+      ...item,
+      id: remoteItem?.id ?? merged.get(key)?.id ?? item.id,
+      updatedAt: item.updatedAt || new Date().toISOString(),
+    });
+  }
+
+  return Array.from(merged.values());
+}
+
 function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
   return {
     id: row.id,
@@ -194,15 +212,16 @@ export async function fetchSkuItems(): Promise<SkuItem[]> {
 export async function replaceSkuItems(items: SkuItem[]): Promise<void> {
   const client = requireSupabase();
   const remote = await fetchSkuItems();
-  const nextIds = new Set(items.map((item) => item.id));
+  const normalizedItems = mergeSkuItemsForSave(items, remote);
+  const nextIds = new Set(normalizedItems.map((item) => item.id));
   const deleteIds = remote.map((item) => item.id).filter((id) => !nextIds.has(id));
 
-  if (items.length > 0) {
-    const { error } = await client.from('sku_items').upsert(items.map(frontendSkuToSupabase), { onConflict: 'id' });
+  if (normalizedItems.length > 0) {
+    const { error } = await client.from('sku_items').upsert(normalizedItems.map(frontendSkuToSupabase), { onConflict: 'id' });
     if (error) {
       console.error(error);
       if (!isMissingColumnError(error)) throw new Error(formatErrorMessage(error));
-      const { error: legacyError } = await client.from('sku_items').upsert(items.map(frontendSkuToLegacySupabase), { onConflict: 'id' });
+      const { error: legacyError } = await client.from('sku_items').upsert(normalizedItems.map(frontendSkuToLegacySupabase), { onConflict: 'id' });
       if (legacyError) throwSupabaseError(legacyError);
     }
   }
