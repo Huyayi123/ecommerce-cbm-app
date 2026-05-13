@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, PurchaseStatus, SalesSuggestionRow, SkuItem, UserRole } from '../types';
+import { formatErrorMessage } from './errors';
 import { frontendSkuToSupabase, supabaseSkuToFrontend, type SupabaseSkuRow } from './skuFieldMapping';
 
 type PurchaseRecordRow = {
@@ -70,7 +71,7 @@ function requireSupabase() {
 
 function throwSupabaseError(error: unknown): never {
   console.error(error);
-  throw error;
+  throw new Error(formatErrorMessage(error));
 }
 
 function isMissingColumnError(error: unknown): boolean {
@@ -202,7 +203,7 @@ export async function replaceSkuItems(items: SkuItem[]): Promise<void> {
     const { error } = await client.from('sku_items').upsert(items.map(frontendSkuToSupabase), { onConflict: 'id' });
     if (error) {
       console.error(error);
-      if (!isMissingColumnError(error)) throw error;
+      if (!isMissingColumnError(error)) throw new Error(formatErrorMessage(error));
       const { error: legacyError } = await client.from('sku_items').upsert(items.map(frontendSkuToLegacySupabase), { onConflict: 'id' });
       if (legacyError) throwSupabaseError(legacyError);
     }

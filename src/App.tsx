@@ -21,6 +21,7 @@ import {
   replaceSkuItems,
   subscribeToSharedTables,
 } from './utils/cloudStorage';
+import { formatErrorMessage } from './utils/errors';
 import { canDelete, canEdit } from './utils/permissions';
 
 type PageKey = 'sku' | 'calculator' | 'inventory' | 'suggestions';
@@ -107,7 +108,7 @@ function App() {
     setSkuItems(nextItems);
     void logSkuChanges(skuItems, nextItems).catch((error) => {
       console.error(error);
-      setStatusMessage(`SKU 已保存，但操作记录写入失败：${error instanceof Error ? error.message : String(error)}`);
+      setStatusMessage(`SKU 已保存，但操作记录写入失败：${formatErrorMessage(error)}`);
     });
   }
 

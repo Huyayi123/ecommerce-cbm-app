@@ -2,6 +2,7 @@ import { Fragment, type ChangeEvent } from 'react';
 import { useMemo, useState } from 'react';
 import type { SkuImportPreview, SkuItem } from '../types';
 import { findMatchingSkuItem, getSkuMatchKey, hydrateSku } from '../utils/calculations';
+import { formatErrorMessage } from '../utils/errors';
 import { exportSkuItems } from '../utils/exporters';
 import { previewSkuFile } from '../utils/fileParsers';
 
@@ -150,7 +151,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
       resetForm();
     } catch (error) {
       console.error(error);
-      setImportMessage(`保存失败：${error instanceof Error ? error.message : String(error)}`);
+      setImportMessage(`保存失败：${formatErrorMessage(error)}`);
     }
   }
 
@@ -167,7 +168,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
       setImportMessage('SKU 已删除');
     } catch (error) {
       console.error(error);
-      setImportMessage(`删除失败：${error instanceof Error ? error.message : String(error)}`);
+      setImportMessage(`删除失败：${formatErrorMessage(error)}`);
     }
   }
 
@@ -209,7 +210,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
       setImportPreview(null);
     } catch (error) {
       console.error(error);
-      setImportMessage(`导入失败：${error instanceof Error ? error.message : String(error)}`);
+      setImportMessage(`导入失败：${formatErrorMessage(error)}`);
     }
   }
 
