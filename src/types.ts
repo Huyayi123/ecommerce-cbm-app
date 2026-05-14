@@ -39,12 +39,15 @@ export type AuditAction =
   | 'sku_created'
   | 'sku_updated'
   | 'sku_deleted'
+  | 'sku_bulk_changed'
   | 'purchase_created'
+  | 'purchase_bulk_created'
   | 'purchase_updated'
   | 'purchase_deleted'
   | 'purchase_price_changed'
   | 'purchase_marked_arrived'
-  | 'purchase_bulk_marked_arrived';
+  | 'purchase_bulk_marked_arrived'
+  | 'profile_binding_updated';
 
 export type AppProfile = {
   id: string;

@@ -373,7 +373,7 @@ export async function fetchAuditLogs(): Promise<AuditLog[]> {
     .from('audit_logs')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(300);
+    .limit(100);
   if (error) throwSupabaseError(error);
   return (data ?? []).map((row) => mapAuditLog(row as AuditLogRow));
 }
