@@ -431,8 +431,10 @@ function App() {
           <ProfileBinding profile={profile} onSave={saveProfileBinding} />
           <MyPurchaseOrdersPage
             records={purchaseRecords}
+            skuItems={skuItems}
             profile={profile}
             onChange={persistPurchaseRecords}
+            onSkuChange={persistSkuItems}
           />
         </>
       )}

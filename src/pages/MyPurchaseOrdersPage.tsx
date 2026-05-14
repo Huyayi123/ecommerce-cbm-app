@@ -1,12 +1,28 @@
 import { useMemo, useState } from 'react';
-import type { AppProfile, PurchaseRecord, PurchaseStatus } from '../types';
+import type { AppProfile, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
+import { getSkuMatchKey, hydrateSku } from '../utils/calculations';
 import { formatErrorMessage } from '../utils/errors';
 import { round } from '../utils/number';
 
 type Props = {
   records: PurchaseRecord[];
+  skuItems: SkuItem[];
   profile: AppProfile;
   onChange: (records: PurchaseRecord[]) => void | Promise<void>;
+  onSkuChange: (items: SkuItem[]) => void | Promise<void>;
+};
+
+type NewOrderDraft = {
+  manufacturerName: string;
+  sku: string;
+  productName: string;
+  englishName: string;
+  shopName: string;
+  purchaseQuantity: string;
+  purchasePrice: string;
+  unitCbm: string;
+  status: PurchaseStatus;
+  note: string;
 };
 
 const statusLabels: Record<PurchaseStatus, string> = {
@@ -41,6 +57,30 @@ function parseNumber(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function createEmptyDraft(): NewOrderDraft {
+  return {
+    manufacturerName: '',
+    sku: 'NEW',
+    productName: '',
+    englishName: '',
+    shopName: '',
+    purchaseQuantity: '',
+    purchasePrice: '',
+    unitCbm: '',
+    status: 'pending',
+    note: '',
+  };
+}
+
+function isNewSkuValue(value: string): boolean {
+  const normalized = value.trim().toUpperCase();
+  return !normalized || normalized === 'NEW';
+}
+
 function patchRecord(record: PurchaseRecord, field: EditableField, value: string): PurchaseRecord {
   const next: PurchaseRecord = { ...record };
 
@@ -60,8 +100,9 @@ function patchRecord(record: PurchaseRecord, field: EditableField, value: string
   return next;
 }
 
-export function MyPurchaseOrdersPage({ records, profile, onChange }: Props) {
+export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onSkuChange }: Props) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [newOrder, setNewOrder] = useState<NewOrderDraft>(() => createEmptyDraft());
   const [message, setMessage] = useState('');
   const isAdmin = profile.role === 'admin';
   const isViewer = profile.role === 'viewer';
@@ -69,6 +110,12 @@ export function MyPurchaseOrdersPage({ records, profile, onChange }: Props) {
     () => records.filter((record) => record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()),
     [profile.email, records],
   );
+
+  const newQuantity = parseNumber(newOrder.purchaseQuantity);
+  const newPrice = parseNumber(newOrder.purchasePrice);
+  const newUnitCbm = parseNumber(newOrder.unitCbm);
+  const newTotalAmount = round(newQuantity * newPrice, 2);
+  const newTotalCbm = round(newQuantity * newUnitCbm, 4);
 
   function draftKey(recordId: string, field: EditableField): string {
     return `${recordId}:${field}`;
@@ -78,6 +125,95 @@ export function MyPurchaseOrdersPage({ records, profile, onChange }: Props) {
     const key = draftKey(record.id, field);
     if (key in drafts) return drafts[key];
     return String(record[field] ?? '');
+  }
+
+  function patchNewOrder<K extends keyof NewOrderDraft>(field: K, value: NewOrderDraft[K]) {
+    setNewOrder((current) => ({ ...current, [field]: value }));
+  }
+
+  function buildSkuFromNewRecord(record: PurchaseRecord): SkuItem {
+    return hydrateSku({
+      id: crypto.randomUUID(),
+      manufacturerName: record.manufacturerName,
+      sku: isNewSkuValue(record.sku) ? '' : record.sku,
+      productName: record.productName,
+      englishName: record.englishName,
+      purchasePrice: record.purchasePrice,
+      manualUnitCbm: record.unitCbm,
+      totalCbm: 0,
+      totalQuantity: 0,
+      shopName: record.shopName,
+      buyerName: record.assignedBuyerName,
+      cartonLengthCm: 0,
+      cartonWidthCm: 0,
+      cartonHeightCm: 0,
+      unitsPerCarton: 0,
+      notes: record.note,
+      cbmSource: 'missing',
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  async function syncNewSku(record: PurchaseRecord) {
+    if (!isNewSkuValue(record.sku)) return;
+    const skuItem = buildSkuFromNewRecord(record);
+    const matchKey = getSkuMatchKey(skuItem);
+    if (!matchKey) {
+      setMessage('采购订单已新增，但新品缺少厂家名 + 产品名称/英文名称，无法同步到 SKU 资料库。');
+      return;
+    }
+
+    const existing = skuItems.find((item) => getSkuMatchKey(item) === matchKey);
+    const nextSkuItems = existing
+      ? skuItems.map((item) => (item.id === existing.id ? { ...skuItem, id: existing.id, updatedAt: new Date().toISOString() } : item))
+      : [skuItem, ...skuItems];
+
+    await onSkuChange(nextSkuItems);
+  }
+
+  async function addNewOrder() {
+    if (isViewer) return;
+    if (!profile.buyerName.trim()) {
+      setMessage('请先在“账号采购人绑定”里填写采购人，再新增个人采购订单。');
+      return;
+    }
+
+    const sku = newOrder.sku.trim() || 'NEW';
+    if (isNewSkuValue(sku) && !newOrder.productName.trim() && !newOrder.englishName.trim()) {
+      setMessage('新品 NEW 至少需要填写产品名称或英文名称。');
+      return;
+    }
+
+    const record: PurchaseRecord = {
+      id: crypto.randomUUID(),
+      manufacturerName: newOrder.manufacturerName.trim(),
+      sku,
+      productName: newOrder.productName.trim(),
+      englishName: newOrder.englishName.trim(),
+      shopName: newOrder.shopName.trim(),
+      buyerName: profile.buyerName.trim(),
+      assignedBuyerName: profile.buyerName.trim(),
+      assignedBuyerEmail: profile.email.trim(),
+      purchaseQuantity: newQuantity,
+      purchasePrice: newPrice,
+      totalAmount: newTotalAmount,
+      purchaseDate: today(),
+      estimatedArrivalDate: '',
+      status: newOrder.status,
+      unitCbm: newUnitCbm,
+      totalCbm: newTotalCbm,
+      note: newOrder.note.trim(),
+    };
+
+    try {
+      await onChange([record, ...records]);
+      await syncNewSku(record);
+      setNewOrder(createEmptyDraft());
+      setMessage(isNewSkuValue(record.sku) ? '已新增采购订单，并同步新品到 SKU 资料库。' : '已新增采购订单。');
+    } catch (error) {
+      console.error(error);
+      setMessage(`新增失败：${formatErrorMessage(error)}`);
+    }
   }
 
   async function commit(record: PurchaseRecord, field: EditableField) {
@@ -138,6 +274,30 @@ export function MyPurchaseOrdersPage({ records, profile, onChange }: Props) {
         </div>
       </div>
       {message && <div className="inline-notice">{message}</div>}
+
+      {!isViewer && (
+        <div className="record-form">
+          <label>厂家名<input value={newOrder.manufacturerName} onChange={(event) => patchNewOrder('manufacturerName', event.target.value)} /></label>
+          <label>SKU<input value={newOrder.sku} onChange={(event) => patchNewOrder('sku', event.target.value)} /></label>
+          <label>产品名称<input value={newOrder.productName} onChange={(event) => patchNewOrder('productName', event.target.value)} /></label>
+          <label>英文名称<input value={newOrder.englishName} onChange={(event) => patchNewOrder('englishName', event.target.value)} /></label>
+          <label>店铺<input value={newOrder.shopName} onChange={(event) => patchNewOrder('shopName', event.target.value)} /></label>
+          <label>采购人<input value={profile.buyerName} readOnly /></label>
+          <label>采购人邮箱<input value={profile.email} readOnly /></label>
+          <label>采购数量<input type="number" min="0" value={newOrder.purchaseQuantity} onChange={(event) => patchNewOrder('purchaseQuantity', event.target.value)} /></label>
+          <label>采购单价<input type="number" min="0" step="0.01" value={newOrder.purchasePrice} onChange={(event) => patchNewOrder('purchasePrice', event.target.value)} /></label>
+          <label>总金额<input value={newTotalAmount.toFixed(2)} readOnly /></label>
+          <label>单品CBM<input type="number" min="0" step="0.00000001" value={newOrder.unitCbm} onChange={(event) => patchNewOrder('unitCbm', event.target.value)} /></label>
+          <label>总CBM<input value={newTotalCbm.toFixed(4)} readOnly /></label>
+          <label>状态<select value={newOrder.status} onChange={(event) => patchNewOrder('status', event.target.value as PurchaseStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="wide">备注<input value={newOrder.note} onChange={(event) => patchNewOrder('note', event.target.value)} /></label>
+          <div className="form-actions">
+            <button className="primary" type="button" onClick={() => void addNewOrder()}>新增采购订单</button>
+            <button type="button" onClick={() => setNewOrder(createEmptyDraft())}>清空</button>
+          </div>
+        </div>
+      )}
+
       <div className="table-wrap">
         <table>
           <thead>
