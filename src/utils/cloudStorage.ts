@@ -231,15 +231,27 @@ export async function fetchProfiles(): Promise<AppProfile[]> {
   }));
 }
 
-export async function updateProfileBinding(profile: AppProfile): Promise<void> {
-  const { error } = await requireSupabase()
+export async function updateProfileBinding(profile: AppProfile): Promise<AppProfile> {
+  const { data, error } = await requireSupabase()
     .from('profiles')
-    .update({
+    .upsert({
+      id: profile.id,
+      email: profile.email,
       display_name: profile.displayName,
       buyer_name: profile.buyerName,
-    })
-    .eq('id', profile.id);
+    }, { onConflict: 'id' })
+    .select('id,email,role,display_name,buyer_name')
+    .single();
   if (error) throwSupabaseError(error);
+  if (!data) throw new Error('账号绑定保存失败：数据库没有返回保存结果');
+
+  return {
+    id: data.id,
+    email: data.email ?? profile.email,
+    role: (data.role ?? profile.role) as UserRole,
+    displayName: data.display_name ?? data.email ?? profile.email,
+    buyerName: data.buyer_name ?? '',
+  };
 }
 
 export async function fetchSkuItems(): Promise<SkuItem[]> {

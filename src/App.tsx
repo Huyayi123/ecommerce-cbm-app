@@ -318,9 +318,14 @@ function App() {
   }
 
   async function saveProfileBinding(nextProfile: AppProfile) {
-    await updateProfileBinding(nextProfile);
-    setProfile(nextProfile);
-    setProfiles((current) => current.map((item) => (item.id === nextProfile.id ? nextProfile : item)));
+    const savedProfile = await updateProfileBinding(nextProfile);
+    setProfile(savedProfile);
+    setProfiles((current) => {
+      const exists = current.some((item) => item.id === savedProfile.id);
+      return exists
+        ? current.map((item) => (item.id === savedProfile.id ? savedProfile : item))
+        : [...current, savedProfile];
+    });
     await loadCloudData();
   }
 
@@ -364,8 +369,6 @@ function App() {
 
       <LocalStorageMigration role={profile.role} onImport={importLocalStorageData} />
 
-      <ProfileBinding profile={profile} onSave={saveProfileBinding} />
-
       {statusMessage && <div className="inline-notice">{statusMessage}</div>}
 
       {activePage === 'sku' && (
@@ -401,11 +404,14 @@ function App() {
       )}
 
       {activePage === 'my-orders' && (
-        <MyPurchaseOrdersPage
-          records={purchaseRecords}
-          profile={profile}
-          onChange={persistPurchaseRecords}
-        />
+        <>
+          <ProfileBinding profile={profile} onSave={saveProfileBinding} />
+          <MyPurchaseOrdersPage
+            records={purchaseRecords}
+            profile={profile}
+            onChange={persistPurchaseRecords}
+          />
+        </>
       )}
 
       {activePage === 'suggestions' && (

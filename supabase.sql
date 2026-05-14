@@ -251,9 +251,15 @@ alter table public.sales_suggestions enable row level security;
 alter table public.audit_logs enable row level security;
 
 drop policy if exists "profiles select own or admin" on public.profiles;
-create policy "profiles select own or admin" on public.profiles
+drop policy if exists "profiles shared select" on public.profiles;
+create policy "profiles shared select" on public.profiles
 for select to authenticated
-using (id = auth.uid() or public.is_admin());
+using (true);
+
+drop policy if exists "profiles insert own" on public.profiles;
+create policy "profiles insert own" on public.profiles
+for insert to authenticated
+with check (id = auth.uid());
 
 drop policy if exists "profiles admin update" on public.profiles;
 create policy "profiles admin update" on public.profiles
