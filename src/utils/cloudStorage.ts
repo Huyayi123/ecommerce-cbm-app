@@ -182,6 +182,7 @@ function mapContainerRow(row: ContainerRow): PurchaseRow {
     englishName: row.english_name ?? '',
     manufacturerName: row.manufacturer_name ?? '',
     purchaseQuantity: row.purchase_quantity,
+    manualTotalCbm: typeof row.raw?.manualTotalCbm === 'number' ? row.raw.manualTotalCbm : null,
     raw: row.raw ?? {},
   };
 }
@@ -195,7 +196,7 @@ function toContainerRow(row: PurchaseRow): ContainerRow {
     english_name: row.englishName,
     manufacturer_name: row.manufacturerName,
     purchase_quantity: row.purchaseQuantity,
-    raw: row.raw,
+    raw: { ...row.raw, manualTotalCbm: row.manualTotalCbm ?? null },
   };
 }
 

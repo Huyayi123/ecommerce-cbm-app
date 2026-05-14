@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import type { AppProfile, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
 import { getSkuMatchKey, hydrateSku } from '../utils/calculations';
 import { formatErrorMessage } from '../utils/errors';
+import { exportPurchaseRecords } from '../utils/exporters';
+import { parsePurchaseRecordsFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
 
 type Props = {
@@ -154,21 +156,24 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     });
   }
 
-  async function syncNewSku(record: PurchaseRecord) {
-    if (!isNewSkuValue(record.sku)) return;
-    const skuItem = buildSkuFromNewRecord(record);
-    const matchKey = getSkuMatchKey(skuItem);
-    if (!matchKey) {
-      setMessage('采购订单已新增，但新品缺少厂家名 + 产品名称/英文名称，无法同步到 SKU 资料库。');
-      return;
+  async function syncNewSkus(recordsToSync: PurchaseRecord[]): Promise<number> {
+    const nextItemsByKey = new Map(skuItems.map((item) => [getSkuMatchKey(item) || item.id, item]));
+    let changedCount = 0;
+
+    for (const record of recordsToSync) {
+      if (!isNewSkuValue(record.sku)) continue;
+      const skuItem = buildSkuFromNewRecord(record);
+      const matchKey = getSkuMatchKey(skuItem);
+      if (!matchKey) continue;
+      const existing = nextItemsByKey.get(matchKey);
+      nextItemsByKey.set(matchKey, existing ? { ...skuItem, id: existing.id, updatedAt: new Date().toISOString() } : skuItem);
+      changedCount += 1;
     }
 
-    const existing = skuItems.find((item) => getSkuMatchKey(item) === matchKey);
-    const nextSkuItems = existing
-      ? skuItems.map((item) => (item.id === existing.id ? { ...skuItem, id: existing.id, updatedAt: new Date().toISOString() } : item))
-      : [skuItem, ...skuItems];
-
-    await onSkuChange(nextSkuItems);
+    if (changedCount > 0) {
+      await onSkuChange(Array.from(nextItemsByKey.values()));
+    }
+    return changedCount;
   }
 
   async function addNewOrder() {
@@ -207,12 +212,29 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
     try {
       await onChange([record, ...records]);
-      await syncNewSku(record);
+      const syncedCount = await syncNewSkus([record]);
       setNewOrder(createEmptyDraft());
-      setMessage(isNewSkuValue(record.sku) ? '已新增采购订单，并同步新品到 SKU 资料库。' : '已新增采购订单。');
+      setMessage(syncedCount > 0 ? '已新增采购订单，并同步新品到 SKU 资料库。' : '已新增采购订单。');
     } catch (error) {
       console.error(error);
       setMessage(`新增失败：${formatErrorMessage(error)}`);
+    }
+  }
+
+  async function importOrders(file: File | undefined) {
+    if (!file || isViewer) return;
+    try {
+      const imported = await parsePurchaseRecordsFile(file, profile);
+      if (imported.length === 0) {
+        setMessage('没有识别到可导入的采购订单。');
+        return;
+      }
+      await onChange([...imported, ...records]);
+      const syncedCount = await syncNewSkus(imported);
+      setMessage(`已导入 ${imported.length} 条采购订单${syncedCount > 0 ? `，并同步 ${syncedCount} 条新品到 SKU 资料库` : ''}。`);
+    } catch (error) {
+      console.error(error);
+      setMessage(`导入失败：${formatErrorMessage(error)}`);
     }
   }
 
@@ -271,6 +293,23 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <div>
           <h2>我的采购订单</h2>
           <p>只显示分配给当前登录邮箱的采购订单。</p>
+        </div>
+        <div className="export-actions">
+          {!isViewer && (
+            <label className="secondary-file-button">
+              导入订单
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={(event) => {
+                  void importOrders(event.target.files?.[0]);
+                  event.currentTarget.value = '';
+                }}
+              />
+            </label>
+          )}
+          <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'xlsx', '我的采购订单')} disabled={visibleRecords.length === 0}>导出 Excel</button>
+          <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'csv', '我的采购订单')} disabled={visibleRecords.length === 0}>导出 CSV</button>
         </div>
       </div>
       {message && <div className="inline-notice">{message}</div>}

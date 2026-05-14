@@ -69,13 +69,38 @@ export function ContainerCalculatorPage({
   }, [purchaseRows]);
 
   function updatePurchaseQuantity(rowId: string, quantity: number | null) {
-    setWorkingRows((current) => current.map((row) => (row.rowId === rowId ? { ...row, purchaseQuantity: quantity } : row)));
+    setWorkingRows((current) => {
+      const next = current.map((row) => (row.rowId === rowId ? { ...row, purchaseQuantity: quantity } : row));
+      onRowsChange(next);
+      return next;
+    });
   }
 
-  function recalculateQuantities(changes: Record<string, number | null>) {
-    setWorkingRows((current) =>
-      current.map((row) => (row.rowId in changes ? { ...row, purchaseQuantity: changes[row.rowId] } : row)),
-    );
+  function updateTotalCbm(rowId: string, totalCbm: number | null) {
+    setWorkingRows((current) => {
+      const next = current.map((row) => (row.rowId === rowId ? { ...row, manualTotalCbm: totalCbm, raw: { ...row.raw, manualTotalCbm: totalCbm } } : row));
+      onRowsChange(next);
+      return next;
+    });
+  }
+
+  function recalculateDrafts(changes: { quantities: Record<string, number | null>; totalCbms: Record<string, number | null> }) {
+    setWorkingRows((current) => {
+      const next = current.map((row) => {
+        const quantityChanged = row.rowId in changes.quantities;
+        const totalCbmChanged = row.rowId in changes.totalCbms;
+        if (!quantityChanged && !totalCbmChanged) return row;
+        const manualTotalCbm = totalCbmChanged ? changes.totalCbms[row.rowId] : row.manualTotalCbm;
+        return {
+          ...row,
+          purchaseQuantity: quantityChanged ? changes.quantities[row.rowId] : row.purchaseQuantity,
+          manualTotalCbm,
+          raw: { ...row.raw, manualTotalCbm },
+        };
+      });
+      onRowsChange(next);
+      return next;
+    });
   }
 
   function normalizeRows(rows: PurchaseRow[]): { rows: PurchaseRow[]; conflicts: string[] } {
@@ -147,7 +172,8 @@ export function ContainerCalculatorPage({
         rows={calculationRows}
         fileName={fileName}
         onQuantityChange={updatePurchaseQuantity}
-        onRecalculate={recalculateQuantities}
+        onTotalCbmChange={updateTotalCbm}
+        onRecalculate={recalculateDrafts}
       />
     </>
   );

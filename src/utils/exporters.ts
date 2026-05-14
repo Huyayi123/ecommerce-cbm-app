@@ -60,7 +60,7 @@ export function exportSkuItems(items: SkuItem[], format: ExportFormat): void {
   writeWorkbook(workbook, 'SKU体积资料库', format);
 }
 
-export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportFormat): void {
+export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportFormat, moduleName = '采购在途库存'): void {
   const worksheet = XLSX.utils.json_to_sheet(
     records.map((record) => ({
       厂家名: record.manufacturerName,
@@ -82,8 +82,8 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
     })),
   );
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, '采购在途库存');
-  writeWorkbook(workbook, '采购在途库存', format);
+  XLSX.utils.book_append_sheet(workbook, worksheet, moduleName);
+  writeWorkbook(workbook, moduleName, format);
 }
 
 export function exportAuditLogs(logs: AuditLog[], format: ExportFormat): void {

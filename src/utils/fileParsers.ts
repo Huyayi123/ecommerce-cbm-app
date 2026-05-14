@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { PurchaseRow, SkuImportPreview, SkuImportPreviewRow, SkuItem } from '../types';
+import type { AppProfile, PurchaseRecord, PurchaseRow, PurchaseStatus, SkuImportPreview, SkuImportPreviewRow, SkuItem } from '../types';
 import { findMatchingSkuItem } from './calculations';
 import { toNumber } from './number';
 import {
@@ -13,6 +13,24 @@ import {
 
 const PURCHASE_QUANTITY_HEADERS = ['采购数量', '数量', 'qty', 'Qty', 'QTY', 'purchaseQuantity'];
 const SALES_QUANTITY_HEADERS = ['月销量', '销售数量', '销量', '销售件数', 'monthlySales', 'salesQuantity'];
+const PURCHASE_RECORD_HEADERS = {
+  manufacturerName: ['厂家名', '厂家', '供应商', 'manufacturer_name'],
+  sku: ['SKU', 'sku', '货号', '产品编码', '商品编码'],
+  productName: ['产品名称', '品名', '中文名称', 'product_name'],
+  englishName: ['英文名称', '英文名', 'English Name', 'english_name'],
+  shopName: ['店铺', '店铺名', 'shop_name'],
+  buyerName: ['采购人', '买手', 'assigned_buyer_name', 'buyer_name'],
+  buyerEmail: ['采购人邮箱', '采购邮箱', 'assigned_buyer_email'],
+  purchaseQuantity: ['采购数量', '数量', 'purchase_quantity'],
+  purchasePrice: ['采购单价', '单价', '成本价', 'purchase_price'],
+  totalAmount: ['总金额', '金额', 'total_amount'],
+  unitCbm: ['单品CBM', '单品 CBM', 'unit_cbm'],
+  totalCbm: ['总CBM', '总 CBM', 'total_cbm'],
+  purchaseDate: ['采购日期', '下单日期', 'purchase_date'],
+  estimatedArrivalDate: ['预计到货日期', '到货日期', 'estimated_arrival_date'],
+  status: ['状态', 'status'],
+  note: ['备注', 'remark', 'notes', 'note'],
+} as const;
 
 function buildHeaderMap(headers: string[]): Map<string, string> {
   const headerMap = new Map<string, string>();
@@ -180,6 +198,71 @@ export async function parseSalesFile(file: File): Promise<PurchaseRow[]> {
       purchaseQuantity: toNumber(salesValue),
       raw: row,
     };
+  });
+}
+
+function parseStatus(value: unknown): PurchaseStatus {
+  const text = String(value ?? '').trim();
+  const statusMap: Record<string, PurchaseStatus> = {
+    待采购: 'pending',
+    已下单: 'ordered',
+    海运在途: 'in_transit',
+    已到货: 'arrived',
+    已取消: 'cancelled',
+    pending: 'pending',
+    ordered: 'ordered',
+    in_transit: 'in_transit',
+    arrived: 'arrived',
+    cancelled: 'cancelled',
+  };
+  return statusMap[text] ?? 'pending';
+}
+
+function nonEmptyText(value: unknown, fallback = ''): string {
+  const text = String(value ?? '').trim();
+  return text || fallback;
+}
+
+function pickPurchaseRecordField(row: Record<string, unknown>, headers: string[], field: keyof typeof PURCHASE_RECORD_HEADERS): unknown {
+  return pickField(row, headers, PURCHASE_RECORD_HEADERS[field]);
+}
+
+export async function parsePurchaseRecordsFile(file: File, profile: AppProfile): Promise<PurchaseRecord[]> {
+  const { headers, rows } = readRows(await file.arrayBuffer(), file.name);
+
+  return rows.flatMap((row, index) => {
+    const sku = String(pickPurchaseRecordField(row, headers, 'sku') ?? '').trim();
+    const productName = String(pickPurchaseRecordField(row, headers, 'productName') ?? '').trim();
+    const englishName = String(pickPurchaseRecordField(row, headers, 'englishName') ?? '').trim();
+    if (!sku && !productName && !englishName) return [];
+
+    const purchaseQuantity = toNumber(pickPurchaseRecordField(row, headers, 'purchaseQuantity')) ?? 0;
+    const purchasePrice = toNumber(pickPurchaseRecordField(row, headers, 'purchasePrice')) ?? 0;
+    const unitCbm = toNumber(pickPurchaseRecordField(row, headers, 'unitCbm')) ?? 0;
+    const importedTotalAmount = toNumber(pickPurchaseRecordField(row, headers, 'totalAmount'));
+    const importedTotalCbm = toNumber(pickPurchaseRecordField(row, headers, 'totalCbm'));
+    const buyerName = String(pickPurchaseRecordField(row, headers, 'buyerName') ?? profile.buyerName).trim() || profile.buyerName;
+
+    return [{
+      id: crypto.randomUUID(),
+      manufacturerName: String(pickPurchaseRecordField(row, headers, 'manufacturerName') ?? '').trim(),
+      sku,
+      productName,
+      englishName,
+      shopName: String(pickPurchaseRecordField(row, headers, 'shopName') ?? '').trim(),
+      buyerName,
+      assignedBuyerName: buyerName,
+      assignedBuyerEmail: profile.email,
+      purchaseQuantity,
+      purchasePrice,
+      totalAmount: importedTotalAmount ?? Math.round(purchaseQuantity * purchasePrice * 100) / 100,
+      purchaseDate: nonEmptyText(pickPurchaseRecordField(row, headers, 'purchaseDate'), new Date().toISOString().slice(0, 10)),
+      estimatedArrivalDate: nonEmptyText(pickPurchaseRecordField(row, headers, 'estimatedArrivalDate')),
+      status: parseStatus(pickPurchaseRecordField(row, headers, 'status')),
+      unitCbm,
+      totalCbm: importedTotalCbm ?? Math.round(purchaseQuantity * unitCbm * 10000) / 10000,
+      note: String(pickPurchaseRecordField(row, headers, 'note') ?? `导入行 ${index + 2}`).trim(),
+    }];
   });
 }
 

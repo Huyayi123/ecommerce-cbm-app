@@ -61,6 +61,12 @@ export function findMatchingSkuItem(input: SkuMatchInput, skuItems: SkuItem[]): 
   return skuItems.find((item) => getSkuMatchKey(item) === key);
 }
 
+function manualTotalCbmFor(row: PurchaseRow): number | null {
+  const value = row.manualTotalCbm ?? row.raw.manualTotalCbm;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function hasIdentity(input: Pick<PurchaseRow, 'sku' | 'productName' | 'englishName'>): boolean {
   return Boolean(input.sku.trim() || input.productName.trim() || input.englishName.trim());
 }
@@ -108,9 +114,12 @@ export function calculateRows(purchases: PurchaseRow[], skuItems: SkuItem[]): Ca
       messages.push('缺少CBM资料');
     }
 
-    const totalCbm = skuItem && quantityValid && hasValidUnitCbm
-      ? round(purchase.purchaseQuantity! * unitCbm, 4)
-      : null;
+    const manualTotalCbm = manualTotalCbmFor(purchase);
+    const totalCbm = manualTotalCbm !== null
+      ? round(manualTotalCbm, 4)
+      : skuItem && quantityValid && hasValidUnitCbm
+        ? round(purchase.purchaseQuantity! * unitCbm, 4)
+        : null;
     const totalAmount =
       purchase.purchaseQuantity !== null &&
       Number.isFinite(purchase.purchaseQuantity) &&

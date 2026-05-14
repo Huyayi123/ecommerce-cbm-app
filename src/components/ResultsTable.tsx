@@ -6,7 +6,8 @@ type Props = {
   rows: CalculationRow[];
   fileName: string;
   onQuantityChange: (rowId: string, quantity: number | null) => void;
-  onRecalculate: (changes: Record<string, number | null>) => void;
+  onTotalCbmChange: (rowId: string, totalCbm: number | null) => void;
+  onRecalculate: (changes: { quantities: Record<string, number | null>; totalCbms: Record<string, number | null> }) => void;
 };
 
 function parseQuantity(value: string): number | null {
@@ -16,12 +17,18 @@ function parseQuantity(value: string): number | null {
   return Number.isFinite(quantity) ? quantity : null;
 }
 
-export function ResultsTable({ rows, fileName, onQuantityChange, onRecalculate }: Props) {
+export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChange, onRecalculate }: Props) {
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
+  const [draftTotalCbms, setDraftTotalCbms] = useState<Record<string, string>>({});
   const totalPurchaseAmount = rows.reduce((sum, row) => sum + (row.totalAmount ?? 0), 0);
 
   useEffect(() => {
     setDraftQuantities((current) => {
+      const rowIds = new Set(rows.map((row) => row.rowId));
+      const next = Object.fromEntries(Object.entries(current).filter(([rowId]) => rowIds.has(rowId)));
+      return next;
+    });
+    setDraftTotalCbms((current) => {
       const rowIds = new Set(rows.map((row) => row.rowId));
       const next = Object.fromEntries(Object.entries(current).filter(([rowId]) => rowIds.has(rowId)));
       return next;
@@ -39,12 +46,27 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onRecalculate }
     onQuantityChange(rowId, quantity);
   }
 
-  function commitAllQuantities() {
-    const changes = Object.fromEntries(
+  function commitTotalCbm(rowId: string) {
+    if (!(rowId in draftTotalCbms)) return;
+    const totalCbm = parseQuantity(draftTotalCbms[rowId]);
+    setDraftTotalCbms((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+    onTotalCbmChange(rowId, totalCbm);
+  }
+
+  function commitAllDrafts() {
+    const quantities = Object.fromEntries(
       Object.entries(draftQuantities).map(([rowId, value]) => [rowId, parseQuantity(value)]),
     );
+    const totalCbms = Object.fromEntries(
+      Object.entries(draftTotalCbms).map(([rowId, value]) => [rowId, parseQuantity(value)]),
+    );
     setDraftQuantities({});
-    onRecalculate(changes);
+    setDraftTotalCbms({});
+    onRecalculate({ quantities, totalCbms });
   }
 
   return (
@@ -58,7 +80,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onRecalculate }
           </p>
         </div>
         <div className="export-actions">
-          <button type="button" onClick={commitAllQuantities} disabled={rows.length === 0}>重新计算</button>
+          <button type="button" onClick={commitAllDrafts} disabled={rows.length === 0}>重新计算</button>
           <button type="button" onClick={() => exportResults(rows, 'xlsx')} disabled={rows.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportResults(rows, 'csv')} disabled={rows.length === 0}>导出 CSV</button>
         </div>
@@ -110,7 +132,24 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onRecalculate }
                 <td>{row.purchasePrice?.toFixed(2) ?? '-'}</td>
                 <td>{row.totalAmount?.toFixed(2) ?? '-'}</td>
                 <td>{row.unitCbm?.toFixed(8) ?? '-'}</td>
-                <td>{row.totalCbm?.toFixed(4) ?? '-'}</td>
+                <td>
+                  <input
+                    className="quantity-input"
+                    type="text"
+                    inputMode="decimal"
+                    min="0"
+                    value={draftTotalCbms[row.rowId] ?? String(row.totalCbm ?? '')}
+                    onChange={(event) => {
+                      setDraftTotalCbms((current) => ({ ...current, [row.rowId]: event.target.value }));
+                    }}
+                    onBlur={() => commitTotalCbm(row.rowId)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.currentTarget.blur();
+                      }
+                    }}
+                  />
+                </td>
                 <td>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</td>
               </tr>
             ))}
