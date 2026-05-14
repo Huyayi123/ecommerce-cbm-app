@@ -63,6 +63,7 @@ export function findMatchingSkuItem(input: SkuMatchInput, skuItems: SkuItem[]): 
 
 function manualTotalCbmFor(row: PurchaseRow): number | null {
   const value = row.manualTotalCbm ?? row.raw.manualTotalCbm;
+  if (value === undefined || value === null || String(value).trim() === '') return null;
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
