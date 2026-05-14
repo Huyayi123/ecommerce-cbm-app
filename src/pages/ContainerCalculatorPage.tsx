@@ -107,9 +107,9 @@ export function ContainerCalculatorPage({
   function saveAsPurchaseRecords() {
     if (!canEditData) return;
     const records = toPurchaseRecords(calculationRows);
-    const missing = records.filter((record) => !record.assignedBuyerEmail.trim()).map((record) => record.sku || record.productName).filter(Boolean);
+    const missing = records.filter((record) => !record.assignedBuyerName.trim()).map((record) => record.sku || record.productName).filter(Boolean);
     if (missing.length > 0) {
-      const ok = window.confirm(`以下 SKU 未绑定采购人邮箱，保存后无法显示在个人采购订单中：\n${missing.join('\n')}\n\n是否继续保存？`);
+      const ok = window.confirm(`以下 SKU 未分配采购人，保存后无法自动分配到个人采购订单中：\n${missing.join('\n')}\n\n是否继续保存？`);
       if (!ok) return;
     }
     if (records.length > 0) onRecordsCreate(records);

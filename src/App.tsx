@@ -148,7 +148,7 @@ function App() {
   }
 
   async function persistPurchaseRecords(nextRecords: PurchaseRecord[]) {
-    const normalized = normalizePurchaseRecords(nextRecords);
+    const normalized = normalizePurchaseRecords(assignBuyerEmails(nextRecords));
     if (normalized.conflicts.length > 0) {
       setStatusMessage(`发现 ${normalized.conflicts.length} 个重复 SKU 价格不同，请人工确认：${normalized.conflicts.join('、')}`);
     }
@@ -163,21 +163,29 @@ function App() {
   }
 
   async function appendPurchaseRecords(records: PurchaseRecord[]) {
-    await persistPurchaseRecords([...assignBuyerEmails(records), ...purchaseRecords]);
+    await persistPurchaseRecords([...records, ...purchaseRecords]);
     setActivePage('inventory');
   }
 
-  function buyerEmailForName(name: string): string {
-    const normalized = name.trim().toLowerCase();
-    if (!normalized) return '';
-    return profiles.find((item) => item.buyerName.trim().toLowerCase() === normalized)?.email ?? '';
+  function normalizeBuyerName(name: string): string {
+    return name.trim().replace(/\s+/g, '').toLowerCase();
   }
 
-  function assignBuyerEmails(records: PurchaseRecord[]): PurchaseRecord[] {
+  function buyerEmailForName(name: string, sourceProfiles = profiles): string {
+    const normalized = name.trim().toLowerCase();
+    if (!normalized) return '';
+    const compact = normalizeBuyerName(name);
+    const matchedProfile = sourceProfiles.find((item) => normalizeBuyerName(item.buyerName) === compact);
+    if (matchedProfile) return matchedProfile.email;
+    if (profile && normalizeBuyerName(profile.buyerName) === compact) return profile.email;
+    return '';
+  }
+
+  function assignBuyerEmails(records: PurchaseRecord[], sourceProfiles = profiles): PurchaseRecord[] {
     return records.map((record) => ({
       ...record,
       assignedBuyerName: record.assignedBuyerName || record.buyerName,
-      assignedBuyerEmail: record.assignedBuyerEmail || buyerEmailForName(record.assignedBuyerName || record.buyerName),
+      assignedBuyerEmail: record.assignedBuyerEmail || buyerEmailForName(record.assignedBuyerName || record.buyerName, sourceProfiles),
     }));
   }
 
@@ -320,12 +328,16 @@ function App() {
   async function saveProfileBinding(nextProfile: AppProfile) {
     const savedProfile = await updateProfileBinding(nextProfile);
     setProfile(savedProfile);
-    setProfiles((current) => {
-      const exists = current.some((item) => item.id === savedProfile.id);
-      return exists
-        ? current.map((item) => (item.id === savedProfile.id ? savedProfile : item))
-        : [...current, savedProfile];
-    });
+    const nextProfiles = profiles.some((item) => item.id === savedProfile.id)
+      ? profiles.map((item) => (item.id === savedProfile.id ? savedProfile : item))
+      : [...profiles, savedProfile];
+    setProfiles(nextProfiles);
+    const reassignedRecords = assignBuyerEmails(purchaseRecords, nextProfiles);
+    if (JSON.stringify(reassignedRecords) !== JSON.stringify(purchaseRecords)) {
+      const normalized = normalizePurchaseRecords(reassignedRecords).records;
+      setPurchaseRecords(normalized);
+      await replacePurchaseRecords(normalized);
+    }
     await loadCloudData();
   }
 
