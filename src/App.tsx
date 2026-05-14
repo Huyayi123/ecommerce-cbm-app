@@ -152,9 +152,12 @@ function App() {
     if (normalized.conflicts.length > 0) {
       setStatusMessage(`发现 ${normalized.conflicts.length} 个重复 SKU 价格不同，请人工确认：${normalized.conflicts.join('、')}`);
     }
-    await logPurchaseChanges(purchaseRecords, normalized.records);
-    setPurchaseRecords(normalized.records);
     await replacePurchaseRecords(normalized.records);
+    setPurchaseRecords(normalized.records);
+    void logPurchaseChanges(purchaseRecords, normalized.records).catch((error) => {
+      console.error(error);
+      setStatusMessage(`采购记录已保存，但操作记录写入失败：${formatErrorMessage(error)}`);
+    });
   }
 
   async function loadSamples() {
@@ -163,8 +166,16 @@ function App() {
   }
 
   async function appendPurchaseRecords(records: PurchaseRecord[]) {
-    await persistPurchaseRecords([...records, ...purchaseRecords]);
-    setActivePage('inventory');
+    try {
+      const nextRecords = [...records, ...purchaseRecords];
+      await persistPurchaseRecords(nextRecords);
+      await loadCloudData();
+      setStatusMessage(`已保存 ${records.length} 条采购记录`);
+      setActivePage('inventory');
+    } catch (error) {
+      console.error(error);
+      setStatusMessage(`采购记录保存失败：${formatErrorMessage(error)}`);
+    }
   }
 
   function normalizeBuyerName(name: string): string {
@@ -398,7 +409,7 @@ function App() {
           onRowsChange={(rows) => void persistPurchaseRows(rows)}
           onFileNameChange={setFileName}
           onRecordsCreate={(records) => {
-            void appendPurchaseRecords(records).then(() => setStatusMessage(`已保存 ${records.length} 条采购记录`));
+            void appendPurchaseRecords(records);
           }}
           canEditData={true}
         />
