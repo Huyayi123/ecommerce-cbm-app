@@ -66,8 +66,8 @@ export function MyPurchaseOrdersPage({ records, profile, onChange }: Props) {
   const isAdmin = profile.role === 'admin';
   const isViewer = profile.role === 'viewer';
   const visibleRecords = useMemo(
-    () => isAdmin ? records : records.filter((record) => record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()),
-    [isAdmin, profile.email, records],
+    () => records.filter((record) => record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()),
+    [profile.email, records],
   );
 
   function draftKey(recordId: string, field: EditableField): string {
@@ -134,7 +134,7 @@ export function MyPurchaseOrdersPage({ records, profile, onChange }: Props) {
       <div className="section-heading">
         <div>
           <h2>我的采购订单</h2>
-          <p>{isAdmin ? '管理员可查看全部采购订单。' : '默认只显示分配给当前登录邮箱的采购订单。'}</p>
+          <p>只显示分配给当前登录邮箱的采购订单。</p>
         </div>
       </div>
       {message && <div className="inline-notice">{message}</div>}

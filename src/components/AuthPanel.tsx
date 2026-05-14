@@ -8,7 +8,6 @@ type Props = {
 export function AuthPanel({ onAuthed }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -17,10 +16,7 @@ export function AuthPanel({ onAuthed }: Props) {
     setLoading(true);
     setMessage('');
 
-    const result =
-      mode === 'sign-in'
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+    const result = await supabase.auth.signInWithPassword({ email, password });
 
     if (result.error) {
       setLoading(false);
@@ -29,7 +25,7 @@ export function AuthPanel({ onAuthed }: Props) {
     }
 
     try {
-      setMessage(mode === 'sign-up' ? '注册成功，请按 Supabase 邮件设置确认策略登录。' : '登录成功，正在加载数据...');
+      setMessage('登录成功，正在加载数据...');
       await onAuthed();
     } catch (error) {
       console.error(error);
@@ -54,7 +50,7 @@ export function AuthPanel({ onAuthed }: Props) {
     <section className="auth-shell">
       <div className="auth-card">
         <h1>电商采购装柜工作台</h1>
-        <p>登录后即可多人共享 SKU、采购记录和在途库存。</p>
+        <p>内部人员登录后即可共享 SKU、采购记录和在途库存。</p>
         <label>
           邮箱
           <input value={email} onChange={(event) => setEmail(event.target.value)} />
@@ -65,11 +61,9 @@ export function AuthPanel({ onAuthed }: Props) {
         </label>
         {message && <div className="inline-notice">{message}</div>}
         <button className="primary" type="button" onClick={submit} disabled={loading || !email || !password}>
-          {loading ? '处理中...' : mode === 'sign-in' ? '登录' : '注册'}
+          {loading ? '处理中...' : '登录'}
         </button>
-        <button type="button" onClick={() => setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}>
-          {mode === 'sign-in' ? '没有账号，去注册' : '已有账号，去登录'}
-        </button>
+        <p className="muted-text">账号由内部管理员创建，请勿自行注册。</p>
       </div>
     </section>
   );
