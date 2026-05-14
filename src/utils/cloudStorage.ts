@@ -145,6 +145,11 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
   };
 }
 
+function dateOrNull(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
 function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
   return {
     id: record.id,
@@ -158,8 +163,8 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     purchase_quantity: record.purchaseQuantity,
     purchase_price: record.purchasePrice,
     total_amount: record.totalAmount,
-    purchase_date: record.purchaseDate,
-    estimated_arrival_date: record.estimatedArrivalDate,
+    purchase_date: dateOrNull(record.purchaseDate),
+    estimated_arrival_date: dateOrNull(record.estimatedArrivalDate),
     status: record.status,
     english_name: record.englishName,
     unit_cbm: record.unitCbm,
