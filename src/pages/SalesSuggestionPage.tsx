@@ -295,36 +295,32 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         </section>
       )}
 
-      <div className="table-wrap">
-        <table>
+      <div className="table-wrap suggestion-table-wrap">
+        <table className="suggestion-table">
           <thead>
             <tr>
-              <th>SKU</th><th>产品名称</th><th>店铺</th><th>厂家名</th><th>采购人</th><th>月销量</th><th>备货月数</th><th>目标备货数量</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>建议采购数量</th><th>每箱数量</th><th>预计箱数</th><th>预计 CBM</th><th>状态/备注</th>
+              <th className="suggestion-sticky suggestion-sticky-1">SKU</th><th className="suggestion-sticky suggestion-sticky-2">产品名称</th><th className="suggestion-sticky suggestion-sticky-3">店铺</th><th>采购人</th><th>月销量</th><th>备货月数</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>建议采购数量</th><th>预计 CBM</th><th>状态/备注</th>
             </tr>
           </thead>
           <tbody>
             {suggestions.map((row) => (
               <tr key={row.rowId} className={row.messages.length > 0 ? 'error-row' : ''}>
-                <td>{row.sku || '-'}</td>
-                <td>{row.productName || '-'}</td>
-                <td>{row.shopName || '-'}</td>
-                <td>{row.manufacturerName || '-'}</td>
+                <td className="suggestion-sticky suggestion-sticky-1">{row.sku || '-'}</td>
+                <td className="suggestion-sticky suggestion-sticky-2">{row.productName || '-'}</td>
+                <td className="suggestion-sticky suggestion-sticky-3">{row.shopName || '-'}</td>
                 <td>{row.buyerName || '-'}</td>
                 <td>{row.monthlySales}</td>
                 <td>{row.stockMonths}</td>
-                <td>{row.targetQuantity}</td>
                 <td>{row.localStockQuantity}</td>
                 <td>{row.takealotStockQuantity}</td>
                 <td>{row.stockOnWayQuantity}</td>
                 <td>{row.inTransitQuantity}</td>
                 <td>{row.suggestedQuantity}</td>
-                <td>{row.unitsPerCarton ?? '-'}</td>
-                <td>{row.estimatedCartons ?? '-'}</td>
                 <td>{row.estimatedCbm?.toFixed(4) ?? '-'}</td>
                 <td>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</td>
               </tr>
             ))}
-            {suggestions.length === 0 && <tr><td colSpan={17} className="empty">同步 Takealot 库存后生成采购建议。</td></tr>}
+            {suggestions.length === 0 && <tr><td colSpan={13} className="empty">同步 Takealot 库存后生成采购建议。</td></tr>}
           </tbody>
         </table>
       </div>

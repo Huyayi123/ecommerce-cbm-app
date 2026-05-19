@@ -396,6 +396,46 @@ button.danger,
   margin-bottom: 18px;
 }
 
+.suggestion-table-wrap {
+  max-height: 640px;
+}
+
+.suggestion-table th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.suggestion-table .suggestion-sticky {
+  position: sticky;
+  z-index: 6;
+  background: #ffffff;
+  box-shadow: 1px 0 0 #dce4ea;
+}
+
+.suggestion-table th.suggestion-sticky {
+  z-index: 7;
+  background: #eaf2f6;
+}
+
+.suggestion-sticky-1 {
+  left: 0;
+  min-width: 150px;
+  max-width: 150px;
+}
+
+.suggestion-sticky-2 {
+  left: 150px;
+  min-width: 260px;
+  max-width: 260px;
+}
+
+.suggestion-sticky-3 {
+  left: 410px;
+  min-width: 120px;
+  max-width: 120px;
+}
+
 .compact-panel {
   padding: 14px 18px;
 }
