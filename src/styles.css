@@ -392,6 +392,10 @@ button.danger,
   padding-bottom: 8px;
 }
 
+.pool-panel {
+  margin-bottom: 18px;
+}
+
 .compact-panel {
   padding: 14px 18px;
 }

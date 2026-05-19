@@ -124,7 +124,8 @@ export function ContainerCalculatorPage({
     const passthrough: PurchaseRow[] = [];
 
     for (const row of rows) {
-      const key = getSkuMatchKey(row);
+      const shopKey = String(row.shopName ?? row.raw.shopName ?? '').trim().toLowerCase();
+      const key = [shopKey, getSkuMatchKey(row)].filter(Boolean).join('|');
       if (!key) {
         passthrough.push(row);
         continue;

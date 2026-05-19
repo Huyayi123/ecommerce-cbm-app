@@ -236,6 +236,7 @@ function mapContainerRow(row: ContainerRow): PurchaseRow {
     productName: row.product_name ?? '',
     englishName: row.english_name ?? '',
     manufacturerName: row.manufacturer_name ?? '',
+    shopName: typeof row.raw?.shopName === 'string' ? row.raw.shopName : '',
     purchaseQuantity: row.purchase_quantity,
     manualTotalCbm: typeof row.raw?.manualTotalCbm === 'number' ? row.raw.manualTotalCbm : null,
     raw: row.raw ?? {},
@@ -251,7 +252,7 @@ function toContainerRow(row: PurchaseRow): ContainerRow {
     english_name: row.englishName,
     manufacturer_name: row.manufacturerName,
     purchase_quantity: row.purchaseQuantity,
-    raw: { ...row.raw, manualTotalCbm: row.manualTotalCbm ?? null },
+    raw: { ...row.raw, shopName: row.shopName ?? row.raw.shopName ?? '', manualTotalCbm: row.manualTotalCbm ?? null },
   };
 }
 

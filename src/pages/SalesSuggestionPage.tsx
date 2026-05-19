@@ -36,6 +36,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   const [stockMonths, setStockMonths] = useState(2);
   const [selectedStore, setSelectedStore] = useState('');
   const [inventoryRows, setInventoryRows] = useState<TakealotInventoryRow[]>([]);
+  const [purchasePool, setPurchasePool] = useState<SalesSuggestionRow[]>([]);
   const [syncMessage, setSyncMessage] = useState('');
 
   const storeOptions = useMemo(() => {
@@ -93,6 +94,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         rowId: `takealot-${row.shopName}-${row.sku || index}`,
         sku: row.sku,
         productName: rawField(row, ['title', 'product_title', 'name']),
+        shopName: selectedStore,
         purchaseQuantity: row.apiSalesQuantity,
         inventory: row,
       }))
@@ -100,6 +102,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         rowId: row.rowId,
         sku: row.sku,
         productName: row.productName,
+        shopName: selectedStore,
         purchaseQuantity: row.purchaseQuantity ?? 0,
         inventory: inventoryMap.get(row.sku.trim().toUpperCase()),
       }));
@@ -132,7 +135,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         rowId: row.rowId,
         sku: row.sku,
         productName: skuItem?.productName ?? row.productName ?? '',
-        shopName: skuItem?.shopName ?? '',
+        shopName: skuItem?.shopName ?? row.shopName ?? selectedStore,
         manufacturerName: skuItem?.manufacturerName ?? '',
         buyerName: skuItem?.buyerName ?? '',
         monthlySales,
@@ -155,8 +158,42 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     if (suggestions.length > 0) onSuggestionsSave?.(suggestions);
   }, [onSuggestionsSave, suggestions]);
 
-  function sendToCalculator() {
-    const rows = suggestions
+  const poolSummary = useMemo(() => {
+    return {
+      count: purchasePool.length,
+      quantity: round(purchasePool.reduce((sum, row) => sum + row.suggestedQuantity, 0), 2),
+      cbm: round(purchasePool.reduce((sum, row) => sum + (row.estimatedCbm ?? 0), 0), 4),
+    };
+  }, [purchasePool]);
+
+  function validSuggestionRows(rows: SalesSuggestionRow[]) {
+    return rows.filter((row) => row.suggestedQuantity > 0 && row.messages.length === 0);
+  }
+
+  function addCurrentStoreToPool() {
+    if (!canEditData) return;
+    const rows = validSuggestionRows(suggestions);
+    if (rows.length === 0) {
+      setSyncMessage('当前店铺没有可加入采购池的建议采购数量。');
+      return;
+    }
+
+    setPurchasePool((current) => {
+      const next = new Map(current.map((row) => [`${row.shopName.trim().toLowerCase()}|${row.sku.trim().toUpperCase()}`, row]));
+      for (const row of rows) {
+        next.set(`${row.shopName.trim().toLowerCase()}|${row.sku.trim().toUpperCase()}`, row);
+      }
+      return Array.from(next.values());
+    });
+    setSyncMessage(`已把 ${selectedStore} 的 ${rows.length} 条建议加入本轮采购池。`);
+  }
+
+  function removePoolRow(rowId: string) {
+    setPurchasePool((current) => current.filter((row) => row.rowId !== rowId));
+  }
+
+  function toCalculatorRows(sourceRows: SalesSuggestionRow[]): PurchaseRow[] {
+    return validSuggestionRows(sourceRows)
       .filter((row) => row.suggestedQuantity > 0 && row.messages.length === 0)
       .map((row, index) => ({
         rowId: `${Date.now()}-suggestion-${index}`,
@@ -165,10 +202,19 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         productName: row.productName,
         englishName: '',
         manufacturerName: row.manufacturerName,
+        shopName: row.shopName,
         purchaseQuantity: row.suggestedQuantity,
-        raw: { source: 'sales-suggestion', monthlySales: row.monthlySales, stockMonths: row.stockMonths },
+        raw: { source: 'sales-suggestion', shopName: row.shopName, monthlySales: row.monthlySales, stockMonths: row.stockMonths },
       }));
+  }
 
+  function sendPoolToCalculator() {
+    const rows = toCalculatorRows(purchasePool);
+    if (canEditData && rows.length > 0) onSendToCalculator(rows, `本轮采购池-${new Date().toISOString().slice(0, 10)}`);
+  }
+
+  function sendCurrentToCalculator() {
+    const rows = toCalculatorRows(suggestions);
     if (canEditData && rows.length > 0) onSendToCalculator(rows, fileName ? `采购建议：${fileName}` : '采购建议');
   }
 
@@ -184,8 +230,11 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
             上传月销量
             <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} />
           </label>
-          <button className="primary" type="button" onClick={sendToCalculator} disabled={!canEditData || suggestions.every((row) => row.suggestedQuantity <= 0 || row.messages.length > 0)}>
-            发送到装柜计算
+          <button type="button" onClick={addCurrentStoreToPool} disabled={!canEditData || validSuggestionRows(suggestions).length === 0}>
+            加入本轮采购池
+          </button>
+          <button className="primary" type="button" onClick={sendPoolToCalculator} disabled={!canEditData || purchasePool.length === 0}>
+            发送采购池到装柜计算
           </button>
         </div>
       </div>
@@ -208,6 +257,43 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         <span>{fileName ? `当前文件：${fileName}` : '表头支持 SKU、月销量、销售数量、销量、salesQuantity'}</span>
       </div>
       {syncMessage && <div className="inline-notice">{syncMessage}</div>}
+
+      {purchasePool.length > 0 && (
+        <section className="pool-panel">
+          <div className="section-heading compact-heading">
+            <div>
+              <h3>本轮采购池</h3>
+              <p>已加入 {poolSummary.count} 条，建议采购数量 {poolSummary.quantity}，预计 {poolSummary.cbm.toFixed(4)} CBM。切换店铺继续同步并加入，最后统一发送到装柜计算。</p>
+            </div>
+            <div className="export-actions">
+              <button type="button" onClick={() => setPurchasePool([])}>清空采购池</button>
+              <button type="button" onClick={sendCurrentToCalculator} disabled={!canEditData || validSuggestionRows(suggestions).length === 0}>仅发送当前店铺</button>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>店铺</th><th>SKU</th><th>产品名称</th><th>月销量</th><th>建议采购数量</th><th>预计 CBM</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {purchasePool.map((row) => (
+                  <tr key={row.rowId}>
+                    <td>{row.shopName || '-'}</td>
+                    <td>{row.sku || '-'}</td>
+                    <td>{row.productName || '-'}</td>
+                    <td>{row.monthlySales}</td>
+                    <td>{row.suggestedQuantity}</td>
+                    <td>{row.estimatedCbm?.toFixed(4) ?? '-'}</td>
+                    <td><button type="button" onClick={() => removePoolRow(row.rowId)}>移除</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <div className="table-wrap">
         <table>

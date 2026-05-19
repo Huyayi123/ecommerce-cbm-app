@@ -28,6 +28,7 @@ export type PurchaseRow = {
   productName: string;
   englishName: string;
   manufacturerName: string;
+  shopName?: string;
   purchaseQuantity: number | null;
   manualTotalCbm?: number | null;
   raw: Record<string, unknown>;

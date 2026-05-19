@@ -61,6 +61,10 @@ export function findMatchingSkuItem(input: SkuMatchInput, skuItems: SkuItem[]): 
   return skuItems.find((item) => getSkuMatchKey(item) === key);
 }
 
+function normalizeShopName(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
 function manualTotalCbmFor(row: PurchaseRow): number | null {
   const value = row.manualTotalCbm ?? row.raw.manualTotalCbm;
   if (value === undefined || value === null || String(value).trim() === '') return null;
@@ -79,7 +83,11 @@ function hasOnlyCbmWarning(messages: string[]): boolean {
 export function calculateRows(purchases: PurchaseRow[], skuItems: SkuItem[]): CalculationRow[] {
   return purchases.map((purchase) => {
     const messages: string[] = [];
-    const skuItem = findMatchingSkuItem(purchase, skuItems);
+    const sourceShopName = normalizeShopName(purchase.shopName ?? purchase.raw.shopName);
+    const scopedSkuItems = sourceShopName
+      ? skuItems.filter((item) => normalizeShopName(item.shopName) === sourceShopName)
+      : skuItems;
+    const skuItem = findMatchingSkuItem(purchase, scopedSkuItems) ?? findMatchingSkuItem(purchase, skuItems);
 
     const quantityValid =
       purchase.purchaseQuantity === null ||
