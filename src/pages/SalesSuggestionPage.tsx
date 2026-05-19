@@ -179,7 +179,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
           备货月数
           <input type="number" min="0" step="0.5" value={stockMonths} onChange={(event) => setStockMonths(Number(event.target.value))} />
         </label>
-        <button type="button" onClick={() => void syncTakealotInventory()} disabled={!selectedStore || salesRows.length === 0}>同步 Takealot 库存</button>
+        <button type="button" onClick={() => void syncTakealotInventory()} disabled={!selectedStore}>同步 Takealot 库存</button>
         <span>{fileName ? `当前文件：${fileName}` : '表头支持 SKU、月销量、销售数量、销量、salesQuantity'}</span>
       </div>
       {syncMessage && <div className="inline-notice">{syncMessage}</div>}
