@@ -208,6 +208,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                   <th>SKU</th>
                   <th>产品标题</th>
                   <th>状态</th>
+                  <th>API销量</th>
                   <th>南非本地库存</th>
                   <th>官方仓库存</th>
                   <th>送仓路上库存</th>
@@ -219,6 +220,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                     <td>{row.sku || '-'}</td>
                     <td>{rawField(row, ['title', 'product_title', 'name']) || '-'}</td>
                     <td>{rawField(row, ['status']) || '-'}</td>
+                    <td>{row.apiSalesQuantity}</td>
                     <td>{row.localStockQuantity}</td>
                     <td>{row.takealotStockQuantity}</td>
                     <td>{row.stockOnWayQuantity}</td>

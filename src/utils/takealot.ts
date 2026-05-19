@@ -1,6 +1,7 @@
 export type TakealotInventoryRow = {
   sku: string;
   shopName: string;
+  apiSalesQuantity: number;
   localStockQuantity: number;
   takealotStockQuantity: number;
   stockOnWayQuantity: number;
@@ -29,6 +30,23 @@ function sumQuantityAvailable(value: unknown): number {
   return numberValue(value);
 }
 
+function sumSalesUnits(value: unknown): number {
+  if (Array.isArray(value)) {
+    return value.reduce((total, item) => {
+      if (item && typeof item === 'object') {
+        return total + numberValue((item as Record<string, unknown>).sales_units);
+      }
+      return total + numberValue(item);
+    }, 0);
+  }
+
+  if (value && typeof value === 'object') {
+    return numberValue((value as Record<string, unknown>).sales_units);
+  }
+
+  return numberValue(value);
+}
+
 export function normalizeTakealotInventoryRow(input: Record<string, unknown>, shopName: string): TakealotInventoryRow {
   const localStockQuantity = input.leadtime_stock === undefined
     ? numberValue(input.quantity_available)
@@ -43,6 +61,7 @@ export function normalizeTakealotInventoryRow(input: Record<string, unknown>, sh
   return {
     sku: String(input.sku ?? input.seller_sku ?? input.merchant_sku ?? input.offer_sku ?? '').trim(),
     shopName,
+    apiSalesQuantity: sumSalesUnits(input.sales_units),
     localStockQuantity,
     takealotStockQuantity,
     stockOnWayQuantity,

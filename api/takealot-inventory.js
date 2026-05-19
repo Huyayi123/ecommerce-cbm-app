@@ -27,6 +27,15 @@ function skuFor(row) {
   return String(row?.sku ?? row?.seller_sku ?? row?.merchant_sku ?? row?.offer_sku ?? '').trim().toUpperCase();
 }
 
+function rowKey(row) {
+  return String(row?.offer_id ?? row?.sku ?? row?.barcode ?? JSON.stringify(row)).trim();
+}
+
+function numberFromEnv(name, fallback) {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export default async function handler(request, response) {
   if (request.method !== 'GET') {
     response.status(405).json({ error: 'Method not allowed' });
@@ -46,25 +55,52 @@ export default async function handler(request, response) {
 
   const baseUrl = process.env.TAKEALOT_API_BASE_URL || 'https://seller-api.takealot.com';
   const inventoryPath = process.env.TAKEALOT_INVENTORY_PATH || '/v2/offers';
-  const url = new URL(inventoryPath, baseUrl);
-  url.searchParams.set('page_size', process.env.TAKEALOT_PAGE_SIZE || '100');
-
+  const pageSize = numberFromEnv('TAKEALOT_PAGE_SIZE', 100);
+  const maxPages = numberFromEnv('TAKEALOT_MAX_PAGES', 50);
+  const requestedSkus = new Set(String(request.query.skus || '').split(',').map((item) => item.trim().toUpperCase()).filter(Boolean));
   const headers = {
     Accept: 'application/json',
     Authorization: `Key ${apiKey}`,
   };
 
   try {
-    const upstream = await fetch(url, { headers });
-    const payload = await upstream.json().catch(() => ({}));
-    if (!upstream.ok) {
-      response.status(upstream.status).json({ error: payload.message || payload.error || 'Takealot API 请求失败', details: payload });
-      return;
+    const allRows = [];
+    const seenKeys = new Set();
+    let totalResults = null;
+    let pagesFetched = 0;
+
+    for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
+      const url = new URL(inventoryPath, baseUrl);
+      url.searchParams.set('page_size', String(pageSize));
+      url.searchParams.set('page_number', String(pageNumber));
+
+      const upstream = await fetch(url, { headers });
+      const payload = await upstream.json().catch(() => ({}));
+      if (!upstream.ok) {
+        response.status(upstream.status).json({ error: payload.message || payload.error || 'Takealot API 请求失败', details: payload });
+        return;
+      }
+
+      const rows = rowsFromPayload(payload);
+      const payloadTotal = Number(payload?.total_results);
+      if (Number.isFinite(payloadTotal)) totalResults = payloadTotal;
+      pagesFetched = pageNumber;
+
+      let newRowsOnPage = 0;
+      for (const row of rows) {
+        const key = rowKey(row);
+        if (!key || seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        newRowsOnPage += 1;
+        if (requestedSkus.size === 0 || requestedSkus.has(skuFor(row))) allRows.push(row);
+      }
+
+      if (rows.length < pageSize) break;
+      if (newRowsOnPage === 0) break;
+      if (totalResults !== null && seenKeys.size >= totalResults) break;
     }
 
-    const requestedSkus = new Set(String(request.query.skus || '').split(',').map((item) => item.trim().toUpperCase()).filter(Boolean));
-    const rows = rowsFromPayload(payload).filter((row) => requestedSkus.size === 0 || requestedSkus.has(skuFor(row)));
-    response.status(200).json({ store, rows });
+    response.status(200).json({ store, rows: allRows, totalResults, pagesFetched });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: error instanceof Error ? error.message : 'Takealot API 连接失败' });
