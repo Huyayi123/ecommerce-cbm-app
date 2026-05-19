@@ -13,7 +13,9 @@ type PurchaseRecordRow = {
   buyer_name: string | null;
   assigned_buyer_name: string | null;
   assigned_buyer_email: string | null;
+  is_confirmed?: boolean | null;
   purchase_quantity: number | null;
+  confirmed_purchase_quantity?: number | null;
   purchase_price: number | null;
   total_amount: number | null;
   purchase_date: string | null;
@@ -22,8 +24,24 @@ type PurchaseRecordRow = {
   english_name: string | null;
   unit_cbm: number | null;
   total_cbm: number | null;
+  loading_type?: PurchaseRecord['loadingType'] | null;
+  container_date?: string | null;
+  total_weight_kg?: number | null;
+  carton_count?: number | null;
+  logistics_total_cbm?: number | null;
   note: string | null;
 };
+
+type LegacyPurchaseRecordRow = Omit<
+  PurchaseRecordRow,
+  | 'is_confirmed'
+  | 'confirmed_purchase_quantity'
+  | 'loading_type'
+  | 'container_date'
+  | 'total_weight_kg'
+  | 'carton_count'
+  | 'logistics_total_cbm'
+>;
 
 type ContainerRow = {
   id: string;
@@ -132,8 +150,10 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     buyerName: row.buyer_name ?? '',
     assignedBuyerName: row.assigned_buyer_name ?? row.buyer_name ?? '',
     assignedBuyerEmail: row.assigned_buyer_email ?? '',
+    isConfirmed: Boolean(row.is_confirmed ?? (row.status !== 'pending')),
     englishName: row.english_name ?? '',
     purchaseQuantity: Number(row.purchase_quantity ?? 0),
+    confirmedPurchaseQuantity: row.confirmed_purchase_quantity === null || row.confirmed_purchase_quantity === undefined ? null : Number(row.confirmed_purchase_quantity),
     purchasePrice: Number(row.purchase_price ?? 0),
     totalAmount: Number(row.total_amount ?? 0),
     purchaseDate: row.purchase_date ?? '',
@@ -141,6 +161,11 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     status: row.status,
     unitCbm: Number(row.unit_cbm ?? 0),
     totalCbm: Number(row.total_cbm ?? 0),
+    loadingType: row.loading_type ?? '',
+    containerDate: row.container_date ?? '',
+    totalWeightKg: row.total_weight_kg === null || row.total_weight_kg === undefined ? null : Number(row.total_weight_kg),
+    cartonCount: row.carton_count === null || row.carton_count === undefined ? null : Number(row.carton_count),
+    logisticsTotalCbm: row.logistics_total_cbm === null || row.logistics_total_cbm === undefined ? null : Number(row.logistics_total_cbm),
     note: row.note ?? '',
   };
 }
@@ -160,7 +185,37 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     buyer_name: record.buyerName,
     assigned_buyer_name: record.assignedBuyerName,
     assigned_buyer_email: record.assignedBuyerEmail,
+    is_confirmed: record.isConfirmed,
     purchase_quantity: record.purchaseQuantity,
+    confirmed_purchase_quantity: record.confirmedPurchaseQuantity,
+    purchase_price: record.purchasePrice,
+    total_amount: record.totalAmount,
+    purchase_date: dateOrNull(record.purchaseDate),
+    estimated_arrival_date: dateOrNull(record.estimatedArrivalDate),
+    status: record.status,
+    english_name: record.englishName,
+    unit_cbm: record.unitCbm,
+    total_cbm: record.totalCbm,
+    loading_type: record.loadingType || null,
+    container_date: dateOrNull(record.containerDate),
+    total_weight_kg: record.totalWeightKg,
+    carton_count: record.cartonCount,
+    logistics_total_cbm: record.logisticsTotalCbm,
+    note: record.note,
+  };
+}
+
+function toLegacyPurchaseRecordRow(record: PurchaseRecord): LegacyPurchaseRecordRow {
+  return {
+    id: record.id,
+    manufacturer_name: record.manufacturerName,
+    sku: record.sku,
+    product_name: record.productName,
+    shop_name: record.shopName,
+    buyer_name: record.buyerName,
+    assigned_buyer_name: record.assignedBuyerName,
+    assigned_buyer_email: record.assignedBuyerEmail,
+    purchase_quantity: record.confirmedPurchaseQuantity ?? record.purchaseQuantity,
     purchase_price: record.purchasePrice,
     total_amount: record.totalAmount,
     purchase_date: dateOrNull(record.purchaseDate),
@@ -302,7 +357,12 @@ export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise
 
   if (records.length > 0) {
     const { error } = await client.from('purchase_records').upsert(records.map(toPurchaseRecordRow));
-    if (error) throwSupabaseError(error);
+    if (error) {
+      console.error(error);
+      if (!isMissingColumnError(error)) throw new Error(formatErrorMessage(error));
+      const { error: legacyError } = await client.from('purchase_records').upsert(records.map(toLegacyPurchaseRecordRow));
+      if (legacyError) throwSupabaseError(legacyError);
+    }
   }
   if (deleteIds.length > 0) {
     const { error } = await client.from('purchase_records').delete().in('id', deleteIds);

@@ -65,6 +65,7 @@ export function loadPurchaseRows(): PurchaseRow[] {
       englishName: String(row.englishName ?? ''),
       manufacturerName: String(row.manufacturerName ?? ''),
       purchaseQuantity: nullableNumber(row.purchaseQuantity),
+      manualTotalCbm: nullableNumber(row.manualTotalCbm ?? row.raw?.manualTotalCbm),
       raw: typeof row.raw === 'object' && row.raw !== null ? row.raw : {},
     }));
   } catch {
@@ -90,7 +91,9 @@ export function loadPurchaseRecords(): PurchaseRecord[] {
 
     return parsed.map((record) => {
       const quantity = nullableNumber(record.purchaseQuantity) ?? 0;
+      const confirmedQuantity = nullableNumber(record.confirmedPurchaseQuantity);
       const price = nullableNumber(record.purchasePrice) ?? 0;
+      const effectiveQuantity = confirmedQuantity ?? quantity;
       return {
         id: String(record.id ?? crypto.randomUUID()),
         manufacturerName: String(record.manufacturerName ?? ''),
@@ -101,14 +104,21 @@ export function loadPurchaseRecords(): PurchaseRecord[] {
         buyerName: String(record.buyerName ?? ''),
         assignedBuyerName: String(record.assignedBuyerName ?? record.buyerName ?? ''),
         assignedBuyerEmail: String(record.assignedBuyerEmail ?? ''),
+        isConfirmed: Boolean(record.isConfirmed ?? record.status !== 'pending'),
         purchaseQuantity: quantity,
+        confirmedPurchaseQuantity: confirmedQuantity,
         purchasePrice: price,
-        totalAmount: quantity * price,
+        totalAmount: nullableNumber(record.totalAmount) ?? effectiveQuantity * price,
         purchaseDate: String(record.purchaseDate ?? new Date().toISOString().slice(0, 10)),
         estimatedArrivalDate: String(record.estimatedArrivalDate ?? ''),
         status: purchaseStatus(record.status),
         unitCbm: nullableNumber(record.unitCbm) ?? 0,
         totalCbm: nullableNumber(record.totalCbm) ?? 0,
+        loadingType: record.loadingType === '整柜' || record.loadingType === '冠通' ? record.loadingType : '',
+        containerDate: String(record.containerDate ?? ''),
+        totalWeightKg: nullableNumber(record.totalWeightKg),
+        cartonCount: nullableNumber(record.cartonCount),
+        logisticsTotalCbm: nullableNumber(record.logisticsTotalCbm),
         note: String(record.note ?? ''),
       };
     });

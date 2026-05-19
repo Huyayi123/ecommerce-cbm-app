@@ -7,6 +7,8 @@ type Props = {
   fileName: string;
   onQuantityChange: (rowId: string, quantity: number | null) => void;
   onTotalCbmChange: (rowId: string, totalCbm: number | null) => void;
+  onDeleteRow: (rowId: string) => void;
+  onClearRows: () => void;
   onRecalculate: (changes: { quantities: Record<string, number | null>; totalCbms: Record<string, number | null> }) => void;
 };
 
@@ -17,7 +19,7 @@ function parseQuantity(value: string): number | null {
   return Number.isFinite(quantity) ? quantity : null;
 }
 
-export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChange, onRecalculate }: Props) {
+export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChange, onDeleteRow, onClearRows, onRecalculate }: Props) {
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
   const [draftTotalCbms, setDraftTotalCbms] = useState<Record<string, string>>({});
   const totalPurchaseAmount = rows.reduce((sum, row) => sum + (row.totalAmount ?? 0), 0);
@@ -81,6 +83,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
         </div>
         <div className="export-actions">
           <button type="button" onClick={commitAllDrafts} disabled={rows.length === 0}>重新计算</button>
+          <button type="button" onClick={onClearRows} disabled={rows.length === 0}>清空全部</button>
           <button type="button" onClick={() => exportResults(rows, 'xlsx')} disabled={rows.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportResults(rows, 'csv')} disabled={rows.length === 0}>导出 CSV</button>
         </div>
@@ -101,6 +104,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
               <th>单品 CBM</th>
               <th>总 CBM</th>
               <th>异常提示</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -151,11 +155,12 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
                   />
                 </td>
                 <td>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</td>
+                <td><button className="danger" type="button" onClick={() => onDeleteRow(row.rowId)}>删除</button></td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={11} className="empty">暂无计算结果。</td>
+                <td colSpan={12} className="empty">暂无计算结果。</td>
               </tr>
             )}
           </tbody>

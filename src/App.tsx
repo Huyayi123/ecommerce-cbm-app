@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { AuthPanel } from './components/AuthPanel';
-import { LocalStorageMigration } from './components/LocalStorageMigration';
 import { ProfileBinding } from './components/ProfileBinding';
 import { SkuManager } from './components/SkuManager';
 import { sampleSkus } from './data/sampleSkus';
@@ -27,6 +26,7 @@ import {
 } from './utils/cloudStorage';
 import { formatErrorMessage } from './utils/errors';
 import { canDelete, canEdit } from './utils/permissions';
+import { effectivePurchaseQuantity } from './utils/purchaseRecords';
 
 type PageKey = 'sku' | 'calculator' | 'inventory' | 'my-orders' | 'suggestions';
 
@@ -37,6 +37,10 @@ const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'my-orders', label: '我的采购订单' },
   { key: 'suggestions', label: '月销量采购建议' },
 ];
+
+function isOptionalProfileLoadError(index: number, error: unknown): boolean {
+  return index === 4 && /failed to fetch|fetch/i.test(formatErrorMessage(error));
+}
 
 function App() {
   const [activePage, setActivePage] = useState<PageKey>('calculator');
@@ -59,18 +63,24 @@ function App() {
       fetchAuditLogs(),
       fetchProfiles(),
     ]);
-    const errors = results
-      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-      .map((result) => formatErrorMessage(result.reason));
+    const errors = results.flatMap((result, index) => {
+      if (result.status !== 'rejected') return [];
+      console.error('云端数据加载失败', { index, error: result.reason });
+      if (isOptionalProfileLoadError(index, result.reason)) return [];
+      return [formatErrorMessage(result.reason)];
+    });
 
     if (results[0].status === 'fulfilled') setSkuItems(results[0].value);
     if (results[1].status === 'fulfilled') setPurchaseRows(results[1].value);
     if (results[2].status === 'fulfilled') setPurchaseRecords(results[2].value);
     if (results[3].status === 'fulfilled') setAuditLogs(results[3].value);
-    if (results[4].status === 'fulfilled') setProfiles(results[4].value);
+    if (results[4].status === 'fulfilled') {
+      setProfiles(results[4].value);
+    } else if (profile) {
+      setProfiles((current) => (current.some((item) => item.id === profile.id) ? current : [...current, profile]));
+    }
 
     if (errors.length > 0) {
-      console.error('云端数据加载失败', errors);
       setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
     }
   }
@@ -170,8 +180,8 @@ function App() {
       const nextRecords = [...records, ...purchaseRecords];
       await persistPurchaseRecords(nextRecords);
       await loadCloudData();
-      setStatusMessage(`已保存 ${records.length} 条采购记录`);
-      setActivePage('inventory');
+      setStatusMessage(`已生成 ${records.length} 条采购任务，请采购人在“我的采购订单”确认后进入在途库存口径。`);
+      setActivePage('my-orders');
     } catch (error) {
       console.error(error);
       setStatusMessage(`采购记录保存失败：${formatErrorMessage(error)}`);
@@ -398,6 +408,10 @@ function App() {
       }
 
       existing.purchaseQuantity += record.purchaseQuantity;
+      existing.confirmedPurchaseQuantity =
+        existing.confirmedPurchaseQuantity !== null || record.confirmedPurchaseQuantity !== null
+          ? effectivePurchaseQuantity(existing) + effectivePurchaseQuantity(record)
+          : null;
       existing.totalAmount += record.totalAmount;
       existing.totalCbm += record.totalCbm;
       existing.note = [existing.note, record.note].filter(Boolean).join('；');
@@ -414,19 +428,6 @@ function App() {
     await persistPurchaseRows(rows);
     setFileName(nextFileName);
     setActivePage('calculator');
-  }
-
-  async function importLocalStorageData(payload: {
-    skuItems: SkuItem[];
-    purchaseRecords: PurchaseRecord[];
-    purchaseRows: PurchaseRow[];
-  }) {
-    await Promise.all([
-      replaceSkuItems([...payload.skuItems, ...skuItems]),
-      replacePurchaseRecords([...payload.purchaseRecords, ...purchaseRecords]),
-      replaceContainerRows(payload.purchaseRows.length > 0 ? payload.purchaseRows : purchaseRows),
-    ]);
-    await loadCloudData();
   }
 
   async function signOut() {
@@ -496,8 +497,6 @@ function App() {
           </button>
         ))}
       </nav>
-
-      <LocalStorageMigration role={profile.role} onImport={importLocalStorageData} />
 
       {statusMessage && <div className="inline-notice">{statusMessage}</div>}
 

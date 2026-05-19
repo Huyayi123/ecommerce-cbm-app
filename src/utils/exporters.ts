@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { AuditLog, CalculationRow, PurchaseRecord, SkuItem } from '../types';
+import { effectivePurchaseQuantity } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
 
@@ -12,6 +13,11 @@ function dateStamp(): string {
 
 function writeWorkbook(workbook: XLSX.WorkBook, moduleName: string, format: ExportFormat): void {
   XLSX.writeFile(workbook, `${moduleName}_${dateStamp()}.${format}`, { bookType: format });
+}
+
+function logisticsValue(record: PurchaseRecord, value: number | null): number | string {
+  if (record.loadingType !== '冠通') return '';
+  return value ?? '待物流商回传';
 }
 
 export function exportResults(rows: CalculationRow[], format: ExportFormat): void {
@@ -70,20 +76,44 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
       店铺: record.shopName,
       采购人: record.assignedBuyerName || record.buyerName,
       采购人邮箱: record.assignedBuyerEmail,
-      采购数量: record.purchaseQuantity,
+      计划采购数量: record.purchaseQuantity,
+      实际采购数量: record.confirmedPurchaseQuantity ?? '',
+      采购数量: effectivePurchaseQuantity(record),
       采购单价: record.purchasePrice,
       总金额: record.totalAmount,
       单品CBM: record.unitCbm,
       采购日期: record.purchaseDate,
-      预计到货日期: record.estimatedArrivalDate,
       状态: record.status,
       '总 CBM': record.totalCbm,
+      装货方式: record.loadingType,
+      装柜日期: record.containerDate,
+      件数: record.cartonCount ?? '',
+      总重量kg: record.totalWeightKg ?? '',
+      物流总CBM: record.logisticsTotalCbm ?? '',
       备注: record.note,
     })),
   );
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, moduleName);
   writeWorkbook(workbook, moduleName, format);
+}
+
+export function exportInspectionChecklist(records: PurchaseRecord[], format: ExportFormat): void {
+  const worksheet = XLSX.utils.json_to_sheet(
+    records.map((record) => ({
+      SKU: record.sku,
+      产品名称: record.productName,
+      英文名称: record.englishName,
+      店铺: record.shopName,
+      采购数量: effectivePurchaseQuantity(record),
+      件数: record.cartonCount ?? '',
+      总重量kg: logisticsValue(record, record.totalWeightKg),
+      总CBM: logisticsValue(record, record.logisticsTotalCbm),
+    })),
+  );
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, '验货单');
+  writeWorkbook(workbook, '验货单', format);
 }
 
 export function exportAuditLogs(logs: AuditLog[], format: ExportFormat): void {

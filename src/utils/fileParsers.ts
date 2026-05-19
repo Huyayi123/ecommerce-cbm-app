@@ -22,12 +22,17 @@ const PURCHASE_RECORD_HEADERS = {
   buyerName: ['采购人', '买手', 'assigned_buyer_name', 'buyer_name'],
   buyerEmail: ['采购人邮箱', '采购邮箱', 'assigned_buyer_email'],
   purchaseQuantity: ['采购数量', '数量', 'purchase_quantity'],
+  confirmedPurchaseQuantity: ['实际采购数量', '确认采购数量', '实际数量', 'confirmed_purchase_quantity'],
   purchasePrice: ['采购单价', '单价', '成本价', 'purchase_price'],
   totalAmount: ['总金额', '金额', 'total_amount'],
   unitCbm: ['单品CBM', '单品 CBM', 'unit_cbm'],
   totalCbm: ['总CBM', '总 CBM', 'total_cbm'],
   purchaseDate: ['采购日期', '下单日期', 'purchase_date'],
-  estimatedArrivalDate: ['预计到货日期', '到货日期', 'estimated_arrival_date'],
+  loadingType: ['装货方式', 'loading_type'],
+  containerDate: ['装柜日期', 'container_date'],
+  totalWeightKg: ['总重量kg', '总重量', '重量kg', 'total_weight_kg'],
+  cartonCount: ['件数', '箱数', 'carton_count'],
+  logisticsTotalCbm: ['物流总CBM', '物流商回传总CBM', '总CBM', '总 CBM', 'logistics_total_cbm'],
   status: ['状态', 'status'],
   note: ['备注', 'remark', 'notes', 'note'],
 } as const;
@@ -237,10 +242,13 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
     if (!sku && !productName && !englishName) return [];
 
     const purchaseQuantity = toNumber(pickPurchaseRecordField(row, headers, 'purchaseQuantity')) ?? 0;
+    const confirmedPurchaseQuantity = toNumber(pickPurchaseRecordField(row, headers, 'confirmedPurchaseQuantity'));
     const purchasePrice = toNumber(pickPurchaseRecordField(row, headers, 'purchasePrice')) ?? 0;
     const unitCbm = toNumber(pickPurchaseRecordField(row, headers, 'unitCbm')) ?? 0;
     const importedTotalAmount = toNumber(pickPurchaseRecordField(row, headers, 'totalAmount'));
     const importedTotalCbm = toNumber(pickPurchaseRecordField(row, headers, 'totalCbm'));
+    const logisticsTotalCbm = toNumber(pickPurchaseRecordField(row, headers, 'logisticsTotalCbm'));
+    const effectiveQuantity = confirmedPurchaseQuantity ?? purchaseQuantity;
     const buyerName = String(pickPurchaseRecordField(row, headers, 'buyerName') ?? profile.buyerName).trim() || profile.buyerName;
 
     return [{
@@ -253,14 +261,21 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
       buyerName,
       assignedBuyerName: buyerName,
       assignedBuyerEmail: profile.email,
+      isConfirmed: true,
       purchaseQuantity,
+      confirmedPurchaseQuantity,
       purchasePrice,
-      totalAmount: importedTotalAmount ?? Math.round(purchaseQuantity * purchasePrice * 100) / 100,
+      totalAmount: importedTotalAmount ?? Math.round(effectiveQuantity * purchasePrice * 100) / 100,
       purchaseDate: nonEmptyText(pickPurchaseRecordField(row, headers, 'purchaseDate'), new Date().toISOString().slice(0, 10)),
-      estimatedArrivalDate: nonEmptyText(pickPurchaseRecordField(row, headers, 'estimatedArrivalDate')),
+      estimatedArrivalDate: '',
       status: parseStatus(pickPurchaseRecordField(row, headers, 'status')),
       unitCbm,
-      totalCbm: importedTotalCbm ?? Math.round(purchaseQuantity * unitCbm * 10000) / 10000,
+      totalCbm: importedTotalCbm ?? Math.round(effectiveQuantity * unitCbm * 10000) / 10000,
+      loadingType: (String(pickPurchaseRecordField(row, headers, 'loadingType') ?? '').trim() === '冠通' ? '冠通' : String(pickPurchaseRecordField(row, headers, 'loadingType') ?? '').trim() === '整柜' ? '整柜' : ''),
+      containerDate: nonEmptyText(pickPurchaseRecordField(row, headers, 'containerDate')),
+      totalWeightKg: toNumber(pickPurchaseRecordField(row, headers, 'totalWeightKg')),
+      cartonCount: toNumber(pickPurchaseRecordField(row, headers, 'cartonCount')),
+      logisticsTotalCbm,
       note: String(pickPurchaseRecordField(row, headers, 'note') ?? `导入行 ${index + 2}`).trim(),
     }];
   });

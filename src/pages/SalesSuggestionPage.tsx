@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from '../types';
 import { parseSalesFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
+import { effectivePurchaseQuantity, isInventoryRecord } from '../utils/purchaseRecords';
+import { fetchTakealotInventory, type TakealotInventoryRow } from '../utils/takealot';
 
 type Props = {
   skuItems: SkuItem[];
@@ -12,10 +14,24 @@ type Props = {
   onSuggestionsSave?: (rows: SalesSuggestionRow[]) => void;
 };
 
+const DEFAULT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
+
 export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, onSuggestionsSave }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
   const [stockMonths, setStockMonths] = useState(2);
+  const [selectedStore, setSelectedStore] = useState('');
+  const [inventoryRows, setInventoryRows] = useState<TakealotInventoryRow[]>([]);
+  const [syncMessage, setSyncMessage] = useState('');
+
+  const storeOptions = useMemo(() => {
+    const names = Array.from(new Set(skuItems.map((item) => item.shopName.trim()).filter(Boolean))).sort();
+    return Array.from(new Set([...DEFAULT_STORES, ...names]));
+  }, [skuItems]);
+
+  useEffect(() => {
+    if (!selectedStore && storeOptions.length > 0) setSelectedStore(storeOptions[0]);
+  }, [selectedStore, storeOptions]);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -26,23 +42,47 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     event.target.value = '';
   }
 
+  async function syncTakealotInventory() {
+    if (!selectedStore) {
+      setSyncMessage('请先选择店铺。');
+      return;
+    }
+    try {
+      setSyncMessage('正在同步 Takealot 库存...');
+      const rows = await fetchTakealotInventory(selectedStore, salesRows.map((row) => row.sku));
+      setInventoryRows(rows);
+      setSyncMessage(`已同步 ${rows.length} 条 Takealot 库存。`);
+    } catch (error) {
+      console.error(error);
+      setSyncMessage(error instanceof Error ? error.message : 'Takealot 库存同步失败');
+    }
+  }
+
   const suggestions = useMemo<SalesSuggestionRow[]>(() => {
-    const skuMap = new Map(skuItems.map((item) => [item.sku.trim().toUpperCase(), item]));
+    const scopedSkuItems = selectedStore ? skuItems.filter((item) => item.shopName === selectedStore) : skuItems;
+    const skuMap = new Map(scopedSkuItems.map((item) => [item.sku.trim().toUpperCase(), item]));
+    const inventoryMap = new Map(inventoryRows.map((item) => [item.sku.trim().toUpperCase(), item]));
     const inTransitBySku = new Map<string, number>();
 
     for (const record of purchaseRecords) {
+      if (!isInventoryRecord(record)) continue;
       if (record.status !== 'in_transit') continue;
+      if (selectedStore && record.shopName !== selectedStore) continue;
       const key = record.sku.trim().toUpperCase();
-      inTransitBySku.set(key, (inTransitBySku.get(key) ?? 0) + record.purchaseQuantity);
+      inTransitBySku.set(key, (inTransitBySku.get(key) ?? 0) + effectivePurchaseQuantity(record));
     }
 
     return salesRows.map((row) => {
       const key = row.sku.trim().toUpperCase();
       const skuItem = skuMap.get(key);
+      const inventory = inventoryMap.get(key);
       const monthlySales = row.purchaseQuantity ?? 0;
       const targetQuantity = round(monthlySales * stockMonths, 2);
+      const localStockQuantity = inventory?.localStockQuantity ?? 0;
+      const takealotStockQuantity = inventory?.takealotStockQuantity ?? 0;
+      const stockOnWayQuantity = inventory?.stockOnWayQuantity ?? 0;
       const inTransitQuantity = inTransitBySku.get(key) ?? 0;
-      const suggestedQuantity = Math.max(round(targetQuantity - inTransitQuantity, 2), 0);
+      const suggestedQuantity = Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
       const estimatedCartons =
         skuItem && skuItem.unitsPerCarton > 0 ? round(suggestedQuantity / skuItem.unitsPerCarton, 2) : null;
       const estimatedCbm =
@@ -66,6 +106,9 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         monthlySales,
         stockMonths,
         targetQuantity,
+        localStockQuantity,
+        takealotStockQuantity,
+        stockOnWayQuantity,
         inTransitQuantity,
         suggestedQuantity,
         unitsPerCarton: skuItem?.unitsPerCarton ?? null,
@@ -74,7 +117,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         messages,
       };
     });
-  }, [purchaseRecords, salesRows, skuItems, stockMonths]);
+  }, [inventoryRows, purchaseRecords, salesRows, selectedStore, skuItems, stockMonths]);
 
   useEffect(() => {
     if (salesRows.length > 0) onSuggestionsSave?.(suggestions);
@@ -117,17 +160,28 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
 
       <div className="suggestion-controls">
         <label>
+          店铺
+          <select value={selectedStore} onChange={(event) => {
+            setSelectedStore(event.target.value);
+            setInventoryRows([]);
+          }}>
+            {storeOptions.map((store) => <option key={store} value={store}>{store}</option>)}
+          </select>
+        </label>
+        <label>
           备货月数
           <input type="number" min="0" step="0.5" value={stockMonths} onChange={(event) => setStockMonths(Number(event.target.value))} />
         </label>
+        <button type="button" onClick={() => void syncTakealotInventory()} disabled={!selectedStore || salesRows.length === 0}>同步 Takealot 库存</button>
         <span>{fileName ? `当前文件：${fileName}` : '表头支持 SKU、月销量、销售数量、销量、salesQuantity'}</span>
       </div>
+      {syncMessage && <div className="inline-notice">{syncMessage}</div>}
 
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>SKU</th><th>产品名称</th><th>店铺</th><th>厂家名</th><th>采购人</th><th>月销量</th><th>备货月数</th><th>目标备货数量</th><th>海运在途数量</th><th>建议采购数量</th><th>每箱数量</th><th>预计箱数</th><th>预计 CBM</th><th>状态/备注</th>
+              <th>SKU</th><th>产品名称</th><th>店铺</th><th>厂家名</th><th>采购人</th><th>月销量</th><th>备货月数</th><th>目标备货数量</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>建议采购数量</th><th>每箱数量</th><th>预计箱数</th><th>预计 CBM</th><th>状态/备注</th>
             </tr>
           </thead>
           <tbody>
@@ -141,6 +195,9 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.monthlySales}</td>
                 <td>{row.stockMonths}</td>
                 <td>{row.targetQuantity}</td>
+                <td>{row.localStockQuantity}</td>
+                <td>{row.takealotStockQuantity}</td>
+                <td>{row.stockOnWayQuantity}</td>
                 <td>{row.inTransitQuantity}</td>
                 <td>{row.suggestedQuantity}</td>
                 <td>{row.unitsPerCarton ?? '-'}</td>
@@ -149,7 +206,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</td>
               </tr>
             ))}
-            {suggestions.length === 0 && <tr><td colSpan={14} className="empty">上传月销量表后生成采购建议。</td></tr>}
+            {suggestions.length === 0 && <tr><td colSpan={17} className="empty">上传月销量表后生成采购建议。</td></tr>}
           </tbody>
         </table>
       </div>

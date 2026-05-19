@@ -5,6 +5,7 @@ import { formatErrorMessage } from '../utils/errors';
 import { exportPurchaseRecords } from '../utils/exporters';
 import { parsePurchaseRecordsFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
+import { effectivePurchaseQuantity } from '../utils/purchaseRecords';
 
 type Props = {
   records: PurchaseRecord[];
@@ -21,6 +22,7 @@ type NewOrderDraft = {
   englishName: string;
   shopName: string;
   purchaseQuantity: string;
+  cartonCount: string;
   purchasePrice: string;
   unitCbm: string;
   status: PurchaseStatus;
@@ -44,10 +46,12 @@ const editableFields = [
   'assignedBuyerName',
   'assignedBuyerEmail',
   'purchaseQuantity',
+  'confirmedPurchaseQuantity',
   'purchasePrice',
   'totalAmount',
   'unitCbm',
   'totalCbm',
+  'cartonCount',
   'status',
   'note',
 ] as const;
@@ -71,6 +75,7 @@ function createEmptyDraft(): NewOrderDraft {
     englishName: '',
     shopName: '',
     purchaseQuantity: '',
+    cartonCount: '',
     purchasePrice: '',
     unitCbm: '',
     status: 'pending',
@@ -86,7 +91,7 @@ function isNewSkuValue(value: string): boolean {
 function patchRecord(record: PurchaseRecord, field: EditableField, value: string): PurchaseRecord {
   const next: PurchaseRecord = { ...record };
 
-  if (field === 'purchaseQuantity' || field === 'purchasePrice' || field === 'unitCbm' || field === 'totalAmount' || field === 'totalCbm') {
+  if (field === 'purchaseQuantity' || field === 'confirmedPurchaseQuantity' || field === 'purchasePrice' || field === 'unitCbm' || field === 'totalAmount' || field === 'totalCbm' || field === 'cartonCount') {
     next[field] = parseNumber(value);
   } else if (field === 'status') {
     next.status = value as PurchaseStatus;
@@ -95,8 +100,15 @@ function patchRecord(record: PurchaseRecord, field: EditableField, value: string
   }
 
   if (field === 'purchaseQuantity' || field === 'purchasePrice' || field === 'unitCbm') {
-    next.totalAmount = round(next.purchaseQuantity * next.purchasePrice, 2);
-    next.totalCbm = round(next.purchaseQuantity * next.unitCbm, 4);
+    const quantity = effectivePurchaseQuantity(next);
+    next.totalAmount = round(quantity * next.purchasePrice, 2);
+    next.totalCbm = round(quantity * next.unitCbm, 4);
+  }
+
+  if (field === 'confirmedPurchaseQuantity') {
+    const quantity = effectivePurchaseQuantity(next);
+    next.totalAmount = round(quantity * next.purchasePrice, 2);
+    next.totalCbm = round(quantity * next.unitCbm, 4);
   }
 
   return next;
@@ -112,8 +124,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     () => records.filter((record) => record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()),
     [profile.email, records],
   );
+  const unconfirmedVisibleCount = visibleRecords.filter((record) => !record.isConfirmed).length;
 
   const newQuantity = parseNumber(newOrder.purchaseQuantity);
+  const newCartonCount = parseNumber(newOrder.cartonCount);
   const newPrice = parseNumber(newOrder.purchasePrice);
   const newUnitCbm = parseNumber(newOrder.unitCbm);
   const newTotalAmount = round(newQuantity * newPrice, 2);
@@ -199,7 +213,9 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       buyerName: profile.buyerName.trim(),
       assignedBuyerName: profile.buyerName.trim(),
       assignedBuyerEmail: profile.email.trim(),
+      isConfirmed: false,
       purchaseQuantity: newQuantity,
+      confirmedPurchaseQuantity: null,
       purchasePrice: newPrice,
       totalAmount: newTotalAmount,
       purchaseDate: today(),
@@ -207,6 +223,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       status: newOrder.status,
       unitCbm: newUnitCbm,
       totalCbm: newTotalCbm,
+      loadingType: '整柜',
+      containerDate: '',
+      totalWeightKg: null,
+      cartonCount: newOrder.cartonCount.trim() ? newCartonCount : null,
+      logisticsTotalCbm: null,
       note: newOrder.note.trim(),
     };
 
@@ -255,6 +276,42 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     } catch (error) {
       console.error(error);
       setMessage(`保存失败：${formatErrorMessage(error)}`);
+    }
+  }
+
+  function confirmedRecord(record: PurchaseRecord): PurchaseRecord {
+    const quantity = effectivePurchaseQuantity(record);
+    return {
+      ...record,
+      isConfirmed: true,
+      confirmedPurchaseQuantity: quantity,
+      status: record.status === 'pending' ? 'ordered' : record.status,
+      totalAmount: round(quantity * record.purchasePrice, 2),
+      totalCbm: record.totalCbm || round(quantity * record.unitCbm, 4),
+    };
+  }
+
+  async function confirmVisiblePurchases() {
+    if (isViewer) return;
+    const visibleIds = new Set(visibleRecords.filter((record) => !record.isConfirmed).map((record) => record.id));
+    if (visibleIds.size === 0) return;
+    try {
+      await onChange(records.map((item) => (visibleIds.has(item.id) ? confirmedRecord(item) : item)));
+      setMessage(`已确认 ${visibleIds.size} 条采购订单，采购 / 在途库存将按回传数据统计。`);
+    } catch (error) {
+      console.error(error);
+      setMessage(`确认失败：${formatErrorMessage(error)}`);
+    }
+  }
+
+  async function deleteRecord(recordId: string) {
+    if (isViewer) return;
+    try {
+      await onChange(records.filter((record) => record.id !== recordId));
+      setMessage('已删除采购订单。');
+    } catch (error) {
+      console.error(error);
+      setMessage(`删除失败：${formatErrorMessage(error)}`);
     }
   }
 
@@ -310,6 +367,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           )}
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'xlsx', '我的采购订单')} disabled={visibleRecords.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'csv', '我的采购订单')} disabled={visibleRecords.length === 0}>导出 CSV</button>
+          {!isViewer && <button className="primary" type="button" onClick={() => void confirmVisiblePurchases()} disabled={unconfirmedVisibleCount === 0}>确认采购</button>}
         </div>
       </div>
       {message && <div className="inline-notice">{message}</div>}
@@ -324,6 +382,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <label>采购人<input value={profile.buyerName} readOnly /></label>
           <label>采购人邮箱<input value={profile.email} readOnly /></label>
           <label>采购数量<input type="number" min="0" value={newOrder.purchaseQuantity} onChange={(event) => patchNewOrder('purchaseQuantity', event.target.value)} /></label>
+          <label>件数<input type="number" min="0" value={newOrder.cartonCount} onChange={(event) => patchNewOrder('cartonCount', event.target.value)} /></label>
           <label>采购单价<input type="number" min="0" step="0.01" value={newOrder.purchasePrice} onChange={(event) => patchNewOrder('purchasePrice', event.target.value)} /></label>
           <label>总金额<input value={newTotalAmount.toFixed(2)} readOnly /></label>
           <label>单品CBM<input type="number" min="0" step="0.00000001" value={newOrder.unitCbm} onChange={(event) => patchNewOrder('unitCbm', event.target.value)} /></label>
@@ -341,7 +400,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <table>
           <thead>
             <tr>
-              <th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>采购人邮箱</th><th>采购数量</th><th>采购单价</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th>
+              <th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>采购人邮箱</th><th>计划数量</th><th>实际数量</th><th>件数</th><th>采购单价</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -355,15 +414,18 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 <td>{isAdmin ? input(record, 'assignedBuyerName') : record.assignedBuyerName}</td>
                 <td>{isAdmin ? input(record, 'assignedBuyerEmail') : record.assignedBuyerEmail}</td>
                 <td>{input(record, 'purchaseQuantity', 'number')}</td>
+                <td>{input(record, 'confirmedPurchaseQuantity', 'number')}</td>
+                <td>{input(record, 'cartonCount', 'number')}</td>
                 <td>{input(record, 'purchasePrice', 'number')}</td>
                 <td>{input(record, 'totalAmount', 'number')}</td>
                 <td>{input(record, 'unitCbm', 'number')}</td>
                 <td>{input(record, 'totalCbm', 'number')}</td>
                 <td>{input(record, 'status')}</td>
                 <td>{input(record, 'note')}</td>
+                <td>{!isViewer && <button className="danger" type="button" onClick={() => void deleteRecord(record.id)}>删除</button>}</td>
               </tr>
             ))}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={14}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={17}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>

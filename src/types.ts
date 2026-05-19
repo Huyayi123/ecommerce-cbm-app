@@ -67,7 +67,9 @@ export type PurchaseRecord = {
   buyerName: string;
   assignedBuyerName: string;
   assignedBuyerEmail: string;
+  isConfirmed: boolean;
   purchaseQuantity: number;
+  confirmedPurchaseQuantity: number | null;
   purchasePrice: number;
   totalAmount: number;
   purchaseDate: string;
@@ -75,6 +77,11 @@ export type PurchaseRecord = {
   status: PurchaseStatus;
   unitCbm: number;
   totalCbm: number;
+  loadingType: '' | '整柜' | '冠通';
+  containerDate: string;
+  totalWeightKg: number | null;
+  cartonCount: number | null;
+  logisticsTotalCbm: number | null;
   note: string;
 };
 
@@ -116,6 +123,9 @@ export type SalesSuggestionRow = {
   monthlySales: number;
   stockMonths: number;
   targetQuantity: number;
+  localStockQuantity: number;
+  takealotStockQuantity: number;
+  stockOnWayQuantity: number;
   inTransitQuantity: number;
   suggestedQuantity: number;
   unitsPerCarton: number | null;

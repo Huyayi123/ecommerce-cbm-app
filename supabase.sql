@@ -130,7 +130,28 @@ alter table public.purchase_records
 add column if not exists assigned_buyer_email text;
 
 alter table public.purchase_records
+add column if not exists is_confirmed boolean not null default false;
+
+alter table public.purchase_records
+add column if not exists confirmed_purchase_quantity numeric;
+
+alter table public.purchase_records
 add column if not exists unit_cbm numeric not null default 0;
+
+alter table public.purchase_records
+add column if not exists loading_type text;
+
+alter table public.purchase_records
+add column if not exists container_date date;
+
+alter table public.purchase_records
+add column if not exists total_weight_kg numeric;
+
+alter table public.purchase_records
+add column if not exists carton_count numeric;
+
+alter table public.purchase_records
+add column if not exists logistics_total_cbm numeric;
 
 alter table public.purchase_records
 alter column status type text using status::text;
@@ -143,6 +164,9 @@ on public.purchase_records (assigned_buyer_email);
 
 create index if not exists purchase_records_status_idx
 on public.purchase_records (status);
+
+create index if not exists purchase_records_is_confirmed_idx
+on public.purchase_records (is_confirmed);
 
 create table if not exists public.container_rows (
   id text primary key,

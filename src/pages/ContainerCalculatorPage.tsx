@@ -16,12 +16,6 @@ type Props = {
   canEditData?: boolean;
 };
 
-function addDays(date: Date, days: number): string {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next.toISOString().slice(0, 10);
-}
-
 function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
   const today = new Date();
   return rows
@@ -36,14 +30,21 @@ function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
       buyerName: row.buyerName,
       assignedBuyerName: row.buyerName,
       assignedBuyerEmail: '',
+      isConfirmed: false,
       purchaseQuantity: row.purchaseQuantity ?? 0,
+      confirmedPurchaseQuantity: null,
       purchasePrice: row.purchasePrice ?? 0,
       totalAmount: round((row.purchaseQuantity ?? 0) * (row.purchasePrice ?? 0), 2),
       purchaseDate: today.toISOString().slice(0, 10),
-      estimatedArrivalDate: addDays(today, 30),
+      estimatedArrivalDate: '',
       status: 'pending',
       unitCbm: row.unitCbm ?? 0,
       totalCbm: row.totalCbm ?? 0,
+      loadingType: '整柜',
+      containerDate: '',
+      totalWeightKg: null,
+      cartonCount: null,
+      logisticsTotalCbm: null,
       note: '',
     }));
 }
@@ -82,6 +83,21 @@ export function ContainerCalculatorPage({
       onRowsChange(next);
       return next;
     });
+  }
+
+  function deleteWorkingRow(rowId: string) {
+    setWorkingRows((current) => {
+      const next = current.filter((row) => row.rowId !== rowId).map((row, index) => ({ ...row, rowNumber: index + 2 }));
+      onRowsChange(next);
+      return next;
+    });
+  }
+
+  function clearWorkingRows() {
+    setWorkingRows([]);
+    onRowsChange([]);
+    onFileNameChange('');
+    setDuplicateMessage('');
   }
 
   function recalculateDrafts(changes: { quantities: Record<string, number | null>; totalCbms: Record<string, number | null> }) {
@@ -129,7 +145,7 @@ export function ContainerCalculatorPage({
     };
   }
 
-  function saveAsPurchaseRecords() {
+  function createPurchaseTasks() {
     if (!canEditData) return;
     const records = toPurchaseRecords(calculationRows);
     const missing = records.filter((record) => !record.assignedBuyerName.trim()).map((record) => record.sku || record.productName).filter(Boolean);
@@ -160,10 +176,10 @@ export function ContainerCalculatorPage({
         <div className="section-heading">
           <div>
             <h2>装柜采购单</h2>
-            <p>确认数量、单价和 CBM 后，可保存为海运在途采购记录。</p>
+            <p>确认计划数量、单价和 CBM 后，生成采购任务并分配给采购人；这里不直接形成在途库存。</p>
           </div>
-          <button className="primary" type="button" onClick={saveAsPurchaseRecords} disabled={!canEditData || savableCount === 0}>
-            保存为采购记录
+          <button className="primary" type="button" onClick={createPurchaseTasks} disabled={!canEditData || savableCount === 0}>
+            生成采购任务
           </button>
         </div>
       </section>
@@ -173,6 +189,8 @@ export function ContainerCalculatorPage({
         fileName={fileName}
         onQuantityChange={updatePurchaseQuantity}
         onTotalCbmChange={updateTotalCbm}
+        onDeleteRow={deleteWorkingRow}
+        onClearRows={clearWorkingRows}
         onRecalculate={recalculateDrafts}
       />
     </>
