@@ -214,7 +214,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
           <div className="section-heading compact-heading">
             <div>
               <h3>Takealot 库存同步结果</h3>
-              <p>{selectedStore} 已同步 {inventoryRows.length} 条库存数据，上传销量表后会自动匹配并参与采购建议计算。</p>
+              <p>{selectedStore} 已同步 {inventoryRows.length} 条库存数据，月销量来自 Takealot sales_units，并会直接参与采购建议计算。</p>
             </div>
           </div>
           <div className="table-wrap">
@@ -224,7 +224,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                   <th>SKU</th>
                   <th>产品标题</th>
                   <th>状态</th>
-                  <th>API销量</th>
+                  <th>月销量</th>
                   <th>南非本地库存</th>
                   <th>官方仓库存</th>
                   <th>送仓路上库存</th>
@@ -277,7 +277,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</td>
               </tr>
             ))}
-            {suggestions.length === 0 && <tr><td colSpan={17} className="empty">上传月销量表后生成采购建议。</td></tr>}
+            {suggestions.length === 0 && <tr><td colSpan={17} className="empty">同步 Takealot 库存后生成采购建议。</td></tr>}
           </tbody>
         </table>
       </div>
