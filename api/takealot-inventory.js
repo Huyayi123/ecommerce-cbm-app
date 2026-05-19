@@ -31,6 +31,10 @@ function rowKey(row) {
   return String(row?.offer_id ?? row?.sku ?? row?.barcode ?? JSON.stringify(row)).trim();
 }
 
+function isDisabledRow(row) {
+  return String(row?.status ?? '').trim().toLowerCase().startsWith('disabled');
+}
+
 function numberFromEnv(name, fallback) {
   const parsed = Number(process.env[name]);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -92,6 +96,7 @@ export default async function handler(request, response) {
         if (!key || seenKeys.has(key)) continue;
         seenKeys.add(key);
         newRowsOnPage += 1;
+        if (isDisabledRow(row)) continue;
         if (requestedSkus.size === 0 || requestedSkus.has(skuFor(row))) allRows.push(row);
       }
 
