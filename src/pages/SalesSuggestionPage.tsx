@@ -65,7 +65,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     }
     try {
       setSyncMessage('正在同步 Takealot 库存...');
-      const rows = await fetchTakealotInventory(selectedStore, salesRows.map((row) => row.sku));
+      const rows = await fetchTakealotInventory(selectedStore, []);
       setInventoryRows(rows);
       setSyncMessage(`已同步 ${rows.length} 条 Takealot 库存。`);
     } catch (error) {
@@ -88,11 +88,27 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       inTransitBySku.set(key, (inTransitBySku.get(key) ?? 0) + effectivePurchaseQuantity(record));
     }
 
-    return salesRows.map((row) => {
+    const sourceRows = inventoryRows.length > 0
+      ? inventoryRows.map((row, index) => ({
+        rowId: `takealot-${row.shopName}-${row.sku || index}`,
+        sku: row.sku,
+        productName: rawField(row, ['title', 'product_title', 'name']),
+        purchaseQuantity: row.apiSalesQuantity,
+        inventory: row,
+      }))
+      : salesRows.map((row) => ({
+        rowId: row.rowId,
+        sku: row.sku,
+        productName: row.productName,
+        purchaseQuantity: row.purchaseQuantity ?? 0,
+        inventory: inventoryMap.get(row.sku.trim().toUpperCase()),
+      }));
+
+    return sourceRows.map((row) => {
       const key = row.sku.trim().toUpperCase();
       const skuItem = skuMap.get(key);
-      const inventory = inventoryMap.get(key);
-      const monthlySales = row.purchaseQuantity ?? 0;
+      const inventory = row.inventory ?? inventoryMap.get(key);
+      const monthlySales = inventory?.apiSalesQuantity ?? row.purchaseQuantity ?? 0;
       const targetQuantity = round(monthlySales * stockMonths, 2);
       const localStockQuantity = inventory?.localStockQuantity ?? 0;
       const takealotStockQuantity = inventory?.takealotStockQuantity ?? 0;
@@ -115,7 +131,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       return {
         rowId: row.rowId,
         sku: row.sku,
-        productName: skuItem?.productName ?? '',
+        productName: skuItem?.productName ?? row.productName ?? '',
         shopName: skuItem?.shopName ?? '',
         manufacturerName: skuItem?.manufacturerName ?? '',
         buyerName: skuItem?.buyerName ?? '',
@@ -136,8 +152,8 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   }, [inventoryRows, purchaseRecords, salesRows, selectedStore, skuItems, stockMonths]);
 
   useEffect(() => {
-    if (salesRows.length > 0) onSuggestionsSave?.(suggestions);
-  }, [onSuggestionsSave, salesRows.length, suggestions]);
+    if (suggestions.length > 0) onSuggestionsSave?.(suggestions);
+  }, [onSuggestionsSave, suggestions]);
 
   function sendToCalculator() {
     const rows = suggestions
