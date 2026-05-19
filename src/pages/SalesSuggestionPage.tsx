@@ -21,6 +21,15 @@ function canonicalStoreName(value: string): string {
   return STORE_NAME_MAP.get(value.trim().toLowerCase()) ?? '';
 }
 
+function rawField(row: TakealotInventoryRow, keys: string[]): string {
+  const raw = row.raw && typeof row.raw === 'object' ? row.raw as Record<string, unknown> : {};
+  for (const key of keys) {
+    const value = raw[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value);
+  }
+  return '';
+}
+
 export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, onSuggestionsSave }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
@@ -183,6 +192,43 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         <span>{fileName ? `当前文件：${fileName}` : '表头支持 SKU、月销量、销售数量、销量、salesQuantity'}</span>
       </div>
       {syncMessage && <div className="inline-notice">{syncMessage}</div>}
+
+      {inventoryRows.length > 0 && (
+        <div className="inventory-preview">
+          <div className="section-heading compact-heading">
+            <div>
+              <h3>Takealot 库存同步结果</h3>
+              <p>{selectedStore} 已同步 {inventoryRows.length} 条库存数据，上传销量表后会自动匹配并参与采购建议计算。</p>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>产品标题</th>
+                  <th>状态</th>
+                  <th>南非本地库存</th>
+                  <th>官方仓库存</th>
+                  <th>送仓路上库存</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inventoryRows.map((row) => (
+                  <tr key={`${row.shopName}-${row.sku}`}>
+                    <td>{row.sku || '-'}</td>
+                    <td>{rawField(row, ['title', 'product_title', 'name']) || '-'}</td>
+                    <td>{rawField(row, ['status']) || '-'}</td>
+                    <td>{row.localStockQuantity}</td>
+                    <td>{row.takealotStockQuantity}</td>
+                    <td>{row.stockOnWayQuantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="table-wrap">
         <table>
