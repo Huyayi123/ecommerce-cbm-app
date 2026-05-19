@@ -15,6 +15,11 @@ type Props = {
 };
 
 const DEFAULT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
+const STORE_NAME_MAP = new Map(DEFAULT_STORES.map((store) => [store.toLowerCase(), store]));
+
+function canonicalStoreName(value: string): string {
+  return STORE_NAME_MAP.get(value.trim().toLowerCase()) ?? '';
+}
 
 export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, onSuggestionsSave }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
@@ -25,8 +30,10 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   const [syncMessage, setSyncMessage] = useState('');
 
   const storeOptions = useMemo(() => {
-    const names = Array.from(new Set(skuItems.map((item) => item.shopName.trim()).filter(Boolean))).sort();
-    return Array.from(new Set([...DEFAULT_STORES, ...names]));
+    const extraNames = skuItems
+      .map((item) => canonicalStoreName(item.shopName))
+      .filter(Boolean);
+    return Array.from(new Set([...DEFAULT_STORES, ...extraNames]));
   }, [skuItems]);
 
   useEffect(() => {
@@ -59,7 +66,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   }
 
   const suggestions = useMemo<SalesSuggestionRow[]>(() => {
-    const scopedSkuItems = selectedStore ? skuItems.filter((item) => item.shopName === selectedStore) : skuItems;
+    const scopedSkuItems = selectedStore ? skuItems.filter((item) => canonicalStoreName(item.shopName) === selectedStore) : skuItems;
     const skuMap = new Map(scopedSkuItems.map((item) => [item.sku.trim().toUpperCase(), item]));
     const inventoryMap = new Map(inventoryRows.map((item) => [item.sku.trim().toUpperCase(), item]));
     const inTransitBySku = new Map<string, number>();
@@ -67,7 +74,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     for (const record of purchaseRecords) {
       if (!isInventoryRecord(record)) continue;
       if (record.status !== 'in_transit') continue;
-      if (selectedStore && record.shopName !== selectedStore) continue;
+      if (selectedStore && canonicalStoreName(record.shopName) !== selectedStore) continue;
       const key = record.sku.trim().toUpperCase();
       inTransitBySku.set(key, (inTransitBySku.get(key) ?? 0) + effectivePurchaseQuantity(record));
     }

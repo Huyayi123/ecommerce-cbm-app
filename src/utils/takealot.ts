@@ -12,20 +12,40 @@ function numberValue(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function sumQuantityAvailable(value: unknown): number {
+  if (Array.isArray(value)) {
+    return value.reduce((total, item) => {
+      if (item && typeof item === 'object') {
+        return total + numberValue((item as Record<string, unknown>).quantity_available);
+      }
+      return total + numberValue(item);
+    }, 0);
+  }
+
+  if (value && typeof value === 'object') {
+    return numberValue((value as Record<string, unknown>).quantity_available);
+  }
+
+  return numberValue(value);
+}
+
 export function normalizeTakealotInventoryRow(input: Record<string, unknown>, shopName: string): TakealotInventoryRow {
-  const leadtimeStock = input.leadtime_stock && typeof input.leadtime_stock === 'object'
-    ? input.leadtime_stock as Record<string, unknown>
-    : {};
-  const stockOnWay = input.stock_on_way && typeof input.stock_on_way === 'object'
-    ? input.stock_on_way as Record<string, unknown>
-    : {};
+  const localStockQuantity = input.leadtime_stock === undefined
+    ? numberValue(input.quantity_available)
+    : sumQuantityAvailable(input.leadtime_stock);
+  const takealotStockQuantity = input.stock_at_takealot_total === undefined
+    ? sumQuantityAvailable(input.stock_at_takealot)
+    : numberValue(input.stock_at_takealot_total);
+  const stockOnWayQuantity = input.total_stock_on_way === undefined
+    ? sumQuantityAvailable(input.stock_on_way)
+    : numberValue(input.total_stock_on_way);
 
   return {
     sku: String(input.sku ?? input.seller_sku ?? input.merchant_sku ?? input.offer_sku ?? '').trim(),
     shopName,
-    localStockQuantity: numberValue(leadtimeStock.quantity_available ?? input.quantity_available),
-    takealotStockQuantity: numberValue(input.stock_at_takealot_total ?? input.stock_at_takealot),
-    stockOnWayQuantity: numberValue(input.total_stock_on_way ?? stockOnWay.total_stock_on_way ?? stockOnWay.quantity_available ?? input.stock_on_way),
+    localStockQuantity,
+    takealotStockQuantity,
+    stockOnWayQuantity,
     raw: input,
   };
 }
