@@ -299,7 +299,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         <table className="suggestion-table">
           <thead>
             <tr>
-              <th className="suggestion-sticky suggestion-sticky-1">SKU</th><th className="suggestion-sticky suggestion-sticky-2">产品名称</th><th className="suggestion-sticky suggestion-sticky-3">店铺</th><th>采购人</th><th>月销量</th><th>备货月数</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>建议采购数量</th><th>预计 CBM</th><th>状态/备注</th>
+              <th className="suggestion-sticky suggestion-sticky-1">SKU</th><th className="suggestion-sticky suggestion-sticky-2">产品名称</th><th className="suggestion-sticky suggestion-sticky-3">店铺</th><th>采购人</th><th>月销量</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>建议采购数量</th><th>预计 CBM</th><th>状态/备注</th>
             </tr>
           </thead>
           <tbody>
@@ -310,7 +310,6 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td className="suggestion-sticky suggestion-sticky-3">{row.shopName || '-'}</td>
                 <td>{row.buyerName || '-'}</td>
                 <td>{row.monthlySales}</td>
-                <td>{row.stockMonths}</td>
                 <td>{row.localStockQuantity}</td>
                 <td>{row.takealotStockQuantity}</td>
                 <td>{row.stockOnWayQuantity}</td>
@@ -320,7 +319,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</td>
               </tr>
             ))}
-            {suggestions.length === 0 && <tr><td colSpan={13} className="empty">同步 Takealot 库存后生成采购建议。</td></tr>}
+            {suggestions.length === 0 && <tr><td colSpan={12} className="empty">同步 Takealot 库存后生成采购建议。</td></tr>}
           </tbody>
         </table>
       </div>
