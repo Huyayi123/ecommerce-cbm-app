@@ -124,7 +124,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
   const inTransitAmount = inTransitRecords.reduce((sum, record) => sum + record.totalAmount, 0);
   const inTransitCbm = inTransitRecords.reduce((sum, record) => sum + logisticsCbmFor(record), 0);
   const loadingBatchCount = new Set(inTransitRecords.map((record) => record.containerDate).filter(Boolean)).size;
-  const selectedRecords = filteredRecords.filter((record) => selectedIds.has(record.id));
+  const selectedRecords = inventoryRecords.filter((record) => selectedIds.has(record.id));
 
   function patchDraft<K extends keyof DraftRecord>(field: K, value: DraftRecord[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -235,7 +235,8 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
           <div className="export-actions">
             <button type="button" onClick={() => exportPurchaseRecords(filteredRecords, 'xlsx')} disabled={filteredRecords.length === 0}>导出 Excel</button>
             <button type="button" onClick={() => exportPurchaseRecords(filteredRecords, 'csv')} disabled={filteredRecords.length === 0}>导出 CSV</button>
-            <button type="button" onClick={() => exportInspectionChecklist(selectedRecords, 'xlsx')} disabled={selectedRecords.length === 0}>导出验货单</button>
+            <button type="button" onClick={() => exportInspectionChecklist(selectedRecords, 'xlsx')} disabled={selectedRecords.length === 0}>导出验货单（已选 {selectedRecords.length}）</button>
+            <button type="button" onClick={() => setSelectedIds(new Set())} disabled={selectedRecords.length === 0}>清空勾选</button>
             {canEditData && <button type="button" onClick={markSelectedArrived} disabled={selectedIds.size === 0}>批量标记已到货</button>}
           </div>
         </div>
