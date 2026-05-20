@@ -134,7 +134,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       return {
         rowId: row.rowId,
         sku: row.sku,
-        productName: skuItem?.productName ?? row.productName ?? '',
+        productName: skuItem?.englishName || skuItem?.productName || row.productName || '',
         shopName: skuItem?.shopName ?? row.shopName ?? selectedStore,
         manufacturerName: skuItem?.manufacturerName ?? '',
         buyerName: skuItem?.buyerName ?? '',
@@ -282,7 +282,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                   <tr key={row.rowId}>
                     <td>{row.shopName || '-'}</td>
                     <td>{row.sku || '-'}</td>
-                    <td>{row.productName || '-'}</td>
+                    <td><div className="suggestion-name-scroll">{row.productName || '-'}</div></td>
                     <td>{row.monthlySales}</td>
                     <td>{row.suggestedQuantity}</td>
                     <td>{row.estimatedCbm?.toFixed(4) ?? '-'}</td>
@@ -306,7 +306,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
             {suggestions.map((row) => (
               <tr key={row.rowId} className={row.messages.length > 0 ? 'error-row' : ''}>
                 <td className="suggestion-sticky suggestion-sticky-1">{row.sku || '-'}</td>
-                <td className="suggestion-sticky suggestion-sticky-2">{row.productName || '-'}</td>
+                <td className="suggestion-sticky suggestion-sticky-2"><div className="suggestion-name-scroll">{row.productName || '-'}</div></td>
                 <td className="suggestion-sticky suggestion-sticky-3">{row.shopName || '-'}</td>
                 <td>{row.buyerName || '-'}</td>
                 <td>{row.monthlySales}</td>

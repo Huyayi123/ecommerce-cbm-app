@@ -430,6 +430,14 @@ button.danger,
   max-width: 260px;
 }
 
+.suggestion-name-scroll {
+  max-width: 240px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
 .suggestion-sticky-3 {
   left: 410px;
   min-width: 120px;
