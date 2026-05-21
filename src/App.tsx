@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AuthPanel } from './components/AuthPanel';
+import { PasswordResetPanel } from './components/PasswordResetPanel';
 import { ProfileBinding } from './components/ProfileBinding';
 import { SkuManager } from './components/SkuManager';
 import { sampleSkus } from './data/sampleSkus';
@@ -46,6 +47,7 @@ function App() {
   const [activePage, setActivePage] = useState<PageKey>('calculator');
   const [profile, setProfile] = useState<AppProfile | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [skuItems, setSkuItems] = useState<SkuItem[]>([]);
   const [purchaseRows, setPurchaseRows] = useState<PurchaseRow[]>([]);
   const [purchaseRecords, setPurchaseRecords] = useState<PurchaseRecord[]>([]);
@@ -115,10 +117,16 @@ function App() {
   }
 
   useEffect(() => {
+    if (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery')) {
+      setPasswordRecovery(true);
+    }
     void loadSession();
     if (!supabase) return undefined;
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecovery(true);
+      }
       const user = session?.user;
       if (!user) {
         setProfile(null);
@@ -462,6 +470,14 @@ function App() {
 
   if (!authReady) {
     return <main className="app-shell"><section className="panel">正在连接云端...</section></main>;
+  }
+
+  if (passwordRecovery) {
+    return <PasswordResetPanel onDone={async () => {
+      setPasswordRecovery(false);
+      window.history.replaceState(null, '', window.location.pathname);
+      await loadSession();
+    }} />;
   }
 
   if (!isSupabaseConfigured || !profile) {
