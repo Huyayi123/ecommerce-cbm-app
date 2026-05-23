@@ -34,7 +34,7 @@ export type PurchaseRow = {
   raw: Record<string, unknown>;
 };
 
-export type PurchaseStatus = 'pending' | 'ordered' | 'in_transit' | 'arrived' | 'cancelled';
+export type PurchaseStatus = 'pending' | 'in_transit' | 'arrived' | 'cancelled';
 export type UserRole = 'admin' | 'buyer' | 'viewer';
 export type AuditAction =
   | 'sku_created'

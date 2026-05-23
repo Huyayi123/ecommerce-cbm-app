@@ -78,7 +78,8 @@ export function savePurchaseRows(rows: PurchaseRow[]): void {
 }
 
 function purchaseStatus(value: unknown): PurchaseStatus {
-  if (value === 'pending' || value === 'ordered' || value === 'arrived' || value === 'cancelled' || value === 'in_transit') return value;
+  if (value === 'ordered' || value === 'in_transit') return 'in_transit';
+  if (value === 'pending' || value === 'arrived' || value === 'cancelled') return value;
   return 'pending';
 }
 

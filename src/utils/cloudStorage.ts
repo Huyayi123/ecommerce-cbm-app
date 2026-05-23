@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, PurchaseStatus, SalesSuggestionRow, SkuItem, UserRole } from '../types';
+import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { getSkuMatchKey } from './calculations';
 import { frontendSkuToSupabase, supabaseSkuToFrontend, type SupabaseSkuRow } from './skuFieldMapping';
@@ -20,7 +20,7 @@ type PurchaseRecordRow = {
   total_amount: number | null;
   purchase_date: string | null;
   estimated_arrival_date: string | null;
-  status: PurchaseStatus;
+  status: string | null;
   english_name: string | null;
   unit_cbm: number | null;
   total_cbm: number | null;
@@ -141,6 +141,7 @@ function mergeSkuItemsForSave(items: SkuItem[], remote: SkuItem[]): SkuItem[] {
 }
 
 function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
+  const status = row.status === 'ordered' ? 'in_transit' : row.status;
   return {
     id: row.id,
     manufacturerName: row.manufacturer_name ?? '',
@@ -158,7 +159,7 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     totalAmount: Number(row.total_amount ?? 0),
     purchaseDate: row.purchase_date ?? '',
     estimatedArrivalDate: row.estimated_arrival_date ?? '',
-    status: row.status,
+    status: status === 'in_transit' || status === 'arrived' || status === 'cancelled' ? status : 'pending',
     unitCbm: Number(row.unit_cbm ?? 0),
     totalCbm: Number(row.total_cbm ?? 0),
     loadingType: row.loading_type ?? '',

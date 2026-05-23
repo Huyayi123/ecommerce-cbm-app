@@ -31,7 +31,6 @@ type NewOrderDraft = {
 
 const statusLabels: Record<PurchaseStatus, string> = {
   pending: '待采购',
-  ordered: '已下单',
   in_transit: '海运在途',
   arrived: '已到货',
   cancelled: '已取消',
@@ -285,7 +284,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       ...record,
       isConfirmed: true,
       confirmedPurchaseQuantity: quantity,
-      status: record.status === 'pending' ? 'ordered' : record.status,
+      status: record.status === 'pending' ? 'in_transit' : record.status,
       totalAmount: round(quantity * record.purchasePrice, 2),
       totalCbm: record.totalCbm || round(quantity * record.unitCbm, 4),
     };

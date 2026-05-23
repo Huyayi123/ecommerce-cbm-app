@@ -210,12 +210,12 @@ function parseStatus(value: unknown): PurchaseStatus {
   const text = String(value ?? '').trim();
   const statusMap: Record<string, PurchaseStatus> = {
     待采购: 'pending',
-    已下单: 'ordered',
+    已下单: 'in_transit',
     海运在途: 'in_transit',
     已到货: 'arrived',
     已取消: 'cancelled',
     pending: 'pending',
-    ordered: 'ordered',
+    ordered: 'in_transit',
     in_transit: 'in_transit',
     arrived: 'arrived',
     cancelled: 'cancelled',

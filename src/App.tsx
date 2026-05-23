@@ -324,7 +324,6 @@ function App() {
 
     const arrivedCount = statusChanged.filter((item) => item.after.status === 'arrived').length;
     const cancelledCount = statusChanged.filter((item) => item.after.status === 'cancelled').length;
-    const orderedCount = statusChanged.filter((item) => item.after.status === 'ordered').length;
     const inTransitCount = statusChanged.filter((item) => item.after.status === 'in_transit').length;
 
     if (created.length > 0) {
@@ -364,7 +363,6 @@ function App() {
     if (statusChanged.length > 0) {
       const statusParts = [
         arrivedCount > 0 ? `到货 ${arrivedCount} 条` : '',
-        orderedCount > 0 ? `已下单 ${orderedCount} 条` : '',
         inTransitCount > 0 ? `海运在途 ${inTransitCount} 条` : '',
         cancelledCount > 0 ? `取消 ${cancelledCount} 条` : '',
       ].filter(Boolean);
