@@ -30,10 +30,15 @@ function rawField(row: TakealotInventoryRow, keys: string[]): string {
   return '';
 }
 
+function stockMonthsForMonthlySales(monthlySales: number): number {
+  if (monthlySales > 50) return 4;
+  if (monthlySales >= 21) return 3;
+  return 2;
+}
+
 export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, onSuggestionsSave }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
-  const [stockMonths, setStockMonths] = useState(2);
   const [selectedStore, setSelectedStore] = useState('');
   const [inventoryRows, setInventoryRows] = useState<TakealotInventoryRow[]>([]);
   const [purchasePool, setPurchasePool] = useState<SalesSuggestionRow[]>([]);
@@ -112,6 +117,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       const skuItem = skuMap.get(key);
       const inventory = row.inventory ?? inventoryMap.get(key);
       const monthlySales = inventory?.apiSalesQuantity ?? row.purchaseQuantity ?? 0;
+      const stockMonths = stockMonthsForMonthlySales(monthlySales);
       const targetQuantity = round(monthlySales * stockMonths, 2);
       const localStockQuantity = inventory?.localStockQuantity ?? 0;
       const takealotStockQuantity = inventory?.takealotStockQuantity ?? 0;
@@ -152,7 +158,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         messages,
       };
     });
-  }, [inventoryRows, purchaseRecords, salesRows, selectedStore, skuItems, stockMonths]);
+  }, [inventoryRows, purchaseRecords, salesRows, selectedStore, skuItems]);
 
   useEffect(() => {
     if (suggestions.length > 0) onSuggestionsSave?.(suggestions);
@@ -223,7 +229,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       <div className="section-heading">
         <div>
           <h2>月销量生成采购建议</h2>
-          <p>根据月销量、备货月数和当前海运在途库存计算建议采购数量。</p>
+          <p>根据月销量自动设置备货月数，并结合当前库存和海运在途计算建议采购数量。</p>
         </div>
         <div className="export-actions">
           <label className="file-button">
@@ -249,12 +255,8 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
             {storeOptions.map((store) => <option key={store} value={store}>{store}</option>)}
           </select>
         </label>
-        <label>
-          备货月数
-          <input type="number" min="0" step="0.5" value={stockMonths} onChange={(event) => setStockMonths(Number(event.target.value))} />
-        </label>
         <button type="button" onClick={() => void syncTakealotInventory()} disabled={!selectedStore}>同步 Takealot 库存</button>
-        <span>{fileName ? `当前文件：${fileName}` : '表头支持 SKU、月销量、销售数量、销量、salesQuantity'}</span>
+        <span>{fileName ? `当前文件：${fileName}` : '备货规则：月销量 > 50 用 4 个月，21-50 用 3 个月，20 及以下用 2 个月'}</span>
       </div>
       {syncMessage && <div className="inline-notice">{syncMessage}</div>}
 
