@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { AuditLog, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
 import { exportAuditLogs, exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
 import { round } from '../utils/number';
@@ -49,6 +49,16 @@ const emptyDraft: DraftRecord = {
   note: '',
 };
 
+const PAGE_SIZE = 100;
+
+function recentMonthOptions(count = 3): string[] {
+  const today = new Date();
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(today.getFullYear(), today.getMonth() - index, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  });
+}
+
 function withTotalAmount(record: DraftRecord): PurchaseRecord {
   return {
     ...record,
@@ -82,17 +92,24 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchDraft, setSearchDraft] = useState('');
+  const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
     manufacturerName: '',
     shopName: '',
     buyerName: '',
     status: 'all' as PurchaseStatus | 'all',
     search: '',
+    purchaseMonth: 'recent',
     purchaseDateFrom: '',
     purchaseDateTo: '',
   });
 
   const inventoryRecords = useMemo(() => records.filter(isInventoryRecord), [records]);
+  const recentMonths = useMemo(() => recentMonthOptions(3), []);
+  const purchaseMonthOptions = useMemo(() => {
+    const months = Array.from(new Set(inventoryRecords.map((record) => record.purchaseDate.slice(0, 7)).filter(Boolean))).sort().reverse();
+    return months.filter((month) => !recentMonths.includes(month));
+  }, [inventoryRecords, recentMonths]);
 
   const filteredRecords = useMemo(
     () =>
@@ -101,6 +118,12 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
         if (filters.manufacturerName && record.manufacturerName !== filters.manufacturerName) return false;
         if (filters.shopName && record.shopName !== filters.shopName) return false;
         if (filters.buyerName && record.buyerName !== filters.buyerName) return false;
+        const recordMonth = record.purchaseDate.slice(0, 7);
+        if (filters.purchaseMonth === 'recent') {
+          if (!recentMonths.includes(recordMonth)) return false;
+        } else if (filters.purchaseMonth && recordMonth !== filters.purchaseMonth) {
+          return false;
+        }
         const search = filters.search.trim().toLowerCase();
         if (search) {
           const searchable = [
@@ -114,8 +137,18 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
         if (filters.purchaseDateTo && record.purchaseDate > filters.purchaseDateTo) return false;
         return true;
       }),
-    [filters, inventoryRecords],
+    [filters, inventoryRecords, recentMonths],
   );
+  const totalPages = Math.max(Math.ceil(filteredRecords.length / PAGE_SIZE), 1);
+  const pagedRecords = filteredRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const inTransitRecords = inventoryRecords.filter((record) => record.status === 'in_transit');
   const inTransitSkuCount = new Set(inTransitRecords.map((record) => record.sku)).size;
@@ -241,6 +274,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
         </div>
 
         <div className="filter-grid inventory-filter-grid">
+          <label>采购月份<select value={filters.purchaseMonth} onChange={(event) => setFilters({ ...filters, purchaseMonth: event.target.value })}><option value="recent">最近 3 个月</option><option value="">全部月份</option>{purchaseMonthOptions.map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>厂家名<select value={filters.manufacturerName} onChange={(event) => setFilters({ ...filters, manufacturerName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'manufacturerName').map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>店铺<select value={filters.shopName} onChange={(event) => setFilters({ ...filters, shopName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'shopName').map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>采购人<select value={filters.buyerName} onChange={(event) => setFilters({ ...filters, buyerName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'buyerName').map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -300,7 +334,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
               </tr>
             </thead>
             <tbody>
-              {filteredRecords.map((record) => (
+              {pagedRecords.map((record) => (
                 <tr key={record.id}>
                   <td><input type="checkbox" checked={selectedIds.has(record.id)} onChange={() => toggleSelection(record.id)} /></td>
                   <td className="pin-col pin-manufacturer">{record.manufacturerName}</td>
@@ -330,6 +364,15 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
             </tbody>
           </table>
         </div>
+        {filteredRecords.length > 0 && (
+          <div className="pagination-bar">
+            <span>共 {filteredRecords.length} 条，每页 {PAGE_SIZE} 条，第 {page} / {totalPages} 页</span>
+            <button type="button" onClick={() => setPage(1)} disabled={page === 1}>首页</button>
+            <button type="button" onClick={() => setPage((current) => Math.max(current - 1, 1))} disabled={page === 1}>上一页</button>
+            <button type="button" onClick={() => setPage((current) => Math.min(current + 1, totalPages))} disabled={page === totalPages}>下一页</button>
+            <button type="button" onClick={() => setPage(totalPages)} disabled={page === totalPages}>末页</button>
+          </div>
+        )}
       </section>
 
       <details className="panel audit-panel">

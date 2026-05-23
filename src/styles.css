@@ -463,6 +463,15 @@ button.danger,
   font-size: 13px;
 }
 
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+  color: #405261;
+}
+
 .form-actions {
   justify-content: flex-end;
   grid-column: span 2;
