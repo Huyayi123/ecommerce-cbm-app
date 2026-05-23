@@ -396,6 +396,12 @@ button.danger,
   margin-bottom: 18px;
 }
 
+.pool-store-row td {
+  background: #eef7f5;
+  color: #0f5f55;
+  font-weight: 700;
+}
+
 .suggestion-table-wrap {
   max-height: 640px;
 }

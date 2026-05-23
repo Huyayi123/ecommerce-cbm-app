@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from '../types';
 import { parseSalesFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
@@ -171,6 +171,19 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       cbm: round(purchasePool.reduce((sum, row) => sum + (row.estimatedCbm ?? 0), 0), 4),
     };
   }, [purchasePool]);
+  const groupedPurchasePool = useMemo(() => {
+    const groups = new Map<string, SalesSuggestionRow[]>();
+    for (const row of purchasePool) {
+      const store = row.shopName || '未分配店铺';
+      groups.set(store, [...(groups.get(store) ?? []), row]);
+    }
+    return Array.from(groups.entries()).map(([store, rows]) => ({
+      store,
+      rows,
+      quantity: round(rows.reduce((sum, row) => sum + row.suggestedQuantity, 0), 2),
+      cbm: round(rows.reduce((sum, row) => sum + (row.estimatedCbm ?? 0), 0), 4),
+    }));
+  }, [purchasePool]);
 
   function validSuggestionRows(rows: SalesSuggestionRow[]) {
     return rows.filter((row) => row.suggestedQuantity > 0 && row.messages.length === 0);
@@ -276,20 +289,26 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
             <table>
               <thead>
                 <tr>
-                  <th>店铺</th><th>SKU</th><th>产品名称</th><th>月销量</th><th>建议采购数量</th><th>预计 CBM</th><th>操作</th>
+                  <th>SKU</th><th>产品名称</th><th>月销量</th><th>建议采购数量</th><th>预计 CBM</th><th>操作</th>
                 </tr>
               </thead>
               <tbody>
-                {purchasePool.map((row) => (
-                  <tr key={row.rowId}>
-                    <td>{row.shopName || '-'}</td>
-                    <td>{row.sku || '-'}</td>
-                    <td><div className="suggestion-name-text" title={row.productName || ''}>{row.productName || '-'}</div></td>
-                    <td>{row.monthlySales}</td>
-                    <td>{row.suggestedQuantity}</td>
-                    <td>{row.estimatedCbm?.toFixed(4) ?? '-'}</td>
-                    <td><button type="button" onClick={() => removePoolRow(row.rowId)}>移除</button></td>
-                  </tr>
+                {groupedPurchasePool.map((group) => (
+                  <Fragment key={group.store}>
+                    <tr className="pool-store-row">
+                      <td colSpan={6}>{group.store}：{group.rows.length} 条，建议采购数量 {group.quantity}，预计 {group.cbm.toFixed(4)} CBM</td>
+                    </tr>
+                    {group.rows.map((row) => (
+                      <tr key={row.rowId}>
+                        <td>{row.sku || '-'}</td>
+                        <td><div className="suggestion-name-text" title={row.productName || ''}>{row.productName || '-'}</div></td>
+                        <td>{row.monthlySales}</td>
+                        <td>{row.suggestedQuantity}</td>
+                        <td>{row.estimatedCbm?.toFixed(4) ?? '-'}</td>
+                        <td><button type="button" onClick={() => removePoolRow(row.rowId)}>移除</button></td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
