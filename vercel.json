@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/takealot-weekly-sync",
-      "schedule": "30 7 * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
