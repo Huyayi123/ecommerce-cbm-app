@@ -189,7 +189,7 @@ async function runSync(request) {
   try {
     const [{ rows: takealotRows, pagesFetched, totalResults }, skuItems, purchaseRecords] = await Promise.all([
       fetchTakealotRows(STORE_NAME),
-      supabaseSelect(`sku_items?shop_name=eq.${encodeURIComponent(STORE_NAME)}&select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,total_cbm,total_quantity,manual_unit_cbm`),
+      supabaseSelect(`sku_items?shop_name=eq.${encodeURIComponent(STORE_NAME)}&select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity`),
       supabaseSelect(`purchase_records?shop_name=eq.${encodeURIComponent(STORE_NAME)}&status=eq.in_transit&select=sku,purchase_quantity`),
     ]);
 
@@ -222,7 +222,7 @@ async function runSync(request) {
       const inTransitQuantity = inTransitMap.get(key) ?? 0;
       const targetQuantity = round(monthlySales * stockMonths, 2);
       const suggestedQuantity = Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
-      const manualUnitCbm = numberValue(skuItem?.manual_unit_cbm);
+      const manualUnitCbm = numberValue(skuItem?.unit_cbm);
       const totalCbm = numberValue(skuItem?.total_cbm);
       const totalQuantity = numberValue(skuItem?.total_quantity);
       const unitCbm = manualUnitCbm || (totalQuantity > 0 && totalCbm > 0 ? totalCbm / totalQuantity : 0);
