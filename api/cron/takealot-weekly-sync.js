@@ -172,7 +172,7 @@ function skuKey(value) {
 }
 
 function effectivePurchaseQuantity(record) {
-  return numberValue(record.confirmed_purchase_quantity ?? record.purchase_quantity);
+  return numberValue(record.purchase_quantity);
 }
 
 function jsonResponse(body, status = 200) {
@@ -190,7 +190,7 @@ async function runSync(request) {
     const [{ rows: takealotRows, pagesFetched, totalResults }, skuItems, purchaseRecords] = await Promise.all([
       fetchTakealotRows(STORE_NAME),
       supabaseSelect(`sku_items?shop_name=eq.${encodeURIComponent(STORE_NAME)}&select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,total_cbm,total_quantity,manual_unit_cbm`),
-      supabaseSelect(`purchase_records?shop_name=eq.${encodeURIComponent(STORE_NAME)}&status=eq.in_transit&select=sku,purchase_quantity,confirmed_purchase_quantity`),
+      supabaseSelect(`purchase_records?shop_name=eq.${encodeURIComponent(STORE_NAME)}&status=eq.in_transit&select=sku,purchase_quantity`),
     ]);
 
     const newestSkus = new Set(
