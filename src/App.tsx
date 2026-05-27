@@ -9,7 +9,7 @@ import { ContainerCalculatorPage } from './pages/ContainerCalculatorPage';
 import { MyPurchaseOrdersPage } from './pages/MyPurchaseOrdersPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
-import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, SkuItem } from './types';
+import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from './types';
 import {
   createAuditLog,
   fetchAuditLogs,
@@ -17,6 +17,7 @@ import {
   fetchProfile,
   fetchProfiles,
   fetchPurchaseRecords,
+  fetchSalesSuggestions,
   fetchSkuItems,
   replaceContainerRows,
   replacePurchaseRecords,
@@ -40,7 +41,7 @@ const navItems: Array<{ key: PageKey; label: string }> = [
 ];
 
 function isOptionalProfileLoadError(index: number, error: unknown): boolean {
-  return index === 4 && /failed to fetch|fetch/i.test(formatErrorMessage(error));
+  return (index === 4 || index === 5) && /failed to fetch|fetch/i.test(formatErrorMessage(error));
 }
 
 function App() {
@@ -51,6 +52,7 @@ function App() {
   const [skuItems, setSkuItems] = useState<SkuItem[]>([]);
   const [purchaseRows, setPurchaseRows] = useState<PurchaseRow[]>([]);
   const [purchaseRecords, setPurchaseRecords] = useState<PurchaseRecord[]>([]);
+  const [savedSalesSuggestions, setSavedSalesSuggestions] = useState<SalesSuggestionRow[]>([]);
   const [profiles, setProfiles] = useState<AppProfile[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [fileName, setFileName] = useState('');
@@ -64,6 +66,7 @@ function App() {
       fetchPurchaseRecords(),
       fetchAuditLogs(),
       fetchProfiles(),
+      fetchSalesSuggestions(),
     ]);
     const errors = results.flatMap((result, index) => {
       if (result.status !== 'rejected') return [];
@@ -81,6 +84,7 @@ function App() {
     } else if (profile) {
       setProfiles((current) => (current.some((item) => item.id === profile.id) ? current : [...current, profile]));
     }
+    if (results[5].status === 'fulfilled') setSavedSalesSuggestions(results[5].value);
 
     if (errors.length > 0) {
       setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
@@ -565,6 +569,7 @@ function App() {
           purchaseRecords={purchaseRecords}
           onSendToCalculator={(rows, name) => void sendSuggestionsToCalculator(rows, name)}
           canEditData={editable}
+          savedSuggestions={savedSalesSuggestions}
           onSuggestionsSave={(rows) => void replaceSalesSuggestions(rows)}
         />
       )}

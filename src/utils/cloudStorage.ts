@@ -415,6 +415,35 @@ export async function replaceSalesSuggestions(rows: SalesSuggestionRow[]): Promi
   if (error) throwSupabaseError(error);
 }
 
+export async function fetchSalesSuggestions(): Promise<SalesSuggestionRow[]> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('sales_suggestions')
+    .select('id,sku,product_name,shop_name,manufacturer_name,buyer_name,monthly_sales,stock_months,target_quantity,in_transit_quantity,suggested_quantity,units_per_carton,estimated_cartons,estimated_cbm,messages')
+    .order('created_at', { ascending: false });
+  if (error) throwSupabaseError(error);
+  return (data ?? []).map((row) => ({
+    rowId: row.id,
+    sku: row.sku ?? '',
+    productName: row.product_name ?? '',
+    shopName: row.shop_name ?? '',
+    manufacturerName: row.manufacturer_name ?? '',
+    buyerName: row.buyer_name ?? '',
+    monthlySales: Number(row.monthly_sales ?? 0),
+    stockMonths: Number(row.stock_months ?? 2),
+    targetQuantity: Number(row.target_quantity ?? 0),
+    localStockQuantity: 0,
+    takealotStockQuantity: 0,
+    stockOnWayQuantity: 0,
+    inTransitQuantity: Number(row.in_transit_quantity ?? 0),
+    suggestedQuantity: Number(row.suggested_quantity ?? 0),
+    unitsPerCarton: row.units_per_carton === null ? null : Number(row.units_per_carton ?? 0),
+    estimatedCartons: row.estimated_cartons === null ? null : Number(row.estimated_cartons ?? 0),
+    estimatedCbm: row.estimated_cbm === null ? null : Number(row.estimated_cbm ?? 0),
+    messages: Array.isArray(row.messages) ? row.messages : [],
+  }));
+}
+
 function mapAuditLog(row: AuditLogRow): AuditLog {
   return {
     id: row.id,

@@ -11,6 +11,7 @@ type Props = {
   purchaseRecords: PurchaseRecord[];
   onSendToCalculator: (rows: PurchaseRow[], fileName: string) => void;
   canEditData?: boolean;
+  savedSuggestions?: SalesSuggestionRow[];
   onSuggestionsSave?: (rows: SalesSuggestionRow[]) => void;
 };
 
@@ -36,7 +37,7 @@ function stockMonthsForMonthlySales(monthlySales: number): number {
   return 2;
 }
 
-export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, onSuggestionsSave }: Props) {
+export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [], onSuggestionsSave }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
   const [selectedStore, setSelectedStore] = useState('');
@@ -92,6 +93,12 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       if (selectedStore && canonicalStoreName(record.shopName) !== selectedStore) continue;
       const key = record.sku.trim().toUpperCase();
       inTransitBySku.set(key, (inTransitBySku.get(key) ?? 0) + effectivePurchaseQuantity(record));
+    }
+
+    if (inventoryRows.length === 0 && salesRows.length === 0 && savedSuggestions.length > 0) {
+      return selectedStore
+        ? savedSuggestions.filter((row) => canonicalStoreName(row.shopName) === selectedStore)
+        : savedSuggestions;
     }
 
     const sourceRows = inventoryRows.length > 0
@@ -158,7 +165,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         messages,
       };
     });
-  }, [inventoryRows, purchaseRecords, salesRows, selectedStore, skuItems]);
+  }, [inventoryRows, purchaseRecords, salesRows, savedSuggestions, selectedStore, skuItems]);
 
   useEffect(() => {
     if (suggestions.length > 0) onSuggestionsSave?.(suggestions);
