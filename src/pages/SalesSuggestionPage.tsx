@@ -49,8 +49,11 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     const extraNames = skuItems
       .map((item) => canonicalStoreName(item.shopName))
       .filter(Boolean);
-    return Array.from(new Set([...DEFAULT_STORES, ...extraNames]));
-  }, [skuItems]);
+    const savedNames = savedSuggestions
+      .map((row) => canonicalStoreName(row.shopName))
+      .filter(Boolean);
+    return Array.from(new Set([...savedNames, ...DEFAULT_STORES, ...extraNames]));
+  }, [savedSuggestions, skuItems]);
 
   useEffect(() => {
     if (!selectedStore && storeOptions.length > 0) setSelectedStore(storeOptions[0]);
