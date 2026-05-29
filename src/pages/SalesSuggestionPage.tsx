@@ -19,7 +19,7 @@ const DEFAULT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Li
 const STORE_NAME_MAP = new Map(DEFAULT_STORES.map((store) => [store.toLowerCase(), store]));
 const NEW_PRODUCT_RULES: Record<string, Array<{ limit: number; multiplier: number }>> = {
   Bestby: [
-    { limit: 60, multiplier: 5 },
+    { limit: 60, multiplier: 4 },
     { limit: 100, multiplier: 3 },
     { limit: 200, multiplier: 2 },
   ],
