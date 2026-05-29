@@ -189,11 +189,12 @@ function App() {
 
   async function appendPurchaseRecords(records: PurchaseRecord[]) {
     try {
-      const nextRecords = [...records, ...purchaseRecords];
+      const assignedRecords = assignBuyerEmails(records);
+      const nextRecords = [...assignedRecords, ...purchaseRecords];
       await persistPurchaseRecords(nextRecords);
       await loadCloudData();
-      const emailMessage = await notifyPurchaseTaskEmails(records);
-      setStatusMessage(`已生成 ${records.length} 条采购任务，请采购人在“我的采购订单”确认后进入在途库存口径。${emailMessage ? ` ${emailMessage}` : ''}`);
+      const emailMessage = await notifyPurchaseTaskEmails(assignedRecords);
+      setStatusMessage(`已生成 ${assignedRecords.length} 条采购任务，请采购人在“我的采购订单”确认后进入在途库存口径。${emailMessage ? ` ${emailMessage}` : ''}`);
       setActivePage('my-orders');
     } catch (error) {
       console.error(error);
