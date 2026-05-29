@@ -76,6 +76,10 @@ function buildNewProductRankMap(storeName: string, rows: TakealotInventoryRow[])
   return ranks;
 }
 
+function hasMissingSkuData(row: SalesSuggestionRow): boolean {
+  return row.messages.some((message) => message.includes('未录入 SKU 资料'));
+}
+
 export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [], onSuggestionsSave }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
@@ -423,7 +427,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
           </thead>
           <tbody>
             {suggestions.map((row) => (
-              <tr key={row.rowId} className={row.messages.length > 0 ? 'error-row' : ''}>
+              <tr key={row.rowId} className={hasMissingSkuData(row) ? 'error-row' : ''}>
                 <td className="suggestion-sticky suggestion-sticky-1">{row.sku || '-'}</td>
                 <td className="suggestion-sticky suggestion-sticky-2"><div className="suggestion-name-text" title={row.productName || ''}>{row.productName || '-'}</div></td>
                 <td>{row.monthlySales}</td>
