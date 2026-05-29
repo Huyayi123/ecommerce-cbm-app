@@ -28,9 +28,7 @@ const NEW_PRODUCT_RULES: Record<string, Array<{ limit: number; multiplier: numbe
     { limit: 40, multiplier: 1.5 },
   ],
   Aicom: [
-    { limit: 25, multiplier: 5 },
-    { limit: 50, multiplier: 3 },
-    { limit: 90, multiplier: 2 },
+    { limit: 25, multiplier: 2 },
   ],
 };
 
@@ -60,6 +58,42 @@ function skuKey(value: string): string {
 function newProductMultiplierForRank(storeName: string, rank: number): number {
   const rule = NEW_PRODUCT_RULES[storeName]?.find((item) => rank > 0 && rank <= item.limit);
   return rule?.multiplier ?? 1;
+}
+
+function forecastMonthlySales(storeName: string, rank: number, rawMonthlySales: number): { monthlySales: number; message: string } {
+  if (storeName === 'Aicom' && rank > 0 && rank <= 15) {
+    if (rawMonthlySales <= 3) {
+      return {
+        monthlySales: 0,
+        message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，未超过 3，暂不补订`,
+      };
+    }
+    if (rawMonthlySales <= 5) {
+      return {
+        monthlySales: 40,
+        message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，按 40 个预测`,
+      };
+    }
+    if (rawMonthlySales <= 8) {
+      return {
+        monthlySales: 50,
+        message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，按 50 个预测`,
+      };
+    }
+    return {
+      monthlySales: 60,
+      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，按 60 个预测`,
+    };
+  }
+
+  const multiplier = newProductMultiplierForRank(storeName, rank);
+  if (multiplier > 1 && rawMonthlySales > 0) {
+    return {
+      monthlySales: rawMonthlySales * multiplier,
+      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，按 ${multiplier} 倍预测`,
+    };
+  }
+  return { monthlySales: rawMonthlySales, message: '' };
 }
 
 function buildNewProductRankMap(storeName: string, rows: TakealotInventoryRow[]): Map<string, number> {
@@ -186,8 +220,8 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       const inventory = row.inventory ?? inventoryMap.get(key);
       const rawMonthlySales = inventory?.apiSalesQuantity ?? row.purchaseQuantity ?? 0;
       const newProductRank = newProductRankMap.get(key) ?? 0;
-      const newProductMultiplier = newProductMultiplierForRank(selectedStore, newProductRank);
-      const monthlySales = newProductMultiplier > 1 && rawMonthlySales > 0 ? rawMonthlySales * newProductMultiplier : rawMonthlySales;
+      const forecast = forecastMonthlySales(selectedStore, newProductRank, rawMonthlySales);
+      const monthlySales = forecast.monthlySales;
       const stockMonths = stockMonthsForMonthlySales(monthlySales);
       const targetQuantity = round(monthlySales * stockMonths, 2);
       const localStockQuantity = inventory?.localStockQuantity ?? 0;
@@ -208,7 +242,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
 
       if (!row.sku.trim()) messages.push('SKU 为空');
       if (!skuItem && row.sku.trim()) messages.push('未录入 SKU 资料');
-      if (newProductMultiplier > 1) messages.push(`新品预测：第 ${newProductRank} 新，原始销量 ${rawMonthlySales}，按 ${newProductMultiplier} 倍预测`);
+      if (forecast.message) messages.push(forecast.message);
 
       return {
         rowId: row.rowId,

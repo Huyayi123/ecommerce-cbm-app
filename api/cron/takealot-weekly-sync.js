@@ -10,9 +10,7 @@ const NEW_PRODUCT_RULES = {
     { limit: 40, multiplier: 1.5 },
   ],
   Aicom: [
-    { limit: 25, multiplier: 5 },
-    { limit: 50, multiplier: 3 },
-    { limit: 90, multiplier: 2 },
+    { limit: 25, multiplier: 2 },
   ],
 };
 
@@ -95,6 +93,42 @@ function newProductRulesForStore(storeName) {
 function newProductMultiplierForRank(storeName, rank) {
   const rule = newProductRulesForStore(storeName).find((item) => rank > 0 && rank <= item.limit);
   return rule?.multiplier ?? 1;
+}
+
+function forecastMonthlySales(storeName, rank, rawMonthlySales) {
+  if (storeName === 'Aicom' && rank > 0 && rank <= 15) {
+    if (rawMonthlySales <= 3) {
+      return {
+        monthlySales: 0,
+        message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，未超过 3，暂不补订`,
+      };
+    }
+    if (rawMonthlySales <= 5) {
+      return {
+        monthlySales: 40,
+        message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，按 40 个预测`,
+      };
+    }
+    if (rawMonthlySales <= 8) {
+      return {
+        monthlySales: 50,
+        message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，按 50 个预测`,
+      };
+    }
+    return {
+      monthlySales: 60,
+      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，按 60 个预测`,
+    };
+  }
+
+  const multiplier = newProductMultiplierForRank(storeName, rank);
+  if (multiplier > 1 && rawMonthlySales > 0) {
+    return {
+      monthlySales: rawMonthlySales * multiplier,
+      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，按 ${multiplier} 倍预测`,
+    };
+  }
+  return { monthlySales: rawMonthlySales, message: '' };
 }
 
 function buildNewProductRankMap(storeName, takealotRows) {
@@ -252,8 +286,8 @@ async function buildStoreSuggestions(storeName) {
     const skuItem = skuMap.get(key);
     const rawMonthlySales = sumSalesUnits(row.sales_units);
     const newProductRank = newProductRankMap.get(key) ?? 0;
-    const newProductMultiplier = newProductMultiplierForRank(storeName, newProductRank);
-    const monthlySales = newProductMultiplier > 1 && rawMonthlySales > 0 ? rawMonthlySales * newProductMultiplier : rawMonthlySales;
+    const forecast = forecastMonthlySales(storeName, newProductRank, rawMonthlySales);
+    const monthlySales = forecast.monthlySales;
     const stockMonths = stockMonthsForMonthlySales(monthlySales);
     const localStockQuantity = sumQuantityAvailable(row.leadtime_stock ?? row.quantity_available);
     const takealotStockQuantity = row.stock_at_takealot_total === undefined ? sumQuantityAvailable(row.stock_at_takealot) : numberValue(row.stock_at_takealot_total);
@@ -283,7 +317,7 @@ async function buildStoreSuggestions(storeName) {
       estimated_cbm: unitCbm > 0 ? round(suggestedQuantity * unitCbm, 4) : null,
       messages: [
         ...(skuItem ? [] : ['未录入SKU资料']),
-        ...(newProductMultiplier > 1 ? [`新品预测：第 ${newProductRank} 新，原始销量 ${rawMonthlySales}，按 ${newProductMultiplier} 倍预测`] : []),
+        ...(forecast.message ? [forecast.message] : []),
       ],
     };
   });
