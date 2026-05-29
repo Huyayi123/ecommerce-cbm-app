@@ -95,30 +95,35 @@ function newProductMultiplierForRank(storeName, rank) {
   return rule?.multiplier ?? 1;
 }
 
+function aicomDirectSuggestedQuantity(rank, rawMonthlySales) {
+  if (rank <= 0 || rank > 15) return null;
+  if (rawMonthlySales <= 3) {
+    return {
+      suggestedQuantity: 0,
+      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，未超过 3，暂不补订`,
+    };
+  }
+  if (rawMonthlySales <= 5) {
+    return {
+      suggestedQuantity: 40,
+      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，建议采购数量直接 40 个`,
+    };
+  }
+  if (rawMonthlySales <= 8) {
+    return {
+      suggestedQuantity: 50,
+      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，建议采购数量直接 50 个`,
+    };
+  }
+  return {
+    suggestedQuantity: 60,
+    message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，建议采购数量直接 60 个`,
+  };
+}
+
 function forecastMonthlySales(storeName, rank, rawMonthlySales) {
   if (storeName === 'Aicom' && rank > 0 && rank <= 15) {
-    if (rawMonthlySales <= 3) {
-      return {
-        monthlySales: 0,
-        message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，未超过 3，暂不补订`,
-      };
-    }
-    if (rawMonthlySales <= 5) {
-      return {
-        monthlySales: 40,
-        message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，按 40 个预测`,
-      };
-    }
-    if (rawMonthlySales <= 8) {
-      return {
-        monthlySales: 50,
-        message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，按 50 个预测`,
-      };
-    }
-    return {
-      monthlySales: 60,
-      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，按 60 个预测`,
-    };
+    return { monthlySales: rawMonthlySales, message: '' };
   }
 
   const multiplier = newProductMultiplierForRank(storeName, rank);
@@ -294,7 +299,10 @@ async function buildStoreSuggestions(storeName) {
     const stockOnWayQuantity = row.total_stock_on_way === undefined ? sumQuantityAvailable(row.stock_on_way) : numberValue(row.total_stock_on_way);
     const inTransitQuantity = inTransitMap.get(key) ?? 0;
     const targetQuantity = round(monthlySales * stockMonths, 2);
-    const suggestedQuantity = Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
+    const directSuggestion = storeName === 'Aicom' ? aicomDirectSuggestedQuantity(newProductRank, rawMonthlySales) : null;
+    const suggestedQuantity = directSuggestion
+      ? directSuggestion.suggestedQuantity
+      : Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
     const manualUnitCbm = numberValue(skuItem?.unit_cbm);
     const totalCbm = numberValue(skuItem?.total_cbm);
     const totalQuantity = numberValue(skuItem?.total_quantity);
@@ -317,7 +325,7 @@ async function buildStoreSuggestions(storeName) {
       estimated_cbm: unitCbm > 0 ? round(suggestedQuantity * unitCbm, 4) : null,
       messages: [
         ...(skuItem ? [] : ['未录入SKU资料']),
-        ...(forecast.message ? [forecast.message] : []),
+        ...(directSuggestion?.message ? [directSuggestion.message] : forecast.message ? [forecast.message] : []),
       ],
     };
   });
