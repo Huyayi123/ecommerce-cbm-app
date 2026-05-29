@@ -694,6 +694,10 @@ th.sticky-col {
   width: 96px;
 }
 
+.compact-input {
+  width: 92px;
+}
+
 .arrived-check {
   display: inline-flex;
   align-items: center;

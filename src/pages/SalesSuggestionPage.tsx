@@ -44,6 +44,8 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   const [inventoryRows, setInventoryRows] = useState<TakealotInventoryRow[]>([]);
   const [purchasePool, setPurchasePool] = useState<SalesSuggestionRow[]>([]);
   const [syncMessage, setSyncMessage] = useState('');
+  const [suggestedQuantityDrafts, setSuggestedQuantityDrafts] = useState<Record<string, string>>({});
+  const [suggestedQuantityOverrides, setSuggestedQuantityOverrides] = useState<Record<string, number>>({});
 
   const storeOptions = useMemo(() => {
     const extraNames = skuItems
@@ -98,10 +100,23 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       inTransitBySku.set(key, (inTransitBySku.get(key) ?? 0) + effectivePurchaseQuantity(record));
     }
 
+    const applySavedOverride = (row: SalesSuggestionRow): SalesSuggestionRow => {
+      const override = suggestedQuantityOverrides[row.rowId];
+      if (override === undefined) return row;
+      const ratio = row.suggestedQuantity > 0 ? override / row.suggestedQuantity : 0;
+      return {
+        ...row,
+        suggestedQuantity: override,
+        estimatedCartons: row.estimatedCartons !== null && row.estimatedCartons !== undefined && ratio > 0 ? round(row.estimatedCartons * ratio, 2) : row.estimatedCartons,
+        estimatedCbm: row.estimatedCbm !== null && row.estimatedCbm !== undefined && ratio > 0 ? round(row.estimatedCbm * ratio, 4) : row.estimatedCbm,
+      };
+    };
+
     if (inventoryRows.length === 0 && salesRows.length === 0 && savedSuggestions.length > 0) {
-      return selectedStore
+      const rows = selectedStore
         ? savedSuggestions.filter((row) => canonicalStoreName(row.shopName) === selectedStore)
         : savedSuggestions;
+      return rows.map(applySavedOverride);
     }
 
     const sourceRows = inventoryRows.length > 0
@@ -133,7 +148,8 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       const takealotStockQuantity = inventory?.takealotStockQuantity ?? 0;
       const stockOnWayQuantity = inventory?.stockOnWayQuantity ?? 0;
       const inTransitQuantity = inTransitBySku.get(key) ?? 0;
-      const suggestedQuantity = Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
+      const autoSuggestedQuantity = Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
+      const suggestedQuantity = suggestedQuantityOverrides[row.rowId] ?? autoSuggestedQuantity;
       const estimatedCartons =
         skuItem && skuItem.unitsPerCarton > 0 ? round(suggestedQuantity / skuItem.unitsPerCarton, 2) : null;
       const estimatedCbm =
@@ -168,7 +184,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         messages,
       };
     });
-  }, [inventoryRows, purchaseRecords, salesRows, savedSuggestions, selectedStore, skuItems]);
+  }, [inventoryRows, purchaseRecords, salesRows, savedSuggestions, selectedStore, skuItems, suggestedQuantityOverrides]);
 
   useEffect(() => {
     if (suggestions.length > 0) onSuggestionsSave?.(suggestions);
@@ -197,6 +213,34 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
 
   function validSuggestionRows(rows: SalesSuggestionRow[]) {
     return rows.filter((row) => row.suggestedQuantity > 0 && row.messages.length === 0);
+  }
+
+  function suggestedQuantityInputValue(row: SalesSuggestionRow) {
+    return suggestedQuantityDrafts[row.rowId] ?? String(row.suggestedQuantity);
+  }
+
+  function commitSuggestedQuantity(row: SalesSuggestionRow) {
+    const draft = suggestedQuantityDrafts[row.rowId];
+    if (draft === undefined) return;
+    const parsed = Number(draft);
+    setSuggestedQuantityDrafts((current) => {
+      const next = { ...current };
+      delete next[row.rowId];
+      return next;
+    });
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    const quantity = round(parsed, 2);
+    setSuggestedQuantityOverrides((current) => ({ ...current, [row.rowId]: quantity }));
+    setPurchasePool((current) => current.map((item) => {
+      if (item.rowId !== row.rowId) return item;
+      const ratio = item.suggestedQuantity > 0 ? quantity / item.suggestedQuantity : 0;
+      return {
+        ...item,
+        suggestedQuantity: quantity,
+        estimatedCartons: item.estimatedCartons !== null && item.estimatedCartons !== undefined && ratio > 0 ? round(item.estimatedCartons * ratio, 2) : item.estimatedCartons,
+        estimatedCbm: item.estimatedCbm !== null && item.estimatedCbm !== undefined && ratio > 0 ? round(item.estimatedCbm * ratio, 4) : item.estimatedCbm,
+      };
+    }));
   }
 
   function addCurrentStoreToPool() {
@@ -343,7 +387,21 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.takealotStockQuantity}</td>
                 <td>{row.stockOnWayQuantity}</td>
                 <td>{row.inTransitQuantity}</td>
-                <td>{row.suggestedQuantity}</td>
+                <td>
+                  <input
+                    className="quantity-input compact-input"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={suggestedQuantityInputValue(row)}
+                    disabled={!canEditData}
+                    onChange={(event) => setSuggestedQuantityDrafts((current) => ({ ...current, [row.rowId]: event.target.value }))}
+                    onBlur={() => commitSuggestedQuantity(row)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') event.currentTarget.blur();
+                    }}
+                  />
+                </td>
                 <td>{row.buyerName || '-'}</td>
                 <td>{row.estimatedCbm?.toFixed(4) ?? '-'}</td>
                 <td>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</td>
