@@ -6,9 +6,8 @@ const NEW_PRODUCT_RULES = {
     { limit: 200, multiplier: 2 },
   ],
   Arfast: [
-    { limit: 40, multiplier: 4 },
-    { limit: 80, multiplier: 3 },
-    { limit: 120, multiplier: 2 },
+    { limit: 15, multiplier: 3 },
+    { limit: 40, multiplier: 1.5 },
   ],
   Aicom: [
     { limit: 25, multiplier: 5 },
