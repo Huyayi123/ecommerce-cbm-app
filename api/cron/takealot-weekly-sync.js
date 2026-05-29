@@ -127,6 +127,9 @@ async function fetchTakealotRows(storeName) {
   const headers = { Accept: 'application/json', Authorization: `Key ${apiKey}` };
   const allRows = [];
   const seenKeys = new Set();
+  let fetchedRows = 0;
+  let disabledRows = 0;
+  let duplicateRows = 0;
   let totalResults = null;
   let pagesFetched = 0;
 
@@ -140,6 +143,7 @@ async function fetchTakealotRows(storeName) {
     if (!upstream.ok) throw new Error(payload.message || payload.error || `Takealot API 请求失败：${upstream.status}`);
 
     const rows = rowsFromPayload(payload);
+    fetchedRows += rows.length;
     const payloadTotal = Number(payload?.total_results);
     if (Number.isFinite(payloadTotal)) totalResults = payloadTotal;
     pagesFetched = pageNumber;
@@ -147,10 +151,17 @@ async function fetchTakealotRows(storeName) {
     let newRowsOnPage = 0;
     for (const row of rows) {
       const key = rowKey(row);
-      if (!key || seenKeys.has(key)) continue;
+      if (!key || seenKeys.has(key)) {
+        duplicateRows += 1;
+        continue;
+      }
       seenKeys.add(key);
       newRowsOnPage += 1;
-      if (!isDisabledRow(row)) allRows.push(row);
+      if (isDisabledRow(row)) {
+        disabledRows += 1;
+      } else {
+        allRows.push(row);
+      }
     }
 
     if (rows.length < pageSize) break;
@@ -158,7 +169,7 @@ async function fetchTakealotRows(storeName) {
     if (totalResults !== null && seenKeys.size >= totalResults) break;
   }
 
-  return { rows: allRows, pagesFetched, totalResults };
+  return { rows: allRows, pagesFetched, totalResults, fetchedRows, activeRows: allRows.length, disabledRows, duplicateRows };
 }
 
 function supabaseHeaders() {
@@ -184,8 +195,11 @@ async function supabaseSelect(path) {
   return Array.isArray(payload) ? payload : [];
 }
 
-async function replaceSalesSuggestions(rows) {
-  const deleteResponse = await fetch(supabaseUrl('sales_suggestions?id=neq.never-match'), {
+async function replaceSalesSuggestions(rows, storeNames = []) {
+  const deletePath = storeNames.length === 1
+    ? `sales_suggestions?shop_name=eq.${encodeURIComponent(storeNames[0])}`
+    : 'sales_suggestions?id=neq.never-match';
+  const deleteResponse = await fetch(supabaseUrl(deletePath), {
     method: 'DELETE',
     headers: supabaseHeaders(),
   });
@@ -219,7 +233,7 @@ function jsonResponse(body, status = 200) {
 }
 
 async function buildStoreSuggestions(storeName) {
-  const [{ rows: takealotRows, pagesFetched, totalResults }, skuItems, purchaseRecords] = await Promise.all([
+  const [{ rows: takealotRows, pagesFetched, totalResults, fetchedRows, activeRows, disabledRows, duplicateRows }, skuItems, purchaseRecords] = await Promise.all([
     fetchTakealotRows(storeName),
     supabaseSelect(`sku_items?shop_name=eq.${encodeURIComponent(storeName)}&select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity`),
     supabaseSelect(`purchase_records?shop_name=eq.${encodeURIComponent(storeName)}&status=eq.in_transit&select=sku,purchase_quantity`),
@@ -278,6 +292,10 @@ async function buildStoreSuggestions(storeName) {
   return {
     store: storeName,
     rows: suggestions.length,
+    fetchedRows,
+    activeRows,
+    disabledRows,
+    duplicateRows,
     newProducts: suggestions.filter((row) => row.messages.some((message) => message.includes('新品预测'))).length,
     pagesFetched,
     totalResults,
@@ -306,6 +324,10 @@ async function runSync(request) {
         results.push({
           store: result.store,
           rows: result.rows,
+          fetchedRows: result.fetchedRows,
+          activeRows: result.activeRows,
+          disabledRows: result.disabledRows,
+          duplicateRows: result.duplicateRows,
           newProducts: result.newProducts,
           pagesFetched: result.pagesFetched,
           totalResults: result.totalResults,
@@ -320,7 +342,7 @@ async function runSync(request) {
     if (requestedStore && errors.length > 0) return jsonResponse({ ok: false, errors }, 500);
     if (allSuggestions.length === 0 && errors.length > 0) return jsonResponse({ ok: false, errors }, 500);
 
-    await replaceSalesSuggestions(allSuggestions);
+    await replaceSalesSuggestions(allSuggestions, requestedStore ? stores : []);
     return jsonResponse({ ok: errors.length === 0, stores: results, errors, rows: allSuggestions.length });
   } catch (error) {
     console.error(error);
