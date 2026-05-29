@@ -11,6 +11,8 @@ function apiKeyForStore(storeName) {
   const config = envStoreConfig().find((item) => item && item.name === storeName);
   if (config?.apiKeyEnv && process.env[config.apiKeyEnv]) return process.env[config.apiKeyEnv];
   if (config?.apiKey) return config.apiKey;
+  const storeSpecificEnv = `TAKEALOT_API_KEY_${storeName.replace(/[^a-z0-9]/gi, '_').toUpperCase()}`;
+  if (process.env[storeSpecificEnv]) return process.env[storeSpecificEnv];
   return process.env.TAKEALOT_API_KEY || '';
 }
 

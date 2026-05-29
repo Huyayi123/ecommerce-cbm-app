@@ -1,9 +1,14 @@
-const STORE_NAME = 'MegaValue';
+const DEFAULT_SYNC_STORES = ['MegaValue', 'KeepFit'];
 const NEW_PRODUCT_COUNT = 60;
 
 function numberValue(value) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function syncStoresFromEnv() {
+  const raw = process.env.TAKEALOT_SYNC_STORES || '';
+  return raw.split(',').map((store) => store.trim()).filter(Boolean);
 }
 
 function envStoreConfig() {
@@ -51,17 +56,13 @@ function numberFromEnv(name, fallback) {
 }
 
 function sumQuantityAvailable(value) {
-  if (Array.isArray(value)) {
-    return value.reduce((total, item) => total + numberValue(item?.quantity_available ?? item), 0);
-  }
+  if (Array.isArray(value)) return value.reduce((total, item) => total + numberValue(item?.quantity_available ?? item), 0);
   if (value && typeof value === 'object') return numberValue(value.quantity_available);
   return numberValue(value);
 }
 
 function sumSalesUnits(value) {
-  if (Array.isArray(value)) {
-    return value.reduce((total, item) => total + numberValue(item?.sales_units ?? item), 0);
-  }
+  if (Array.isArray(value)) return value.reduce((total, item) => total + numberValue(item?.sales_units ?? item), 0);
   if (value && typeof value === 'object') return numberValue(value.sales_units);
   return numberValue(value);
 }
@@ -179,6 +180,79 @@ function jsonResponse(body, status = 200) {
   return Response.json(body, { status });
 }
 
+async function buildStoreSuggestions(storeName) {
+  const [{ rows: takealotRows, pagesFetched, totalResults }, skuItems, purchaseRecords] = await Promise.all([
+    fetchTakealotRows(storeName),
+    supabaseSelect(`sku_items?shop_name=eq.${encodeURIComponent(storeName)}&select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity`),
+    supabaseSelect(`purchase_records?shop_name=eq.${encodeURIComponent(storeName)}&status=eq.in_transit&select=sku,purchase_quantity`),
+  ]);
+
+  const newestSkus = new Set(
+    takealotRows
+      .map((row) => skuFor(row))
+      .filter(Boolean)
+      .sort((a, b) => numberValue(a) - numberValue(b))
+      .slice(-NEW_PRODUCT_COUNT)
+      .map((sku) => skuKey(sku)),
+  );
+  const skuMap = new Map(skuItems.map((item) => [skuKey(item.sku), item]));
+  const inTransitMap = new Map();
+  for (const record of purchaseRecords) {
+    const key = skuKey(record.sku);
+    inTransitMap.set(key, (inTransitMap.get(key) ?? 0) + effectivePurchaseQuantity(record));
+  }
+
+  const suggestions = takealotRows.map((row, index) => {
+    const sku = skuFor(row);
+    const key = skuKey(sku);
+    const skuItem = skuMap.get(key);
+    const rawMonthlySales = sumSalesUnits(row.sales_units);
+    const isNewProduct = newestSkus.has(key);
+    const monthlySales = isNewProduct && rawMonthlySales > 0 ? rawMonthlySales * 4 : rawMonthlySales;
+    const stockMonths = stockMonthsForMonthlySales(monthlySales);
+    const localStockQuantity = sumQuantityAvailable(row.leadtime_stock ?? row.quantity_available);
+    const takealotStockQuantity = row.stock_at_takealot_total === undefined ? sumQuantityAvailable(row.stock_at_takealot) : numberValue(row.stock_at_takealot_total);
+    const stockOnWayQuantity = row.total_stock_on_way === undefined ? sumQuantityAvailable(row.stock_on_way) : numberValue(row.total_stock_on_way);
+    const inTransitQuantity = inTransitMap.get(key) ?? 0;
+    const targetQuantity = round(monthlySales * stockMonths, 2);
+    const suggestedQuantity = Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
+    const manualUnitCbm = numberValue(skuItem?.unit_cbm);
+    const totalCbm = numberValue(skuItem?.total_cbm);
+    const totalQuantity = numberValue(skuItem?.total_quantity);
+    const unitCbm = manualUnitCbm || (totalQuantity > 0 && totalCbm > 0 ? totalCbm / totalQuantity : 0);
+
+    return {
+      id: `cron-${storeName}-${sku || index}`,
+      sku,
+      product_name: skuItem?.english_name || skuItem?.product_name || row.title || '',
+      shop_name: storeName,
+      manufacturer_name: skuItem?.manufacturer_name || '',
+      buyer_name: skuItem?.buyer_name || '',
+      monthly_sales: monthlySales,
+      stock_months: stockMonths,
+      target_quantity: targetQuantity,
+      in_transit_quantity: inTransitQuantity,
+      suggested_quantity: suggestedQuantity,
+      units_per_carton: skuItem?.units_per_carton ?? null,
+      estimated_cartons: numberValue(skuItem?.units_per_carton) > 0 ? round(suggestedQuantity / numberValue(skuItem.units_per_carton), 2) : null,
+      estimated_cbm: unitCbm > 0 ? round(suggestedQuantity * unitCbm, 4) : null,
+      messages: [
+        ...(skuItem ? [] : ['未录入SKU资料']),
+        ...(isNewProduct ? [`新品预测：原始销量 ${rawMonthlySales}，按 4 倍预测`] : []),
+      ],
+    };
+  });
+
+  return {
+    store: storeName,
+    rows: suggestions.length,
+    newProducts: newestSkus.size,
+    pagesFetched,
+    totalResults,
+    suggestions,
+  };
+}
+
 async function runSync(request) {
   if (request.method !== 'GET' && request.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
@@ -187,77 +261,26 @@ async function runSync(request) {
   if (cronSecret && authorization !== `Bearer ${cronSecret}`) return jsonResponse({ error: 'Unauthorized' }, 401);
 
   try {
-    const [{ rows: takealotRows, pagesFetched, totalResults }, skuItems, purchaseRecords] = await Promise.all([
-      fetchTakealotRows(STORE_NAME),
-      supabaseSelect(`sku_items?shop_name=eq.${encodeURIComponent(STORE_NAME)}&select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity`),
-      supabaseSelect(`purchase_records?shop_name=eq.${encodeURIComponent(STORE_NAME)}&status=eq.in_transit&select=sku,purchase_quantity`),
-    ]);
+    const url = new URL(request.url);
+    const requestedStore = url.searchParams.get('store')?.trim();
+    const stores = requestedStore ? [requestedStore] : (syncStoresFromEnv().length > 0 ? syncStoresFromEnv() : DEFAULT_SYNC_STORES);
+    const results = [];
+    const allSuggestions = [];
 
-    const newestSkus = new Set(
-      takealotRows
-        .map((row) => skuFor(row))
-        .filter(Boolean)
-        .sort((a, b) => numberValue(a) - numberValue(b))
-        .slice(-NEW_PRODUCT_COUNT)
-        .map((sku) => skuKey(sku)),
-    );
-    const skuMap = new Map(skuItems.map((item) => [skuKey(item.sku), item]));
-    const inTransitMap = new Map();
-    for (const record of purchaseRecords) {
-      const key = skuKey(record.sku);
-      inTransitMap.set(key, (inTransitMap.get(key) ?? 0) + effectivePurchaseQuantity(record));
+    for (const store of stores) {
+      const result = await buildStoreSuggestions(store);
+      results.push({
+        store: result.store,
+        rows: result.rows,
+        newProducts: result.newProducts,
+        pagesFetched: result.pagesFetched,
+        totalResults: result.totalResults,
+      });
+      allSuggestions.push(...result.suggestions);
     }
 
-    const suggestions = takealotRows.map((row, index) => {
-      const sku = skuFor(row);
-      const key = skuKey(sku);
-      const skuItem = skuMap.get(key);
-      const rawMonthlySales = sumSalesUnits(row.sales_units);
-      const isNewProduct = newestSkus.has(key);
-      const monthlySales = isNewProduct && rawMonthlySales > 0 ? rawMonthlySales * 4 : rawMonthlySales;
-      const stockMonths = stockMonthsForMonthlySales(monthlySales);
-      const localStockQuantity = sumQuantityAvailable(row.leadtime_stock ?? row.quantity_available);
-      const takealotStockQuantity = row.stock_at_takealot_total === undefined ? sumQuantityAvailable(row.stock_at_takealot) : numberValue(row.stock_at_takealot_total);
-      const stockOnWayQuantity = row.total_stock_on_way === undefined ? sumQuantityAvailable(row.stock_on_way) : numberValue(row.total_stock_on_way);
-      const inTransitQuantity = inTransitMap.get(key) ?? 0;
-      const targetQuantity = round(monthlySales * stockMonths, 2);
-      const suggestedQuantity = Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
-      const manualUnitCbm = numberValue(skuItem?.unit_cbm);
-      const totalCbm = numberValue(skuItem?.total_cbm);
-      const totalQuantity = numberValue(skuItem?.total_quantity);
-      const unitCbm = manualUnitCbm || (totalQuantity > 0 && totalCbm > 0 ? totalCbm / totalQuantity : 0);
-
-      return {
-        id: `cron-${STORE_NAME}-${sku || index}`,
-        sku,
-        product_name: skuItem?.english_name || skuItem?.product_name || row.title || '',
-        shop_name: STORE_NAME,
-        manufacturer_name: skuItem?.manufacturer_name || '',
-        buyer_name: skuItem?.buyer_name || '',
-        monthly_sales: monthlySales,
-        stock_months: stockMonths,
-        target_quantity: targetQuantity,
-        in_transit_quantity: inTransitQuantity,
-        suggested_quantity: suggestedQuantity,
-        units_per_carton: skuItem?.units_per_carton ?? null,
-        estimated_cartons: numberValue(skuItem?.units_per_carton) > 0 ? round(suggestedQuantity / numberValue(skuItem.units_per_carton), 2) : null,
-        estimated_cbm: unitCbm > 0 ? round(suggestedQuantity * unitCbm, 4) : null,
-        messages: [
-          ...(skuItem ? [] : ['未录入SKU资料']),
-          ...(isNewProduct ? [`新品预测：原始销量 ${rawMonthlySales}，按 4 倍预测`] : []),
-        ],
-      };
-    });
-
-    await replaceSalesSuggestions(suggestions);
-    return jsonResponse({
-      ok: true,
-      store: STORE_NAME,
-      rows: suggestions.length,
-      newProducts: newestSkus.size,
-      pagesFetched,
-      totalResults,
-    });
+    await replaceSalesSuggestions(allSuggestions);
+    return jsonResponse({ ok: true, stores: results, rows: allSuggestions.length });
   } catch (error) {
     console.error(error);
     return jsonResponse({ error: error instanceof Error ? error.message : '自动同步失败' }, 500);

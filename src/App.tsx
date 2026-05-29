@@ -192,11 +192,37 @@ function App() {
       const nextRecords = [...records, ...purchaseRecords];
       await persistPurchaseRecords(nextRecords);
       await loadCloudData();
-      setStatusMessage(`已生成 ${records.length} 条采购任务，请采购人在“我的采购订单”确认后进入在途库存口径。`);
+      const emailMessage = await notifyPurchaseTaskEmails(records);
+      setStatusMessage(`已生成 ${records.length} 条采购任务，请采购人在“我的采购订单”确认后进入在途库存口径。${emailMessage ? ` ${emailMessage}` : ''}`);
       setActivePage('my-orders');
     } catch (error) {
       console.error(error);
       setStatusMessage(`采购记录保存失败：${formatErrorMessage(error)}`);
+    }
+  }
+
+  async function notifyPurchaseTaskEmails(records: PurchaseRecord[]): Promise<string> {
+    if (!supabase || records.length === 0) return '';
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return '邮件通知未发送：登录会话已失效。';
+      const response = await fetch('/api/notify-purchase-tasks', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ records }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) return `邮件通知失败：${formatErrorMessage(payload.error || response.statusText)}`;
+      if (payload.skipped > 0) return '采购任务已生成，但邮件服务未配置，暂未发送邮件。';
+      const missingText = payload.missingEmailCount > 0 ? `，${payload.missingEmailCount} 条缺少采购人邮箱` : '';
+      return `已发送 ${payload.sent ?? 0} 封采购任务邮件${missingText}。`;
+    } catch (error) {
+      console.error(error);
+      return `邮件通知失败：${formatErrorMessage(error)}`;
     }
   }
 
