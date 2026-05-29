@@ -1,9 +1,9 @@
 const DEFAULT_SYNC_STORES = ['MegaValue', 'KeepFit'];
 const NEW_PRODUCT_RULES = {
   Bestby: [
-    { limit: 60, multiplier: 4 },
-    { limit: 100, multiplier: 3 },
-    { limit: 200, multiplier: 2 },
+    { limit: 60, multiplier: 3 },
+    { limit: 100, multiplier: 2 },
+    { limit: 200, multiplier: 1.5 },
   ],
   Arfast: [
     { limit: 15, multiplier: 3 },
