@@ -17,6 +17,23 @@ type Props = {
 
 const DEFAULT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
 const STORE_NAME_MAP = new Map(DEFAULT_STORES.map((store) => [store.toLowerCase(), store]));
+const NEW_PRODUCT_RULES: Record<string, Array<{ limit: number; multiplier: number }>> = {
+  Bestby: [
+    { limit: 60, multiplier: 5 },
+    { limit: 100, multiplier: 3 },
+    { limit: 200, multiplier: 2 },
+  ],
+  Arfast: [
+    { limit: 40, multiplier: 4 },
+    { limit: 80, multiplier: 3 },
+    { limit: 120, multiplier: 2 },
+  ],
+  Aicom: [
+    { limit: 25, multiplier: 5 },
+    { limit: 50, multiplier: 3 },
+    { limit: 90, multiplier: 2 },
+  ],
+};
 
 function canonicalStoreName(value: string): string {
   return STORE_NAME_MAP.get(value.trim().toLowerCase()) ?? '';
@@ -35,6 +52,28 @@ function stockMonthsForMonthlySales(monthlySales: number): number {
   if (monthlySales > 50) return 4;
   if (monthlySales >= 21) return 3;
   return 2;
+}
+
+function skuKey(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+function newProductMultiplierForRank(storeName: string, rank: number): number {
+  const rule = NEW_PRODUCT_RULES[storeName]?.find((item) => rank > 0 && rank <= item.limit);
+  return rule?.multiplier ?? 1;
+}
+
+function buildNewProductRankMap(storeName: string, rows: TakealotInventoryRow[]): Map<string, number> {
+  if (!NEW_PRODUCT_RULES[storeName]) return new Map();
+  const sortedSkus = rows
+    .map((row) => row.sku.trim())
+    .filter(Boolean)
+    .sort((a, b) => Number(a) - Number(b));
+  const ranks = new Map<string, number>();
+  [...sortedSkus].reverse().forEach((sku, index) => {
+    ranks.set(skuKey(sku), index + 1);
+  });
+  return ranks;
 }
 
 export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [], onSuggestionsSave }: Props) {
@@ -90,6 +129,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     const scopedSkuItems = selectedStore ? skuItems.filter((item) => canonicalStoreName(item.shopName) === selectedStore) : skuItems;
     const skuMap = new Map(scopedSkuItems.map((item) => [item.sku.trim().toUpperCase(), item]));
     const inventoryMap = new Map(inventoryRows.map((item) => [item.sku.trim().toUpperCase(), item]));
+    const newProductRankMap = buildNewProductRankMap(selectedStore, inventoryRows);
     const inTransitBySku = new Map<string, number>();
 
     for (const record of purchaseRecords) {
@@ -138,10 +178,13 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       }));
 
     return sourceRows.map((row) => {
-      const key = row.sku.trim().toUpperCase();
+      const key = skuKey(row.sku);
       const skuItem = skuMap.get(key);
       const inventory = row.inventory ?? inventoryMap.get(key);
-      const monthlySales = inventory?.apiSalesQuantity ?? row.purchaseQuantity ?? 0;
+      const rawMonthlySales = inventory?.apiSalesQuantity ?? row.purchaseQuantity ?? 0;
+      const newProductRank = newProductRankMap.get(key) ?? 0;
+      const newProductMultiplier = newProductMultiplierForRank(selectedStore, newProductRank);
+      const monthlySales = newProductMultiplier > 1 && rawMonthlySales > 0 ? rawMonthlySales * newProductMultiplier : rawMonthlySales;
       const stockMonths = stockMonthsForMonthlySales(monthlySales);
       const targetQuantity = round(monthlySales * stockMonths, 2);
       const localStockQuantity = inventory?.localStockQuantity ?? 0;
@@ -162,6 +205,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
 
       if (!row.sku.trim()) messages.push('SKU 为空');
       if (!skuItem && row.sku.trim()) messages.push('未录入 SKU 资料');
+      if (newProductMultiplier > 1) messages.push(`新品预测：第 ${newProductRank} 新，原始销量 ${rawMonthlySales}，按 ${newProductMultiplier} 倍预测`);
 
       return {
         rowId: row.rowId,

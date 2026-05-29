@@ -1,5 +1,21 @@
 const DEFAULT_SYNC_STORES = ['MegaValue', 'KeepFit'];
-const NEW_PRODUCT_COUNT = 60;
+const NEW_PRODUCT_RULES = {
+  Bestby: [
+    { limit: 60, multiplier: 5 },
+    { limit: 100, multiplier: 3 },
+    { limit: 200, multiplier: 2 },
+  ],
+  Arfast: [
+    { limit: 40, multiplier: 4 },
+    { limit: 80, multiplier: 3 },
+    { limit: 120, multiplier: 2 },
+  ],
+  Aicom: [
+    { limit: 25, multiplier: 5 },
+    { limit: 50, multiplier: 3 },
+    { limit: 90, multiplier: 2 },
+  ],
+};
 
 function numberValue(value) {
   const parsed = Number(value ?? 0);
@@ -71,6 +87,28 @@ function stockMonthsForMonthlySales(monthlySales) {
   if (monthlySales > 50) return 4;
   if (monthlySales >= 21) return 3;
   return 2;
+}
+
+function newProductRulesForStore(storeName) {
+  return NEW_PRODUCT_RULES[storeName] || [];
+}
+
+function newProductMultiplierForRank(storeName, rank) {
+  const rule = newProductRulesForStore(storeName).find((item) => rank > 0 && rank <= item.limit);
+  return rule?.multiplier ?? 1;
+}
+
+function buildNewProductRankMap(storeName, takealotRows) {
+  if (newProductRulesForStore(storeName).length === 0) return new Map();
+  const sortedSkus = takealotRows
+    .map((row) => skuFor(row))
+    .filter(Boolean)
+    .sort((a, b) => numberValue(a) - numberValue(b));
+  const ranks = new Map();
+  [...sortedSkus].reverse().forEach((sku, index) => {
+    ranks.set(skuKey(sku), index + 1);
+  });
+  return ranks;
 }
 
 function round(value, digits) {
@@ -187,14 +225,7 @@ async function buildStoreSuggestions(storeName) {
     supabaseSelect(`purchase_records?shop_name=eq.${encodeURIComponent(storeName)}&status=eq.in_transit&select=sku,purchase_quantity`),
   ]);
 
-  const newestSkus = new Set(
-    takealotRows
-      .map((row) => skuFor(row))
-      .filter(Boolean)
-      .sort((a, b) => numberValue(a) - numberValue(b))
-      .slice(-NEW_PRODUCT_COUNT)
-      .map((sku) => skuKey(sku)),
-  );
+  const newProductRankMap = buildNewProductRankMap(storeName, takealotRows);
   const skuMap = new Map(skuItems.map((item) => [skuKey(item.sku), item]));
   const inTransitMap = new Map();
   for (const record of purchaseRecords) {
@@ -207,8 +238,9 @@ async function buildStoreSuggestions(storeName) {
     const key = skuKey(sku);
     const skuItem = skuMap.get(key);
     const rawMonthlySales = sumSalesUnits(row.sales_units);
-    const isNewProduct = newestSkus.has(key);
-    const monthlySales = isNewProduct && rawMonthlySales > 0 ? rawMonthlySales * 4 : rawMonthlySales;
+    const newProductRank = newProductRankMap.get(key) ?? 0;
+    const newProductMultiplier = newProductMultiplierForRank(storeName, newProductRank);
+    const monthlySales = newProductMultiplier > 1 && rawMonthlySales > 0 ? rawMonthlySales * newProductMultiplier : rawMonthlySales;
     const stockMonths = stockMonthsForMonthlySales(monthlySales);
     const localStockQuantity = sumQuantityAvailable(row.leadtime_stock ?? row.quantity_available);
     const takealotStockQuantity = row.stock_at_takealot_total === undefined ? sumQuantityAvailable(row.stock_at_takealot) : numberValue(row.stock_at_takealot_total);
@@ -238,7 +270,7 @@ async function buildStoreSuggestions(storeName) {
       estimated_cbm: unitCbm > 0 ? round(suggestedQuantity * unitCbm, 4) : null,
       messages: [
         ...(skuItem ? [] : ['未录入SKU资料']),
-        ...(isNewProduct ? [`新品预测：原始销量 ${rawMonthlySales}，按 4 倍预测`] : []),
+        ...(newProductMultiplier > 1 ? [`新品预测：第 ${newProductRank} 新，原始销量 ${rawMonthlySales}，按 ${newProductMultiplier} 倍预测`] : []),
       ],
     };
   });
@@ -246,7 +278,7 @@ async function buildStoreSuggestions(storeName) {
   return {
     store: storeName,
     rows: suggestions.length,
-    newProducts: newestSkus.size,
+    newProducts: suggestions.filter((row) => row.messages.some((message) => message.includes('新品预测'))).length,
     pagesFetched,
     totalResults,
     suggestions,
