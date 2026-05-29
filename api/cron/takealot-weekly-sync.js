@@ -265,22 +265,31 @@ async function runSync(request) {
     const requestedStore = url.searchParams.get('store')?.trim();
     const stores = requestedStore ? [requestedStore] : (syncStoresFromEnv().length > 0 ? syncStoresFromEnv() : DEFAULT_SYNC_STORES);
     const results = [];
+    const errors = [];
     const allSuggestions = [];
 
     for (const store of stores) {
-      const result = await buildStoreSuggestions(store);
-      results.push({
-        store: result.store,
-        rows: result.rows,
-        newProducts: result.newProducts,
-        pagesFetched: result.pagesFetched,
-        totalResults: result.totalResults,
-      });
-      allSuggestions.push(...result.suggestions);
+      try {
+        const result = await buildStoreSuggestions(store);
+        results.push({
+          store: result.store,
+          rows: result.rows,
+          newProducts: result.newProducts,
+          pagesFetched: result.pagesFetched,
+          totalResults: result.totalResults,
+        });
+        allSuggestions.push(...result.suggestions);
+      } catch (error) {
+        console.error(error);
+        errors.push({ store, error: error instanceof Error ? error.message : '同步失败' });
+      }
     }
 
+    if (requestedStore && errors.length > 0) return jsonResponse({ ok: false, errors }, 500);
+    if (allSuggestions.length === 0 && errors.length > 0) return jsonResponse({ ok: false, errors }, 500);
+
     await replaceSalesSuggestions(allSuggestions);
-    return jsonResponse({ ok: true, stores: results, rows: allSuggestions.length });
+    return jsonResponse({ ok: errors.length === 0, stores: results, errors, rows: allSuggestions.length });
   } catch (error) {
     console.error(error);
     return jsonResponse({ error: error instanceof Error ? error.message : '自动同步失败' }, 500);
