@@ -404,6 +404,9 @@ export async function replaceSalesSuggestions(rows: SalesSuggestionRow[]): Promi
       monthly_sales: row.monthlySales,
       stock_months: row.stockMonths,
       target_quantity: row.targetQuantity,
+      local_stock_quantity: row.localStockQuantity,
+      takealot_stock_quantity: row.takealotStockQuantity,
+      stock_on_way_quantity: row.stockOnWayQuantity,
       in_transit_quantity: row.inTransitQuantity,
       suggested_quantity: row.suggestedQuantity,
       units_per_carton: row.unitsPerCarton,
@@ -428,6 +431,9 @@ export async function fetchSalesSuggestions(): Promise<SalesSuggestionRow[]> {
     monthly_sales: number | null;
     stock_months: number | null;
     target_quantity: number | null;
+    local_stock_quantity: number | null;
+    takealot_stock_quantity: number | null;
+    stock_on_way_quantity: number | null;
     in_transit_quantity: number | null;
     suggested_quantity: number | null;
     units_per_carton: number | null;
@@ -439,7 +445,7 @@ export async function fetchSalesSuggestions(): Promise<SalesSuggestionRow[]> {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await client
       .from('sales_suggestions')
-      .select('id,sku,product_name,shop_name,manufacturer_name,buyer_name,monthly_sales,stock_months,target_quantity,in_transit_quantity,suggested_quantity,units_per_carton,estimated_cartons,estimated_cbm,messages')
+      .select('id,sku,product_name,shop_name,manufacturer_name,buyer_name,monthly_sales,stock_months,target_quantity,local_stock_quantity,takealot_stock_quantity,stock_on_way_quantity,in_transit_quantity,suggested_quantity,units_per_carton,estimated_cartons,estimated_cbm,messages')
       .order('shop_name', { ascending: true })
       .order('sku', { ascending: true })
       .range(from, from + pageSize - 1);
@@ -459,9 +465,9 @@ export async function fetchSalesSuggestions(): Promise<SalesSuggestionRow[]> {
     monthlySales: Number(row.monthly_sales ?? 0),
     stockMonths: Number(row.stock_months ?? 2),
     targetQuantity: Number(row.target_quantity ?? 0),
-    localStockQuantity: 0,
-    takealotStockQuantity: 0,
-    stockOnWayQuantity: 0,
+    localStockQuantity: Number(row.local_stock_quantity ?? 0),
+    takealotStockQuantity: Number(row.takealot_stock_quantity ?? 0),
+    stockOnWayQuantity: Number(row.stock_on_way_quantity ?? 0),
     inTransitQuantity: Number(row.in_transit_quantity ?? 0),
     suggestedQuantity: Number(row.suggested_quantity ?? 0),
     unitsPerCarton: row.units_per_carton === null ? null : Number(row.units_per_carton ?? 0),

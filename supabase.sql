@@ -199,6 +199,9 @@ create table if not exists public.sales_suggestions (
   monthly_sales numeric default 0,
   stock_months numeric default 2,
   target_quantity numeric default 0,
+  local_stock_quantity numeric default 0,
+  takealot_stock_quantity numeric default 0,
+  stock_on_way_quantity numeric default 0,
   in_transit_quantity numeric default 0,
   suggested_quantity numeric default 0,
   units_per_carton numeric,
@@ -207,6 +210,15 @@ create table if not exists public.sales_suggestions (
   messages text[] default '{}',
   created_at timestamptz not null default now()
 );
+
+alter table public.sales_suggestions
+add column if not exists local_stock_quantity numeric default 0;
+
+alter table public.sales_suggestions
+add column if not exists takealot_stock_quantity numeric default 0;
+
+alter table public.sales_suggestions
+add column if not exists stock_on_way_quantity numeric default 0;
 
 create table if not exists public.audit_logs (
   id text primary key,
