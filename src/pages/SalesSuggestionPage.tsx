@@ -115,7 +115,7 @@ function buildNewProductRankMap(storeName: string, rows: TakealotInventoryRow[])
 }
 
 function hasMissingSkuData(row: SalesSuggestionRow): boolean {
-  return row.messages.some((message) => message.includes('未录入 SKU 资料'));
+  return row.messages.some((message) => /未录入\s*SKU\s*资料/i.test(message));
 }
 
 export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [], onRefreshData }: Props) {

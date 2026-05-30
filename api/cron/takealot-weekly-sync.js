@@ -324,7 +324,7 @@ async function buildStoreSuggestions(storeName) {
       estimated_cartons: numberValue(skuItem?.units_per_carton) > 0 ? round(suggestedQuantity / numberValue(skuItem.units_per_carton), 2) : null,
       estimated_cbm: unitCbm > 0 ? round(suggestedQuantity * unitCbm, 4) : null,
       messages: [
-        ...(skuItem ? [] : ['未录入SKU资料']),
+        ...(skuItem ? [] : ['未录入 SKU 资料']),
         ...(directSuggestion?.message ? [directSuggestion.message] : forecast.message ? [forecast.message] : []),
       ],
     };
