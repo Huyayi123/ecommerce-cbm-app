@@ -126,6 +126,10 @@ function sortSuggestionRows(rows: SalesSuggestionRow[]): SalesSuggestionRow[] {
   ));
 }
 
+function isInTransitStatus(status: string): boolean {
+  return ['in_transit', 'ordered', '海运在途', '已下单'].includes(status);
+}
+
 export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [], onRefreshData }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
@@ -217,19 +221,28 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
 
     for (const record of purchaseRecords) {
       if (!isInventoryRecord(record)) continue;
-      if (record.status !== 'in_transit') continue;
-      if (selectedStore && canonicalStoreName(record.shopName) !== selectedStore) continue;
-      const key = record.sku.trim().toUpperCase();
+      if (!isInTransitStatus(record.status)) continue;
+      const key = skuKey(record.sku);
       inTransitBySku.set(key, (inTransitBySku.get(key) ?? 0) + effectivePurchaseQuantity(record));
     }
 
     const applySavedOverride = (row: SalesSuggestionRow): SalesSuggestionRow => {
+      const inTransitQuantity = inTransitBySku.get(skuKey(row.sku)) ?? row.inTransitQuantity;
+      const autoSuggestedQuantity = Math.max(round(
+        row.targetQuantity
+        - row.localStockQuantity
+        - row.takealotStockQuantity
+        - row.stockOnWayQuantity
+        - inTransitQuantity,
+        2,
+      ), 0);
       const override = suggestedQuantityOverrides[row.rowId];
-      if (override === undefined) return row;
-      const ratio = row.suggestedQuantity > 0 ? override / row.suggestedQuantity : 0;
+      const suggestedQuantity = override ?? autoSuggestedQuantity;
+      const ratio = row.suggestedQuantity > 0 ? suggestedQuantity / row.suggestedQuantity : 0;
       return {
         ...row,
-        suggestedQuantity: override,
+        inTransitQuantity,
+        suggestedQuantity,
         estimatedCartons: row.estimatedCartons !== null && row.estimatedCartons !== undefined && ratio > 0 ? round(row.estimatedCartons * ratio, 2) : row.estimatedCartons,
         estimatedCbm: row.estimatedCbm !== null && row.estimatedCbm !== undefined && ratio > 0 ? round(row.estimatedCbm * ratio, 4) : row.estimatedCbm,
       };

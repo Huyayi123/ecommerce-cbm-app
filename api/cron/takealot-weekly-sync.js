@@ -277,7 +277,13 @@ function skuKey(value) {
 }
 
 function effectivePurchaseQuantity(record) {
-  return numberValue(record.purchase_quantity);
+  return record.confirmed_purchase_quantity === null || record.confirmed_purchase_quantity === undefined
+    ? numberValue(record.purchase_quantity)
+    : numberValue(record.confirmed_purchase_quantity);
+}
+
+function isInTransitStatus(status) {
+  return ['in_transit', 'ordered', '海运在途', '已下单'].includes(String(status ?? '').trim());
 }
 
 function jsonResponse(body, status = 200) {
@@ -288,7 +294,7 @@ async function buildStoreSuggestions(storeName) {
   const [{ rows: takealotRows, pagesFetched, totalResults, fetchedRows, activeRows, disabledRows, duplicateRows }, skuItems, purchaseRecords] = await Promise.all([
     fetchTakealotRows(storeName),
     supabaseSelectAll('sku_items?select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity'),
-    supabaseSelectAll('purchase_records?status=eq.in_transit&select=sku,purchase_quantity,shop_name'),
+    supabaseSelectAll('purchase_records?select=sku,purchase_quantity,confirmed_purchase_quantity,shop_name,status,is_confirmed'),
   ]);
 
   const newProductRankMap = buildNewProductRankMap(storeName, takealotRows);
@@ -297,6 +303,7 @@ async function buildStoreSuggestions(storeName) {
   const skuCatalogSkuRows = skuItems.filter((item) => skuKey(item.sku)).length;
   const inTransitMap = new Map();
   for (const record of purchaseRecords) {
+    if (!isInTransitStatus(record.status)) continue;
     const key = skuKey(record.sku);
     inTransitMap.set(key, (inTransitMap.get(key) ?? 0) + effectivePurchaseQuantity(record));
   }
