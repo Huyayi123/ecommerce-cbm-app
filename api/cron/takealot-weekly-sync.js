@@ -293,6 +293,8 @@ async function buildStoreSuggestions(storeName) {
 
   const newProductRankMap = buildNewProductRankMap(storeName, takealotRows);
   const skuMap = new Map(skuItems.filter((item) => skuKey(item.sku)).map((item) => [skuKey(item.sku), item]));
+  const skuCatalogRows = skuItems.length;
+  const skuCatalogSkuRows = skuItems.filter((item) => skuKey(item.sku)).length;
   const inTransitMap = new Map();
   for (const record of purchaseRecords) {
     const key = skuKey(record.sku);
@@ -349,6 +351,16 @@ async function buildStoreSuggestions(storeName) {
     rows: suggestions.length,
     matchedSkuRows: suggestions.filter((row) => !row.messages.some((message) => message.includes('未录入 SKU 资料'))).length,
     missingSkuRows: suggestions.filter((row) => row.messages.some((message) => message.includes('未录入 SKU 资料'))).length,
+    skuCatalogRows,
+    skuCatalogSkuRows,
+    matchedSkuSamples: suggestions
+      .filter((row) => !row.messages.some((message) => message.includes('未录入 SKU 资料')))
+      .slice(0, 5)
+      .map((row) => row.sku),
+    missingSkuSamples: suggestions
+      .filter((row) => row.messages.some((message) => message.includes('未录入 SKU 资料')))
+      .slice(0, 5)
+      .map((row) => row.sku),
     fetchedRows,
     activeRows,
     disabledRows,
@@ -383,6 +395,10 @@ async function runSync(request) {
           rows: result.rows,
           matchedSkuRows: result.matchedSkuRows,
           missingSkuRows: result.missingSkuRows,
+          skuCatalogRows: result.skuCatalogRows,
+          skuCatalogSkuRows: result.skuCatalogSkuRows,
+          matchedSkuSamples: result.matchedSkuSamples,
+          missingSkuSamples: result.missingSkuSamples,
           fetchedRows: result.fetchedRows,
           activeRows: result.activeRows,
           disabledRows: result.disabledRows,

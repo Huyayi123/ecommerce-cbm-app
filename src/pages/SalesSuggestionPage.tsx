@@ -118,6 +118,14 @@ function hasMissingSkuData(row: SalesSuggestionRow): boolean {
   return row.messages.some((message) => /未录入\s*SKU\s*资料/i.test(message));
 }
 
+function sortSuggestionRows(rows: SalesSuggestionRow[]): SalesSuggestionRow[] {
+  return [...rows].sort((a, b) => (
+    b.suggestedQuantity - a.suggestedQuantity
+    || b.monthlySales - a.monthlySales
+    || skuKey(a.sku).localeCompare(skuKey(b.sku))
+  ));
+}
+
 export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [], onRefreshData }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
@@ -231,7 +239,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       const rows = selectedStore
         ? savedSuggestions.filter((row) => canonicalStoreName(row.shopName) === selectedStore)
         : savedSuggestions;
-      return rows.map(applySavedOverride);
+      return sortSuggestionRows(rows.map(applySavedOverride));
     }
 
     const sourceRows = inventoryRows.length > 0
@@ -252,7 +260,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         inventory: inventoryMap.get(row.sku.trim().toUpperCase()),
       }));
 
-    return sourceRows.map((row) => {
+    return sortSuggestionRows(sourceRows.map((row) => {
       const key = skuKey(row.sku);
       const skuItem = skuMap.get(key);
       const inventory = row.inventory ?? inventoryMap.get(key);
@@ -309,7 +317,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         estimatedCbm,
         messages,
       };
-    });
+    }));
   }, [inventoryRows, purchaseRecords, salesRows, savedSuggestions, selectedStore, skuItems, suggestedQuantityOverrides]);
 
   const poolSummary = useMemo(() => {
