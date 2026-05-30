@@ -301,7 +301,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         rowId: row.rowId,
         sku: row.sku,
         productName: skuItem?.englishName || skuItem?.productName || row.productName || '',
-        shopName: skuItem?.shopName ?? row.shopName ?? selectedStore,
+        shopName: row.shopName || selectedStore || skuItem?.shopName || '',
         manufacturerName: skuItem?.manufacturerName ?? '',
         buyerName: skuItem?.buyerName ?? '',
         monthlySales,
