@@ -493,6 +493,7 @@ export function subscribeToSharedTables(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_records' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'container_rows' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_suggestions' }, onChange)
     .subscribe();
 
   return () => {
