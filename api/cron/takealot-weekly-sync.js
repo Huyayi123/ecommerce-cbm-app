@@ -294,7 +294,7 @@ async function buildStoreSuggestions(storeName) {
   const [{ rows: takealotRows, pagesFetched, totalResults, fetchedRows, activeRows, disabledRows, duplicateRows }, skuItems, purchaseRecords] = await Promise.all([
     fetchTakealotRows(storeName),
     supabaseSelectAll('sku_items?select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity'),
-    supabaseSelectAll('purchase_records?select=sku,purchase_quantity,confirmed_purchase_quantity,shop_name,status,is_confirmed'),
+    supabaseSelectAll('purchase_records?select=sku,purchase_quantity,shop_name,status,is_confirmed'),
   ]);
 
   const newProductRankMap = buildNewProductRankMap(storeName, takealotRows);
