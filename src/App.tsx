@@ -580,6 +580,7 @@ function App() {
           onSendToCalculator={(rows, name) => void sendSuggestionsToCalculator(rows, name)}
           canEditData={editable}
           savedSuggestions={savedSalesSuggestions}
+          onRefreshData={loadCloudData}
         />
       )}
     </main>

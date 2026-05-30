@@ -12,6 +12,7 @@ type Props = {
   onSendToCalculator: (rows: PurchaseRow[], fileName: string) => void;
   canEditData?: boolean;
   savedSuggestions?: SalesSuggestionRow[];
+  onRefreshData?: () => void | Promise<void>;
 };
 
 const DEFAULT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
@@ -117,7 +118,7 @@ function hasMissingSkuData(row: SalesSuggestionRow): boolean {
   return row.messages.some((message) => message.includes('未录入 SKU 资料'));
 }
 
-export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [] }: Props) {
+export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [], onRefreshData }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
   const [selectedStore, setSelectedStore] = useState('');
@@ -126,6 +127,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   const [syncMessage, setSyncMessage] = useState('');
   const [suggestedQuantityDrafts, setSuggestedQuantityDrafts] = useState<Record<string, string>>({});
   const [suggestedQuantityOverrides, setSuggestedQuantityOverrides] = useState<Record<string, number>>({});
+  const [isRefreshingCloud, setIsRefreshingCloud] = useState(false);
 
   const storeOptions = useMemo(() => {
     const extraNames = skuItems
@@ -136,6 +138,22 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       .filter(Boolean);
     return Array.from(new Set([...savedNames, ...DEFAULT_STORES, ...extraNames]));
   }, [savedSuggestions, skuItems]);
+
+  const savedStoreCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of savedSuggestions) {
+      const store = canonicalStoreName(row.shopName);
+      if (!store) continue;
+      counts.set(store, (counts.get(store) ?? 0) + 1);
+    }
+    return counts;
+  }, [savedSuggestions]);
+
+  const savedTotalCount = useMemo(() => {
+    let total = 0;
+    for (const count of savedStoreCounts.values()) total += count;
+    return total;
+  }, [savedStoreCounts]);
 
   useEffect(() => {
     if (selectedStore && !storeOptions.includes(selectedStore)) setSelectedStore('');
@@ -163,6 +181,23 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     } catch (error) {
       console.error(error);
       setSyncMessage(error instanceof Error ? error.message : 'Takealot 库存同步失败');
+    }
+  }
+
+  async function refreshCloudSuggestions() {
+    if (!onRefreshData) return;
+    try {
+      setIsRefreshingCloud(true);
+      setSyncMessage('正在刷新云端采购建议...');
+      await onRefreshData();
+      setInventoryRows([]);
+      setSalesRows([]);
+      setSyncMessage('云端采购建议已刷新。');
+    } catch (error) {
+      console.error(error);
+      setSyncMessage(error instanceof Error ? error.message : '云端采购建议刷新失败');
+    } finally {
+      setIsRefreshingCloud(false);
     }
   }
 
@@ -412,8 +447,36 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
           </select>
         </label>
         <button type="button" onClick={() => void syncTakealotInventory()} disabled={!selectedStore}>同步 Takealot 库存</button>
+        <button type="button" onClick={() => void refreshCloudSuggestions()} disabled={!onRefreshData || isRefreshingCloud}>刷新云端建议</button>
         <span>{fileName ? `当前文件：${fileName}` : '备货规则：月销量 > 50 用 4 个月，21-50 用 3 个月，20 及以下用 2 个月'}</span>
       </div>
+      {savedSuggestions.length > 0 && (
+        <div className="store-summary-bar" aria-label="店铺采购建议数量">
+          <button
+            type="button"
+            className={!selectedStore ? 'active' : ''}
+            onClick={() => {
+              setSelectedStore('');
+              setInventoryRows([]);
+            }}
+          >
+            全部 <strong>{savedTotalCount}</strong>
+          </button>
+          {storeOptions.map((store) => (
+            <button
+              key={store}
+              type="button"
+              className={selectedStore === store ? 'active' : ''}
+              onClick={() => {
+                setSelectedStore(store);
+                setInventoryRows([]);
+              }}
+            >
+              {store} <strong>{savedStoreCounts.get(store) ?? 0}</strong>
+            </button>
+          ))}
+        </div>
+      )}
       {syncMessage && <div className="inline-notice">{syncMessage}</div>}
 
       {purchasePool.length > 0 && (

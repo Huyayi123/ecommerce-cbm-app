@@ -403,6 +403,33 @@ button.danger,
   padding-bottom: 8px;
 }
 
+.store-summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -6px 0 16px;
+  padding: 10px;
+  border: 1px solid #e1e8ee;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.store-summary-bar button {
+  min-height: 34px;
+  padding: 0 12px;
+  background: #ffffff;
+}
+
+.store-summary-bar button.active {
+  border-color: #136f63;
+  background: #136f63;
+  color: #ffffff;
+}
+
+.store-summary-bar strong {
+  margin-left: 4px;
+}
+
 .pool-panel {
   margin-bottom: 18px;
 }

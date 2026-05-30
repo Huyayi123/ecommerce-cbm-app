@@ -417,12 +417,39 @@ export async function replaceSalesSuggestions(rows: SalesSuggestionRow[]): Promi
 
 export async function fetchSalesSuggestions(): Promise<SalesSuggestionRow[]> {
   const client = requireSupabase();
-  const { data, error } = await client
-    .from('sales_suggestions')
-    .select('id,sku,product_name,shop_name,manufacturer_name,buyer_name,monthly_sales,stock_months,target_quantity,in_transit_quantity,suggested_quantity,units_per_carton,estimated_cartons,estimated_cbm,messages')
-    .order('created_at', { ascending: false });
-  if (error) throwSupabaseError(error);
-  return (data ?? []).map((row) => ({
+  const pageSize = 1000;
+  const allRows: Array<{
+    id: string;
+    sku: string | null;
+    product_name: string | null;
+    shop_name: string | null;
+    manufacturer_name: string | null;
+    buyer_name: string | null;
+    monthly_sales: number | null;
+    stock_months: number | null;
+    target_quantity: number | null;
+    in_transit_quantity: number | null;
+    suggested_quantity: number | null;
+    units_per_carton: number | null;
+    estimated_cartons: number | null;
+    estimated_cbm: number | null;
+    messages: unknown;
+  }> = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await client
+      .from('sales_suggestions')
+      .select('id,sku,product_name,shop_name,manufacturer_name,buyer_name,monthly_sales,stock_months,target_quantity,in_transit_quantity,suggested_quantity,units_per_carton,estimated_cartons,estimated_cbm,messages')
+      .order('shop_name', { ascending: true })
+      .order('sku', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throwSupabaseError(error);
+    const rows = data ?? [];
+    allRows.push(...rows);
+    if (rows.length < pageSize) break;
+  }
+
+  return allRows.map((row) => ({
     rowId: row.id,
     sku: row.sku ?? '',
     productName: row.product_name ?? '',
