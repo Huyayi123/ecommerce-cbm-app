@@ -202,8 +202,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   }
 
   const suggestions = useMemo<SalesSuggestionRow[]>(() => {
-    const scopedSkuItems = selectedStore ? skuItems.filter((item) => canonicalStoreName(item.shopName) === selectedStore) : skuItems;
-    const skuMap = new Map(scopedSkuItems.map((item) => [item.sku.trim().toUpperCase(), item]));
+    const skuMap = new Map(skuItems.filter((item) => skuKey(item.sku)).map((item) => [skuKey(item.sku), item]));
     const inventoryMap = new Map(inventoryRows.map((item) => [item.sku.trim().toUpperCase(), item]));
     const newProductRankMap = buildNewProductRankMap(selectedStore, inventoryRows);
     const inTransitBySku = new Map<string, number>();

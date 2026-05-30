@@ -276,10 +276,6 @@ function skuKey(value) {
   return String(value ?? '').trim().replace(/\s+/g, '').toUpperCase();
 }
 
-function shopKey(value) {
-  return String(value ?? '').trim().replace(/\s+/g, '').toLowerCase();
-}
-
 function effectivePurchaseQuantity(record) {
   return numberValue(record.purchase_quantity);
 }
@@ -296,13 +292,9 @@ async function buildStoreSuggestions(storeName) {
   ]);
 
   const newProductRankMap = buildNewProductRankMap(storeName, takealotRows);
-  const currentShopKey = shopKey(storeName);
-  const scopedSkuItems = skuItems.filter((item) => shopKey(item.shop_name) === currentShopKey);
-  const allSkuMap = new Map(skuItems.filter((item) => skuKey(item.sku)).map((item) => [skuKey(item.sku), item]));
-  const scopedSkuMap = new Map(scopedSkuItems.filter((item) => skuKey(item.sku)).map((item) => [skuKey(item.sku), item]));
+  const skuMap = new Map(skuItems.filter((item) => skuKey(item.sku)).map((item) => [skuKey(item.sku), item]));
   const inTransitMap = new Map();
   for (const record of purchaseRecords) {
-    if (shopKey(record.shop_name) !== currentShopKey) continue;
     const key = skuKey(record.sku);
     inTransitMap.set(key, (inTransitMap.get(key) ?? 0) + effectivePurchaseQuantity(record));
   }
@@ -310,7 +302,7 @@ async function buildStoreSuggestions(storeName) {
   const suggestions = takealotRows.map((row, index) => {
     const sku = skuFor(row);
     const key = skuKey(sku);
-    const skuItem = scopedSkuMap.get(key) ?? allSkuMap.get(key);
+    const skuItem = skuMap.get(key);
     const rawMonthlySales = sumSalesUnits(row.sales_units);
     const newProductRank = newProductRankMap.get(key) ?? 0;
     const forecast = forecastMonthlySales(storeName, newProductRank, rawMonthlySales);
