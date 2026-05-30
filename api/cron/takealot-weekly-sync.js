@@ -233,6 +233,20 @@ async function supabaseSelect(path) {
   return Array.isArray(payload) ? payload : [];
 }
 
+async function supabaseSelectAll(path) {
+  const pageSize = 1000;
+  const rows = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    const separator = path.includes('?') ? '&' : '?';
+    const page = await supabaseSelect(`${path}${separator}limit=${pageSize}&offset=${offset}`);
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
+}
+
 async function replaceSalesSuggestions(rows, storeNames = []) {
   const deletePath = storeNames.length === 1
     ? `sales_suggestions?shop_name=eq.${encodeURIComponent(storeNames[0])}`
@@ -259,7 +273,11 @@ async function replaceSalesSuggestions(rows, storeNames = []) {
 }
 
 function skuKey(value) {
-  return String(value ?? '').trim().toUpperCase();
+  return String(value ?? '').trim().replace(/\s+/g, '').toUpperCase();
+}
+
+function shopKey(value) {
+  return String(value ?? '').trim().replace(/\s+/g, '').toLowerCase();
 }
 
 function effectivePurchaseQuantity(record) {
@@ -273,14 +291,18 @@ function jsonResponse(body, status = 200) {
 async function buildStoreSuggestions(storeName) {
   const [{ rows: takealotRows, pagesFetched, totalResults, fetchedRows, activeRows, disabledRows, duplicateRows }, skuItems, purchaseRecords] = await Promise.all([
     fetchTakealotRows(storeName),
-    supabaseSelect(`sku_items?shop_name=eq.${encodeURIComponent(storeName)}&select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity`),
-    supabaseSelect(`purchase_records?shop_name=eq.${encodeURIComponent(storeName)}&status=eq.in_transit&select=sku,purchase_quantity`),
+    supabaseSelectAll('sku_items?select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity'),
+    supabaseSelectAll('purchase_records?status=eq.in_transit&select=sku,purchase_quantity,shop_name'),
   ]);
 
   const newProductRankMap = buildNewProductRankMap(storeName, takealotRows);
-  const skuMap = new Map(skuItems.map((item) => [skuKey(item.sku), item]));
+  const currentShopKey = shopKey(storeName);
+  const scopedSkuItems = skuItems.filter((item) => shopKey(item.shop_name) === currentShopKey);
+  const allSkuMap = new Map(skuItems.filter((item) => skuKey(item.sku)).map((item) => [skuKey(item.sku), item]));
+  const scopedSkuMap = new Map(scopedSkuItems.filter((item) => skuKey(item.sku)).map((item) => [skuKey(item.sku), item]));
   const inTransitMap = new Map();
   for (const record of purchaseRecords) {
+    if (shopKey(record.shop_name) !== currentShopKey) continue;
     const key = skuKey(record.sku);
     inTransitMap.set(key, (inTransitMap.get(key) ?? 0) + effectivePurchaseQuantity(record));
   }
@@ -288,7 +310,7 @@ async function buildStoreSuggestions(storeName) {
   const suggestions = takealotRows.map((row, index) => {
     const sku = skuFor(row);
     const key = skuKey(sku);
-    const skuItem = skuMap.get(key);
+    const skuItem = scopedSkuMap.get(key) ?? allSkuMap.get(key);
     const rawMonthlySales = sumSalesUnits(row.sales_units);
     const newProductRank = newProductRankMap.get(key) ?? 0;
     const forecast = forecastMonthlySales(storeName, newProductRank, rawMonthlySales);
@@ -333,6 +355,8 @@ async function buildStoreSuggestions(storeName) {
   return {
     store: storeName,
     rows: suggestions.length,
+    matchedSkuRows: suggestions.filter((row) => !row.messages.some((message) => message.includes('未录入 SKU 资料'))).length,
+    missingSkuRows: suggestions.filter((row) => row.messages.some((message) => message.includes('未录入 SKU 资料'))).length,
     fetchedRows,
     activeRows,
     disabledRows,
@@ -365,6 +389,8 @@ async function runSync(request) {
         results.push({
           store: result.store,
           rows: result.rows,
+          matchedSkuRows: result.matchedSkuRows,
+          missingSkuRows: result.missingSkuRows,
           fetchedRows: result.fetchedRows,
           activeRows: result.activeRows,
           disabledRows: result.disabledRows,
