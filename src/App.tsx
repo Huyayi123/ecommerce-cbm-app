@@ -21,7 +21,6 @@ import {
   fetchSkuItems,
   replaceContainerRows,
   replacePurchaseRecords,
-  replaceSalesSuggestions,
   replaceSkuItems,
   subscribeToSharedTables,
   updateProfileBinding,
@@ -581,7 +580,6 @@ function App() {
           onSendToCalculator={(rows, name) => void sendSuggestionsToCalculator(rows, name)}
           canEditData={editable}
           savedSuggestions={savedSalesSuggestions}
-          onSuggestionsSave={(rows) => void replaceSalesSuggestions(rows)}
         />
       )}
     </main>

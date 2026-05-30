@@ -12,7 +12,6 @@ type Props = {
   onSendToCalculator: (rows: PurchaseRow[], fileName: string) => void;
   canEditData?: boolean;
   savedSuggestions?: SalesSuggestionRow[];
-  onSuggestionsSave?: (rows: SalesSuggestionRow[]) => void;
 };
 
 const DEFAULT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
@@ -118,7 +117,7 @@ function hasMissingSkuData(row: SalesSuggestionRow): boolean {
   return row.messages.some((message) => message.includes('未录入 SKU 资料'));
 }
 
-export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [], onSuggestionsSave }: Props) {
+export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [] }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
   const [selectedStore, setSelectedStore] = useState('');
@@ -139,7 +138,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   }, [savedSuggestions, skuItems]);
 
   useEffect(() => {
-    if (!selectedStore && storeOptions.length > 0) setSelectedStore(storeOptions[0]);
+    if (selectedStore && !storeOptions.includes(selectedStore)) setSelectedStore('');
   }, [selectedStore, storeOptions]);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -279,10 +278,6 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     });
   }, [inventoryRows, purchaseRecords, salesRows, savedSuggestions, selectedStore, skuItems, suggestedQuantityOverrides]);
 
-  useEffect(() => {
-    if (suggestions.length > 0) onSuggestionsSave?.(suggestions);
-  }, [onSuggestionsSave, suggestions]);
-
   const poolSummary = useMemo(() => {
     return {
       count: purchasePool.length,
@@ -305,7 +300,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   }, [purchasePool]);
 
   function validSuggestionRows(rows: SalesSuggestionRow[]) {
-    return rows.filter((row) => row.suggestedQuantity > 0 && row.messages.length === 0);
+    return rows.filter((row) => row.suggestedQuantity > 0 && !hasMissingSkuData(row));
   }
 
   function suggestedQuantityInputValue(row: SalesSuggestionRow) {
@@ -360,7 +355,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
 
   function toCalculatorRows(sourceRows: SalesSuggestionRow[]): PurchaseRow[] {
     return validSuggestionRows(sourceRows)
-      .filter((row) => row.suggestedQuantity > 0 && row.messages.length === 0)
+      .filter((row) => row.suggestedQuantity > 0 && !hasMissingSkuData(row))
       .map((row, index) => ({
         rowId: `${Date.now()}-suggestion-${index}`,
         rowNumber: index + 2,
@@ -412,6 +407,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
             setSelectedStore(event.target.value);
             setInventoryRows([]);
           }}>
+            <option value="">全部店铺</option>
             {storeOptions.map((store) => <option key={store} value={store}>{store}</option>)}
           </select>
         </label>
