@@ -9,6 +9,7 @@ type PurchaseRecordRow = {
   manufacturer_name: string | null;
   sku: string;
   product_name: string | null;
+  image_url?: string | null;
   shop_name: string | null;
   buyer_name: string | null;
   assigned_buyer_name: string | null;
@@ -34,6 +35,7 @@ type PurchaseRecordRow = {
 
 type LegacyPurchaseRecordRow = Omit<
   PurchaseRecordRow,
+  | 'image_url'
   | 'is_confirmed'
   | 'confirmed_purchase_quantity'
   | 'loading_type'
@@ -50,6 +52,7 @@ type ContainerRow = {
   product_name: string | null;
   english_name: string | null;
   manufacturer_name: string | null;
+  image_url?: string | null;
   purchase_quantity: number | null;
   raw: Record<string, unknown> | null;
 };
@@ -147,6 +150,7 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     manufacturerName: row.manufacturer_name ?? '',
     sku: row.sku,
     productName: row.product_name ?? '',
+    imageUrl: row.image_url ?? '',
     shopName: row.shop_name ?? '',
     buyerName: row.buyer_name ?? '',
     assignedBuyerName: row.assigned_buyer_name ?? row.buyer_name ?? '',
@@ -182,6 +186,7 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     manufacturer_name: record.manufacturerName,
     sku: record.sku,
     product_name: record.productName,
+    image_url: record.imageUrl,
     shop_name: record.shopName,
     buyer_name: record.buyerName,
     assigned_buyer_name: record.assignedBuyerName,
@@ -236,6 +241,7 @@ function mapContainerRow(row: ContainerRow): PurchaseRow {
     sku: row.sku ?? '',
     productName: row.product_name ?? '',
     englishName: row.english_name ?? '',
+    imageUrl: typeof row.raw?.imageUrl === 'string' ? row.raw.imageUrl : '',
     manufacturerName: row.manufacturer_name ?? '',
     shopName: typeof row.raw?.shopName === 'string' ? row.raw.shopName : '',
     purchaseQuantity: row.purchase_quantity,
@@ -253,7 +259,7 @@ function toContainerRow(row: PurchaseRow): ContainerRow {
     english_name: row.englishName,
     manufacturer_name: row.manufacturerName,
     purchase_quantity: row.purchaseQuantity,
-    raw: { ...row.raw, shopName: row.shopName ?? row.raw.shopName ?? '', manualTotalCbm: row.manualTotalCbm ?? null },
+    raw: { ...row.raw, shopName: row.shopName ?? row.raw.shopName ?? '', imageUrl: row.imageUrl ?? row.raw.imageUrl ?? '', manualTotalCbm: row.manualTotalCbm ?? null },
   };
 }
 

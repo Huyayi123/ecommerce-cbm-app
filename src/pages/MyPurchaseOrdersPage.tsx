@@ -20,6 +20,7 @@ type NewOrderDraft = {
   sku: string;
   productName: string;
   englishName: string;
+  imageUrl: string;
   shopName: string;
   purchaseQuantity: string;
   cartonCount: string;
@@ -41,6 +42,7 @@ const editableFields = [
   'sku',
   'productName',
   'englishName',
+  'imageUrl',
   'shopName',
   'assignedBuyerName',
   'assignedBuyerEmail',
@@ -72,6 +74,7 @@ function createEmptyDraft(): NewOrderDraft {
     sku: 'NEW',
     productName: '',
     englishName: '',
+    imageUrl: '',
     shopName: '',
     purchaseQuantity: '',
     cartonCount: '',
@@ -123,7 +126,15 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     () => records.filter((record) => record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()),
     [profile.email, records],
   );
+  const imageUrlBySku = useMemo(
+    () => new Map(skuItems.map((item) => [item.sku.trim().toUpperCase(), item.imageUrl])),
+    [skuItems],
+  );
   const unconfirmedVisibleCount = visibleRecords.filter((record) => !record.isConfirmed).length;
+
+  function imageUrlFor(record: PurchaseRecord): string {
+    return record.imageUrl || imageUrlBySku.get(record.sku.trim().toUpperCase()) || '';
+  }
 
   const newQuantity = parseNumber(newOrder.purchaseQuantity);
   const newCartonCount = parseNumber(newOrder.cartonCount);
@@ -153,6 +164,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       sku: isNewSkuValue(record.sku) ? '' : record.sku,
       productName: record.productName,
       englishName: record.englishName,
+      imageUrl: record.imageUrl,
       purchasePrice: record.purchasePrice,
       manualUnitCbm: record.unitCbm,
       totalCbm: 0,
@@ -209,6 +221,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       sku,
       productName: newOrder.productName.trim(),
       englishName: newOrder.englishName.trim(),
+      imageUrl: newOrder.imageUrl.trim(),
       shopName: newOrder.shopName.trim(),
       buyerName: profile.buyerName.trim(),
       assignedBuyerName: profile.buyerName.trim(),
@@ -378,6 +391,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <label>SKU<input value={newOrder.sku} onChange={(event) => patchNewOrder('sku', event.target.value)} /></label>
           <label>产品名称<input value={newOrder.productName} onChange={(event) => patchNewOrder('productName', event.target.value)} /></label>
           <label>英文名称<input value={newOrder.englishName} onChange={(event) => patchNewOrder('englishName', event.target.value)} /></label>
+          <label>图片链接<input value={newOrder.imageUrl} onChange={(event) => patchNewOrder('imageUrl', event.target.value)} /></label>
           <label>店铺<input value={newOrder.shopName} onChange={(event) => patchNewOrder('shopName', event.target.value)} /></label>
           <label>采购人<input value={profile.buyerName} readOnly /></label>
           <label>采购人邮箱<input value={profile.email} readOnly /></label>
@@ -400,12 +414,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <table>
           <thead>
             <tr>
-              <th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>采购人邮箱</th><th>计划数量</th><th>实际数量</th><th>件数</th><th>采购单价</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th><th>操作</th>
+              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>采购人邮箱</th><th>计划数量</th><th>实际数量</th><th>件数</th><th>采购单价</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
             {visibleRecords.map((record) => (
               <tr key={record.id}>
+                <td>{imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                 <td>{input(record, 'manufacturerName')}</td>
                 <td>{isAdmin ? input(record, 'sku') : record.sku}</td>
                 <td>{input(record, 'productName')}</td>
@@ -425,7 +440,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 <td>{!isViewer && <button className="danger" type="button" onClick={() => void deleteRecord(record.id)}>删除</button>}</td>
               </tr>
             ))}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={17}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={18}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>

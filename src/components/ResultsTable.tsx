@@ -93,6 +93,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
         <table>
           <thead>
             <tr>
+              <th>图片</th>
               <th>厂家名</th>
               <th>SKU</th>
               <th>产品名称</th>
@@ -110,6 +111,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
           <tbody>
             {rows.map((row) => (
               <tr key={row.rowId} className={row.status === 'error' ? 'error-row' : ''}>
+                <td>{row.imageUrl ? <img className="sku-thumb" src={row.imageUrl} alt={row.productName || row.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                 <td>{row.manufacturerName || '-'}</td>
                 <td>{row.sku || '-'}</td>
                 <td>{row.productName || '-'}</td>
@@ -160,7 +162,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={12} className="empty">暂无计算结果。</td>
+                <td colSpan={13} className="empty">暂无计算结果。</td>
               </tr>
             )}
           </tbody>

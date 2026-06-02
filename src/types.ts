@@ -3,6 +3,7 @@ export type SkuItem = {
   sku: string;
   productName: string;
   englishName: string;
+  imageUrl: string;
   manufacturerName: string;
   shopName: string;
   buyerName: string;
@@ -28,6 +29,7 @@ export type PurchaseRow = {
   sku: string;
   productName: string;
   englishName: string;
+  imageUrl?: string;
   manufacturerName: string;
   shopName?: string;
   purchaseQuantity: number | null;
@@ -65,6 +67,7 @@ export type PurchaseRecord = {
   sku: string;
   productName: string;
   englishName: string;
+  imageUrl: string;
   shopName: string;
   buyerName: string;
   assignedBuyerName: string;
@@ -94,6 +97,7 @@ export type CalculationRow = {
   manufacturerName: string;
   productName: string;
   englishName: string;
+  imageUrl: string;
   shopName: string;
   buyerName: string;
   purchaseQuantity: number | null;

@@ -418,6 +418,7 @@ function App() {
           : null;
       existing.totalAmount += record.totalAmount;
       existing.totalCbm += record.totalCbm;
+      existing.imageUrl ||= record.imageUrl;
       existing.note = [existing.note, record.note].filter(Boolean).join('；');
     }
 

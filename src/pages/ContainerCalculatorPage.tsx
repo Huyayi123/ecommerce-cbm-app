@@ -26,6 +26,7 @@ function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
       sku: row.sku,
       productName: row.productName,
       englishName: row.englishName,
+      imageUrl: row.imageUrl,
       shopName: row.shopName,
       buyerName: row.buyerName,
       assignedBuyerName: row.buyerName,

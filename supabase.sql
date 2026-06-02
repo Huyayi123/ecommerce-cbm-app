@@ -27,6 +27,7 @@ create table if not exists public.sku_items (
   sku text,
   product_name text,
   english_name text,
+  image_url text,
   manufacturer_name text,
   shop_name text,
   buyer_name text,
@@ -50,6 +51,9 @@ add column if not exists purchase_price numeric default 0;
 
 alter table public.sku_items
 add column if not exists unit_cbm numeric default 0;
+
+alter table public.sku_items
+add column if not exists image_url text;
 
 alter table public.sku_items
 add column if not exists box_length_cm numeric default 0;
@@ -107,6 +111,7 @@ create table if not exists public.purchase_records (
   sku text not null,
   product_name text,
   english_name text,
+  image_url text,
   shop_name text,
   buyer_name text,
   assigned_buyer_name text,
@@ -126,6 +131,9 @@ create table if not exists public.purchase_records (
 
 alter table public.purchase_records
 add column if not exists english_name text;
+
+alter table public.purchase_records
+add column if not exists image_url text;
 
 alter table public.purchase_records
 add column if not exists assigned_buyer_name text;

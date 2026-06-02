@@ -28,6 +28,7 @@ const emptyDraft: DraftRecord = {
   sku: '',
   productName: '',
   englishName: '',
+  imageUrl: '',
   shopName: '',
   buyerName: '',
   assignedBuyerName: '',
@@ -154,6 +155,14 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
   const inTransitCbm = inTransitRecords.reduce((sum, record) => sum + logisticsCbmFor(record), 0);
   const loadingBatchCount = new Set(inTransitRecords.map((record) => record.containerDate).filter(Boolean)).size;
   const selectedRecords = inventoryRecords.filter((record) => selectedIds.has(record.id));
+  const imageUrlBySku = useMemo(
+    () => new Map(skuItems.map((item) => [item.sku.trim().toUpperCase(), item.imageUrl])),
+    [skuItems],
+  );
+
+  function imageUrlFor(record: PurchaseRecord): string {
+    return record.imageUrl || imageUrlBySku.get(record.sku.trim().toUpperCase()) || '';
+  }
 
   function patchDraft<K extends keyof DraftRecord>(field: K, value: DraftRecord[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -166,6 +175,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
       sku,
       manufacturerName: item?.manufacturerName ?? current.manufacturerName,
       productName: item?.productName ?? current.productName,
+      imageUrl: item?.imageUrl ?? current.imageUrl,
       shopName: item?.shopName ?? current.shopName,
       buyerName: item?.buyerName ?? current.buyerName,
       assignedBuyerName: item?.buyerName ?? current.assignedBuyerName,
@@ -197,6 +207,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
       sku: record.sku,
       productName: record.productName,
       englishName: record.englishName,
+      imageUrl: record.imageUrl,
       shopName: record.shopName,
       buyerName: record.buyerName,
       assignedBuyerName: record.assignedBuyerName,
@@ -297,6 +308,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
           <label>SKU<input value={draft.sku} onChange={(event) => fillFromSku(event.target.value)} /></label>
           <label>产品名称<input value={draft.productName} onChange={(event) => patchDraft('productName', event.target.value)} /></label>
           <label>英文名称<input value={draft.englishName} onChange={(event) => patchDraft('englishName', event.target.value)} /></label>
+          <label>图片链接<input value={draft.imageUrl} onChange={(event) => patchDraft('imageUrl', event.target.value)} /></label>
           <label>店铺<input value={draft.shopName} onChange={(event) => patchDraft('shopName', event.target.value)} /></label>
           <label>采购人<input value={draft.assignedBuyerName || draft.buyerName} onChange={(event) => {
             patchDraft('buyerName', event.target.value);
@@ -327,13 +339,14 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
           <table>
             <thead>
               <tr>
-                <th>选择</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>件数</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
+                <th>选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>件数</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
               {pagedRecords.map((record) => (
                 <tr key={record.id}>
                   <td><input type="checkbox" checked={selectedIds.has(record.id)} onChange={() => toggleSelection(record.id)} /></td>
+                  <td className="pin-col pin-image">{imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                   <td className="pin-col pin-manufacturer">{record.manufacturerName}</td>
                   <td className="pin-col pin-sku">{record.sku}</td>
                   <td className="pin-col pin-product">{record.productName}</td>
@@ -357,7 +370,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
                   </td>
                 </tr>
               ))}
-              {filteredRecords.length === 0 && <tr><td colSpan={19} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
+              {filteredRecords.length === 0 && <tr><td colSpan={20} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
             </tbody>
           </table>
         </div>

@@ -7,6 +7,7 @@ export const SKU_FIELD_ALIASES = {
   sku: ['SKU', 'sku', '货号', '产品编码', '商品编码', '条码'],
   productName: ['产品名称', '品名', '中文名称', 'product_name'],
   englishName: ['英文名称', '英文名', 'English Name', 'english_name'],
+  imageUrl: ['图片', '图片链接', '图片URL', 'image_url', 'imageUrl', 'image'],
   purchasePrice: ['采购单价', '单价', '成本价', 'purchase_price'],
   manualUnitCbm: ['单品CBM', '单品 CBM', 'unit_cbm', '单个体积'],
   totalCbm: ['总CBM', '总 CBM', 'total_cbm'],
@@ -29,6 +30,7 @@ export type SupabaseSkuRow = {
   sku: string | null;
   product_name: string | null;
   english_name: string | null;
+  image_url?: string | null;
   purchase_price: number | null;
   unit_cbm: number | null;
   total_cbm: number | null;
@@ -74,6 +76,7 @@ export function supabaseSkuToFrontend(row: SupabaseSkuRow): SkuItem {
     sku: row.sku ?? '',
     productName: row.product_name ?? '',
     englishName: row.english_name ?? '',
+    imageUrl: row.image_url ?? '',
     purchasePrice: Number(row.purchase_price ?? 0),
     manualUnitCbm: Number(row.unit_cbm ?? row.manual_unit_cbm ?? 0),
     totalCbm: Number(row.total_cbm ?? 0),
@@ -98,6 +101,7 @@ export function frontendSkuToSupabase(item: SkuItem): SupabaseSkuRow {
     sku: item.sku.trim() || null,
     product_name: item.productName,
     english_name: item.englishName,
+    image_url: item.imageUrl,
     purchase_price: item.purchasePrice,
     unit_cbm: item.unitCbm || item.manualUnitCbm,
     total_cbm: item.totalCbm,
@@ -126,6 +130,7 @@ export function skuExcelRowToFrontend(row: Record<string, unknown>, headers: str
     sku: String(pickSkuExcelField(row, headers, 'sku') ?? '').trim(),
     productName: String(pickSkuExcelField(row, headers, 'productName') ?? '').trim(),
     englishName: String(pickSkuExcelField(row, headers, 'englishName') ?? '').trim(),
+    imageUrl: String(pickSkuExcelField(row, headers, 'imageUrl') ?? '').trim(),
     purchasePrice: toNumber(pickSkuExcelField(row, headers, 'purchasePrice')) ?? 0,
     manualUnitCbm,
     totalCbm,

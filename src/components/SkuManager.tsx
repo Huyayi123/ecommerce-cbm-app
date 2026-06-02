@@ -8,6 +8,7 @@ import { previewSkuFile } from '../utils/fileParsers';
 
 type DraftSku = Omit<SkuItem, 'cartonCbm' | 'unitCbm'>;
 type ColumnKey =
+  | 'imageUrl'
   | 'manufacturerName'
   | 'sku'
   | 'productName'
@@ -32,6 +33,7 @@ type Props = {
 };
 
 const columnOptions: Array<{ key: ColumnKey; label: string }> = [
+  { key: 'imageUrl', label: '图片' },
   { key: 'manufacturerName', label: '厂家名' },
   { key: 'sku', label: 'SKU' },
   { key: 'productName', label: '产品名称' },
@@ -50,6 +52,7 @@ const columnOptions: Array<{ key: ColumnKey; label: string }> = [
 ];
 
 const defaultVisibleColumns = new Set<ColumnKey>([
+  'imageUrl',
   'manufacturerName',
   'sku',
   'productName',
@@ -65,6 +68,7 @@ const emptyDraft: DraftSku = {
   sku: '',
   productName: '',
   englishName: '',
+  imageUrl: '',
   manufacturerName: '',
   shopName: '',
   buyerName: '',
@@ -88,6 +92,7 @@ function toDraft(item: SkuItem): DraftSku {
     sku: item.sku,
     productName: item.productName,
     englishName: item.englishName,
+    imageUrl: item.imageUrl,
     manufacturerName: item.manufacturerName,
     shopName: item.shopName,
     buyerName: item.buyerName,
@@ -302,6 +307,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
         <label>SKU<input value={draft.sku} onChange={(event) => updateField('sku', event.target.value)} placeholder="例如 SKU-1001" /></label>
         <label>产品名称<input value={draft.productName} onChange={(event) => updateField('productName', event.target.value)} /></label>
         <label>英文名称<input value={draft.englishName} onChange={(event) => updateField('englishName', event.target.value)} /></label>
+        <label>图片链接<input value={draft.imageUrl} onChange={(event) => updateField('imageUrl', event.target.value)} /></label>
         <label>厂家名<input value={draft.manufacturerName} onChange={(event) => updateField('manufacturerName', event.target.value)} /></label>
         <label>采购单价<input type="number" min="0" step="0.01" value={draft.purchasePrice} onChange={(event) => updateField('purchasePrice', Number(event.target.value))} /></label>
         <label>单品CBM<input type="number" min="0" step="0.00000001" value={draft.manualUnitCbm} onChange={(event) => updateField('manualUnitCbm', Number(event.target.value))} /></label>
@@ -351,9 +357,10 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
         <table className="sku-table">
           <thead>
             <tr>
-              {visibleColumns.has('manufacturerName') && <th className="sticky-col sticky-col-1">厂家名</th>}
-              {visibleColumns.has('sku') && <th className="sticky-col sticky-col-2">SKU</th>}
-              {visibleColumns.has('productName') && <th className="sticky-col sticky-col-3">产品名称</th>}
+              {visibleColumns.has('imageUrl') && <th className="sticky-col sticky-col-1">图片</th>}
+              {visibleColumns.has('manufacturerName') && <th className="sticky-col sticky-col-2">厂家名</th>}
+              {visibleColumns.has('sku') && <th className="sticky-col sticky-col-3">SKU</th>}
+              {visibleColumns.has('productName') && <th className="sticky-col sticky-col-4">产品名称</th>}
               {visibleColumns.has('englishName') && <th>英文名称</th>}
               {visibleColumns.has('purchasePrice') && <th>采购单价</th>}
               {visibleColumns.has('unitCbm') && <th>单品CBM</th>}
@@ -373,9 +380,10 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
             {filteredItems.map((item) => (
               <Fragment key={item.id}>
                 <tr>
-                  {visibleColumns.has('manufacturerName') && <td className="sticky-col sticky-col-1">{item.manufacturerName}</td>}
-                  {visibleColumns.has('sku') && <td className="sticky-col sticky-col-2">{item.sku}</td>}
-                  {visibleColumns.has('productName') && <td className="sticky-col sticky-col-3">{item.productName}</td>}
+                  {visibleColumns.has('imageUrl') && <td className="sticky-col sticky-col-1">{item.imageUrl ? <img className="sku-thumb" src={item.imageUrl} alt={item.productName || item.sku || 'SKU'} loading="lazy" /> : '-'}</td>}
+                  {visibleColumns.has('manufacturerName') && <td className="sticky-col sticky-col-2">{item.manufacturerName}</td>}
+                  {visibleColumns.has('sku') && <td className="sticky-col sticky-col-3">{item.sku}</td>}
+                  {visibleColumns.has('productName') && <td className="sticky-col sticky-col-4">{item.productName}</td>}
                   {visibleColumns.has('englishName') && <td>{item.englishName}</td>}
                   {visibleColumns.has('purchasePrice') && <td>{item.purchasePrice}</td>}
                   {visibleColumns.has('unitCbm') && <td>{item.unitCbm.toFixed(8)}</td>}
@@ -396,9 +404,10 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
                 </tr>
                 {expandedIds.has(item.id) && (
                   <tr key={`${item.id}-detail`}>
-                    <td colSpan={14} className="detail-row">
+                    <td colSpan={16} className="detail-row">
                       <div className="detail-grid">
                         <span>英文名称：{item.englishName || '-'}</span>
+                        <span>图片链接：{item.imageUrl || '-'}</span>
                         <span>总CBM：{item.totalCbm || '-'}</span>
                         <span>总数量：{item.totalQuantity || '-'}</span>
                         <span>长宽高：{item.cartonLengthCm} x {item.cartonWidthCm} x {item.cartonHeightCm}</span>

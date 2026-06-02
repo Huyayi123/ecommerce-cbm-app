@@ -431,10 +431,11 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         sku: row.sku,
         productName: row.productName,
         englishName: '',
+        imageUrl: row.imageUrl,
         manufacturerName: row.manufacturerName,
         shopName: row.shopName,
         purchaseQuantity: row.suggestedQuantity,
-        raw: { source: 'sales-suggestion', shopName: row.shopName, monthlySales: row.monthlySales, stockMonths: row.stockMonths },
+        raw: { source: 'sales-suggestion', shopName: row.shopName, monthlySales: row.monthlySales, stockMonths: row.stockMonths, imageUrl: row.imageUrl },
       }));
   }
 
