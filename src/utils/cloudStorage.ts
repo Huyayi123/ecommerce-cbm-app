@@ -324,9 +324,22 @@ export async function updateProfileBinding(profile: AppProfile): Promise<AppProf
 }
 
 export async function fetchSkuItems(): Promise<SkuItem[]> {
-  const { data, error } = await requireSupabase().from('sku_items').select('*').order('manufacturer_name');
-  if (error) throwSupabaseError(error);
-  return (data ?? []).map((row) => supabaseSkuToFrontend(row as SupabaseSkuRow));
+  const client = requireSupabase();
+  const pageSize = 1000;
+  const rows: SupabaseSkuRow[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await client
+      .from('sku_items')
+      .select('*')
+      .order('manufacturer_name')
+      .range(from, from + pageSize - 1);
+    if (error) throwSupabaseError(error);
+    rows.push(...((data ?? []) as SupabaseSkuRow[]));
+    if (!data || data.length < pageSize) break;
+  }
+
+  return rows.map((row) => supabaseSkuToFrontend(row));
 }
 
 export async function replaceSkuItems(items: SkuItem[]): Promise<void> {

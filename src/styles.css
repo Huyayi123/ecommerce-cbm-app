@@ -631,6 +631,7 @@ th.sticky-col {
 .sku-search {
   display: flex;
   align-items: end;
+  flex-wrap: wrap;
   gap: 16px;
   margin: 12px 0;
 }
@@ -639,12 +640,17 @@ th.sticky-col {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: min(420px, 100%);
+  min-width: 160px;
   color: #51606c;
   font-size: 13px;
 }
 
-.sku-search input {
+.sku-search label:nth-child(2) {
+  flex: 1 1 360px;
+}
+
+.sku-search input,
+.sku-search select {
   height: 36px;
   padding: 0 10px;
   border: 1px solid #cbd6df;
@@ -656,6 +662,12 @@ th.sticky-col {
   color: #5f6d78;
   font-size: 14px;
   padding-bottom: 8px;
+}
+
+.pagination-actions {
+  display: inline-flex;
+  gap: 8px;
+  padding-bottom: 1px;
 }
 
 .column-settings label {

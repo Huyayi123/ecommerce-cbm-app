@@ -1,5 +1,5 @@
 import { Fragment, type ChangeEvent } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { SkuImportPreview, SkuItem } from '../types';
 import { findMatchingSkuItem, getSkuMatchKey, hydrateSku } from '../utils/calculations';
 import { formatErrorMessage } from '../utils/errors';
@@ -63,6 +63,8 @@ const defaultVisibleColumns = new Set<ColumnKey>([
   'isSeasonal',
 ]);
 
+const SKU_PAGE_SIZE_OPTIONS = [50, 100, 200];
+
 const emptyDraft: DraftSku = {
   id: '',
   sku: '',
@@ -123,15 +125,36 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(defaultVisibleColumns);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState('');
+  const [shopFilter, setShopFilter] = useState('');
+  const [pageSize, setPageSize] = useState(100);
+  const [page, setPage] = useState(1);
   const calculated = useMemo(() => hydrateSku({ ...draft, id: draft.id || 'preview' }), [draft]);
+  const shopOptions = useMemo(
+    () => Array.from(new Set(items.map((item) => item.shopName.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [items],
+  );
   const filteredItems = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
-    if (!keyword) return items;
-    return items.filter((item) =>
+    const shopMatchedItems = shopFilter ? items.filter((item) => item.shopName === shopFilter) : items;
+    if (!keyword) return shopMatchedItems;
+    return shopMatchedItems.filter((item) =>
       [item.manufacturerName, item.sku, item.productName, item.englishName, item.shopName, item.buyerName, item.isSeasonal ? '季节性产品' : '']
         .some((value) => value.toLowerCase().includes(keyword)),
     );
-  }, [items, searchText]);
+  }, [items, searchText, shopFilter]);
+  const totalPages = Math.max(Math.ceil(filteredItems.length / pageSize), 1);
+  const pagedItems = useMemo(
+    () => filteredItems.slice((page - 1) * pageSize, page * pageSize),
+    [filteredItems, page, pageSize],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchText, shopFilter, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   function updateField<K extends keyof DraftSku>(field: K, value: DraftSku[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -343,14 +366,31 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
 
       <div className="sku-search">
         <label>
+          店铺筛选
+          <select value={shopFilter} onChange={(event) => setShopFilter(event.target.value)}>
+            <option value="">全部店铺</option>
+            {shopOptions.map((shop) => <option key={shop} value={shop}>{shop}</option>)}
+          </select>
+        </label>
+        <label>
           搜索资料库
           <input
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
-            placeholder="搜索 SKU、产品名称、厂家名、店铺、采购人"
+            placeholder="搜索 SKU、产品名称、英文名称、厂家名、店铺、采购人"
           />
         </label>
-        <span>共 {filteredItems.length} / {items.length} 条</span>
+        <label>
+          每页
+          <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+            {SKU_PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} 条</option>)}
+          </select>
+        </label>
+        <span>共 {filteredItems.length} / {items.length} 条，第 {page} / {totalPages} 页</span>
+        <div className="pagination-actions">
+          <button type="button" onClick={() => setPage((current) => Math.max(current - 1, 1))} disabled={page <= 1}>上一页</button>
+          <button type="button" onClick={() => setPage((current) => Math.min(current + 1, totalPages))} disabled={page >= totalPages}>下一页</button>
+        </div>
       </div>
 
       <div className="table-wrap sku-table-wrap">
@@ -377,7 +417,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
             </tr>
           </thead>
           <tbody>
-            {filteredItems.map((item) => (
+            {pagedItems.map((item) => (
               <Fragment key={item.id}>
                 <tr>
                   {visibleColumns.has('imageUrl') && <td className="sticky-col sticky-col-1">{item.imageUrl ? <img className="sku-thumb" src={item.imageUrl} alt={item.productName || item.sku || 'SKU'} loading="lazy" /> : '-'}</td>}
