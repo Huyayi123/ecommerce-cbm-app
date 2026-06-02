@@ -56,12 +56,28 @@ function mergePurchasePoolRows(rows: SalesSuggestionRow[]): SalesSuggestionRow[]
 
 function loadStoredPurchasePool(): SalesSuggestionRow[] {
   const rows = parseStoredPurchasePool(localStorage.getItem(SHARED_PURCHASE_POOL_STORAGE_KEY));
+  const legacyKeys: string[] = [];
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
     if (!key || !key.startsWith(PURCHASE_POOL_STORAGE_PREFIX) || key === SHARED_PURCHASE_POOL_STORAGE_KEY) continue;
     rows.push(...parseStoredPurchasePool(localStorage.getItem(key)));
+    legacyKeys.push(key);
   }
-  return mergePurchasePoolRows(rows);
+  const mergedRows = mergePurchasePoolRows(rows);
+  if (legacyKeys.length > 0) {
+    localStorage.setItem(SHARED_PURCHASE_POOL_STORAGE_KEY, JSON.stringify(mergedRows));
+    legacyKeys.forEach((key) => localStorage.removeItem(key));
+  }
+  return mergedRows;
+}
+
+function clearStoredPurchasePool() {
+  const keysToRemove: string[] = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith(PURCHASE_POOL_STORAGE_PREFIX)) keysToRemove.push(key);
+  }
+  keysToRemove.forEach((key) => localStorage.removeItem(key));
 }
 
 function rawField(row: TakealotInventoryRow, keys: string[]): string {
@@ -418,6 +434,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   }
 
   function clearPurchasePool() {
+    clearStoredPurchasePool();
     setPurchasePool([]);
     setSyncMessage('已清空本轮采购池。');
   }
@@ -443,7 +460,10 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     const rows = toCalculatorRows(purchasePool);
     const shouldClearPool = canEditData && rows.length > 0;
     if (canEditData && rows.length > 0) onSendToCalculator(rows, `本轮采购池-${new Date().toISOString().slice(0, 10)}`);
-    if (shouldClearPool) setPurchasePool([]);
+    if (shouldClearPool) {
+      clearStoredPurchasePool();
+      setPurchasePool([]);
+    }
   }
 
   function sendCurrentToCalculator() {

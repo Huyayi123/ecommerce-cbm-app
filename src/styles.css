@@ -57,9 +57,9 @@ button.danger,
 }
 
 .app-shell {
-  max-width: 1440px;
+  width: min(1920px, calc(100vw - 48px));
   margin: 0 auto;
-  padding: 28px;
+  padding: 28px 0;
 }
 
 .auth-shell {
