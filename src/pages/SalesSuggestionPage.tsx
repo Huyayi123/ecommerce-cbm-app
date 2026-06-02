@@ -12,11 +12,11 @@ type Props = {
   onSendToCalculator: (rows: PurchaseRow[], fileName: string) => void;
   canEditData?: boolean;
   savedSuggestions?: SalesSuggestionRow[];
-  poolOwnerKey?: string;
 };
 
 const DEFAULT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
 const PURCHASE_POOL_STORAGE_PREFIX = 'sales-suggestion-purchase-pool:v1:';
+const SHARED_PURCHASE_POOL_STORAGE_KEY = `${PURCHASE_POOL_STORAGE_PREFIX}shared`;
 const STORE_NAME_MAP = new Map(DEFAULT_STORES.map((store) => [store.toLowerCase(), store]));
 const NEW_PRODUCT_RULES: Record<string, Array<{ limit: number; multiplier: number }>> = {
   Bestby: [
@@ -37,18 +37,31 @@ function canonicalStoreName(value: string): string {
   return STORE_NAME_MAP.get(value.trim().toLowerCase()) ?? '';
 }
 
-function purchasePoolStorageKey(ownerKey: string): string {
-  return `${PURCHASE_POOL_STORAGE_PREFIX}${ownerKey.trim().toLowerCase() || 'shared'}`;
-}
-
-function loadStoredPurchasePool(ownerKey: string): SalesSuggestionRow[] {
+function parseStoredPurchasePool(raw: string | null): SalesSuggestionRow[] {
   try {
-    const raw = localStorage.getItem(purchasePoolStorageKey(ownerKey));
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed as SalesSuggestionRow[] : [];
   } catch {
     return [];
   }
+}
+
+function mergePurchasePoolRows(rows: SalesSuggestionRow[]): SalesSuggestionRow[] {
+  const next = new Map<string, SalesSuggestionRow>();
+  for (const row of rows) {
+    next.set(`${row.shopName.trim().toLowerCase()}|${row.sku.trim().toUpperCase()}`, row);
+  }
+  return Array.from(next.values());
+}
+
+function loadStoredPurchasePool(): SalesSuggestionRow[] {
+  const rows = parseStoredPurchasePool(localStorage.getItem(SHARED_PURCHASE_POOL_STORAGE_KEY));
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key || !key.startsWith(PURCHASE_POOL_STORAGE_PREFIX) || key === SHARED_PURCHASE_POOL_STORAGE_KEY) continue;
+    rows.push(...parseStoredPurchasePool(localStorage.getItem(key)));
+  }
+  return mergePurchasePoolRows(rows);
 }
 
 function rawField(row: TakealotInventoryRow, keys: string[]): string {
@@ -149,12 +162,12 @@ function isInTransitStatus(status: string): boolean {
   return ['in_transit', 'ordered', '海运在途', '已下单'].includes(status);
 }
 
-export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [], poolOwnerKey = 'shared' }: Props) {
+export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [] }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
   const [selectedStore, setSelectedStore] = useState('');
   const [inventoryRows, setInventoryRows] = useState<TakealotInventoryRow[]>([]);
-  const [purchasePool, setPurchasePool] = useState<SalesSuggestionRow[]>(() => loadStoredPurchasePool(poolOwnerKey));
+  const [purchasePool, setPurchasePool] = useState<SalesSuggestionRow[]>(loadStoredPurchasePool);
   const [syncMessage, setSyncMessage] = useState('');
   const [suggestedQuantityDrafts, setSuggestedQuantityDrafts] = useState<Record<string, string>>({});
   const [suggestedQuantityOverrides, setSuggestedQuantityOverrides] = useState<Record<string, number>>({});
@@ -175,12 +188,8 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   }, [selectedStore, storeOptions]);
 
   useEffect(() => {
-    setPurchasePool(loadStoredPurchasePool(poolOwnerKey));
-  }, [poolOwnerKey]);
-
-  useEffect(() => {
-    localStorage.setItem(purchasePoolStorageKey(poolOwnerKey), JSON.stringify(purchasePool));
-  }, [poolOwnerKey, purchasePool]);
+    localStorage.setItem(SHARED_PURCHASE_POOL_STORAGE_KEY, JSON.stringify(purchasePool));
+  }, [purchasePool]);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
