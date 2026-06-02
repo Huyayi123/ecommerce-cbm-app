@@ -48,16 +48,26 @@ function sumSalesUnits(value: unknown): number {
   return numberValue(value);
 }
 
-function isImageUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value) && /\.(jpg|jpeg|png|webp|gif)(\?|#|$)/i.test(value);
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
 }
 
-function findImageUrl(value: unknown, depth = 0): string {
+function normalizeImageUrl(value: string): string {
+  return value.replace(/^http:\/\/takealot\.s3\.amazonaws\.com\//i, 'https://takealot.s3.amazonaws.com/');
+}
+
+function isImageUrl(value: string): boolean {
+  return isHttpUrl(value) && /\.(jpg|jpeg|png|webp|gif)(\?|#|$)/i.test(value);
+}
+
+function findImageUrl(value: unknown, depth = 0, allowAnyHttpUrl = false): string {
   if (depth > 5 || value === null || value === undefined) return '';
-  if (typeof value === 'string') return isImageUrl(value) ? value : '';
+  if (typeof value === 'string') {
+    return (allowAnyHttpUrl ? isHttpUrl(value) : isImageUrl(value)) ? normalizeImageUrl(value) : '';
+  }
   if (Array.isArray(value)) {
     for (const item of value) {
-      const found = findImageUrl(item, depth + 1);
+      const found = findImageUrl(item, depth + 1, allowAnyHttpUrl);
       if (found) return found;
     }
     return '';
@@ -66,7 +76,7 @@ function findImageUrl(value: unknown, depth = 0): string {
     const record = value as Record<string, unknown>;
     const priorityKeys = ['image_url', 'imageUrl', 'image', 'images', 'thumbnail', 'thumbnail_url', 'product_image', 'lead_image', 'main_image'];
     for (const key of priorityKeys) {
-      const found = findImageUrl(record[key], depth + 1);
+      const found = findImageUrl(record[key], depth + 1, true);
       if (found) return found;
     }
     for (const item of Object.values(record)) {
