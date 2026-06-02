@@ -74,9 +74,6 @@ function uniqueValues(records: PurchaseRecord[], field: keyof PurchaseRecord): s
 
 function calcRecordCbm(item: SkuItem | undefined, quantity: number): number {
   if (!item || quantity <= 0) return 0;
-  if (item.unitsPerCarton > 0 && item.cartonCbm > 0) {
-    return round((quantity / item.unitsPerCarton) * item.cartonCbm, 4);
-  }
   if (item.unitCbm > 0) {
     return round(quantity * item.unitCbm, 4);
   }

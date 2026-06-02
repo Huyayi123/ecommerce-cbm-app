@@ -302,11 +302,9 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       const estimatedCartons =
         skuItem && skuItem.unitsPerCarton > 0 ? round(suggestedQuantity / skuItem.unitsPerCarton, 2) : null;
       const estimatedCbm =
-        skuItem && estimatedCartons !== null && skuItem.cartonCbm > 0
-          ? round(estimatedCartons * skuItem.cartonCbm, 4)
-          : skuItem && skuItem.unitCbm > 0
-            ? round(suggestedQuantity * skuItem.unitCbm, 4)
-            : null;
+        skuItem && skuItem.unitCbm > 0
+          ? round(suggestedQuantity * skuItem.unitCbm, 4)
+          : null;
       const messages: string[] = [];
 
       if (!row.sku.trim()) messages.push('SKU 为空');

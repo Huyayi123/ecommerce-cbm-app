@@ -107,7 +107,7 @@ function toDraft(item: SkuItem): DraftSku {
 }
 
 function sourceLabel(source: SkuItem['cbmSource']): string {
-  return source === 'imported' ? '导入单品CBM' : source === 'total' ? '总CBM/总数量' : source === 'carton' ? '箱规计算' : '缺失';
+  return source === 'imported' ? '导入单品CBM' : source === 'total' ? '总CBM/总数量' : source === 'carton' ? '长宽高计算' : '缺失';
 }
 
 export function SkuManager({ items, onChange, canEditData = true, canDeleteData = true }: Props) {
@@ -315,7 +315,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
         <label>高cm<input type="number" min="0" value={draft.cartonHeightCm} onChange={(event) => updateField('cartonHeightCm', Number(event.target.value))} /></label>
         <label>每箱数量<input type="number" min="0" value={draft.unitsPerCarton} onChange={(event) => updateField('unitsPerCarton', Number(event.target.value))} /></label>
         <div className="computed wide">
-          <span>单箱体积：{calculated.cartonCbm.toFixed(6)} CBM</span>
+          <span>长宽高CBM：{calculated.cartonCbm.toFixed(8)} CBM</span>
           <span>单品体积：{calculated.unitCbm.toFixed(8)} CBM</span>
           <span>来源：{sourceLabel(calculated.cbmSource)}</span>
         </div>
@@ -403,7 +403,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
                         <span>总数量：{item.totalQuantity || '-'}</span>
                         <span>长宽高：{item.cartonLengthCm} x {item.cartonWidthCm} x {item.cartonHeightCm}</span>
                         <span>每箱数量：{item.unitsPerCarton}</span>
-                        <span>单箱CBM：{item.cartonCbm.toFixed(6)}</span>
+                        <span>长宽高CBM：{item.cartonCbm.toFixed(8)}</span>
                         <span>季节性产品：{item.isSeasonal ? '是' : '否'}</span>
                         <span>更新时间：{item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-'}</span>
                       </div>

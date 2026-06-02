@@ -6,12 +6,13 @@ export const TARGET_CBM = 70;
 
 export function calcCartonCbm(lengthCm: number, widthCm: number, heightCm: number): number {
   if (lengthCm <= 0 || widthCm <= 0 || heightCm <= 0) return 0;
-  return round((lengthCm * widthCm * heightCm) / 1_000_000, 6);
+  return round((lengthCm * widthCm * heightCm) / 1_000_000, 8);
 }
 
 export function calcUnitCbm(cartonCbm: number, unitsPerCarton: number): number {
-  if (cartonCbm <= 0 || unitsPerCarton <= 0) return 0;
-  return round(cartonCbm / unitsPerCarton, 8);
+  if (cartonCbm <= 0) return 0;
+  void unitsPerCarton;
+  return round(cartonCbm, 8);
 }
 
 export function hydrateSku(item: Omit<SkuItem, 'cartonCbm' | 'unitCbm'>): SkuItem {
