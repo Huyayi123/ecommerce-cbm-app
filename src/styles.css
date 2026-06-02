@@ -457,12 +457,18 @@ button.danger,
 
 .suggestion-sticky-1 {
   left: 0;
+  min-width: 82px;
+  max-width: 82px;
+}
+
+.suggestion-sticky-2 {
+  left: 82px;
   min-width: 150px;
   max-width: 150px;
 }
 
-.suggestion-sticky-2 {
-  left: 150px;
+.suggestion-sticky-3 {
+  left: 232px;
   min-width: 360px;
   max-width: 360px;
 }
@@ -474,10 +480,13 @@ button.danger,
   white-space: nowrap;
 }
 
-.suggestion-sticky-3 {
-  left: 510px;
-  min-width: 120px;
-  max-width: 120px;
+.sku-thumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border: 1px solid #dce4ea;
+  border-radius: 6px;
+  background: #ffffff;
 }
 
 .compact-panel {

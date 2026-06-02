@@ -119,6 +119,7 @@ export type SalesSuggestionRow = {
   rowId: string;
   sku: string;
   productName: string;
+  imageUrl?: string;
   shopName: string;
   manufacturerName: string;
   buyerName: string;

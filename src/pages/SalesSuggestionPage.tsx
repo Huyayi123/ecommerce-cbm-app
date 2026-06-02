@@ -267,6 +267,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         rowId: `takealot-${row.shopName}-${row.sku || index}`,
         sku: row.sku,
         productName: rawField(row, ['title', 'product_title', 'name']),
+        imageUrl: row.imageUrl,
         shopName: selectedStore,
         purchaseQuantity: row.apiSalesQuantity,
         inventory: row,
@@ -275,6 +276,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         rowId: row.rowId,
         sku: row.sku,
         productName: row.productName,
+        imageUrl: '',
         shopName: selectedStore,
         purchaseQuantity: row.purchaseQuantity ?? 0,
         inventory: inventoryMap.get(row.sku.trim().toUpperCase()),
@@ -320,6 +322,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         rowId: row.rowId,
         sku: row.sku,
         productName: skuItem?.englishName || skuItem?.productName || row.productName || '',
+        imageUrl: row.imageUrl,
         shopName: row.shopName || selectedStore || skuItem?.shopName || '',
         manufacturerName: skuItem?.manufacturerName ?? '',
         buyerName: skuItem?.buyerName ?? '',
@@ -534,14 +537,15 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         <table className="suggestion-table">
           <thead>
             <tr>
-              <th className="suggestion-sticky suggestion-sticky-1">SKU</th><th className="suggestion-sticky suggestion-sticky-2">产品名称</th><th>月销量</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>建议采购数量</th><th>采购人</th><th>预计 CBM</th><th>状态/备注</th><th>店铺</th>
+              <th className="suggestion-sticky suggestion-sticky-1">图片</th><th className="suggestion-sticky suggestion-sticky-2">SKU</th><th className="suggestion-sticky suggestion-sticky-3">产品名称</th><th>月销量</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>建议采购数量</th><th>采购人</th><th>预计 CBM</th><th>状态/备注</th><th>店铺</th>
             </tr>
           </thead>
           <tbody>
             {suggestions.map((row) => (
               <tr key={row.rowId} className={hasMissingSkuData(row) ? 'error-row' : hasSeasonalWarning(row) ? 'seasonal-row' : ''}>
-                <td className="suggestion-sticky suggestion-sticky-1">{row.sku || '-'}</td>
-                <td className="suggestion-sticky suggestion-sticky-2"><div className="suggestion-name-text" title={row.productName || ''}>{row.productName || '-'}</div></td>
+                <td className="suggestion-sticky suggestion-sticky-1">{row.imageUrl ? <img className="sku-thumb" src={row.imageUrl} alt={row.productName || row.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                <td className="suggestion-sticky suggestion-sticky-2">{row.sku || '-'}</td>
+                <td className="suggestion-sticky suggestion-sticky-3"><div className="suggestion-name-text" title={row.productName || ''}>{row.productName || '-'}</div></td>
                 <td>{row.monthlySales}</td>
                 <td>{row.localStockQuantity}</td>
                 <td>{row.takealotStockQuantity}</td>
@@ -568,7 +572,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.shopName || '-'}</td>
               </tr>
             ))}
-            {suggestions.length === 0 && <tr><td colSpan={12} className="empty">上传月销量或手动同步 Takealot 库存后生成采购建议。</td></tr>}
+            {suggestions.length === 0 && <tr><td colSpan={13} className="empty">上传月销量或手动同步 Takealot 库存后生成采购建议。</td></tr>}
           </tbody>
         </table>
       </div>

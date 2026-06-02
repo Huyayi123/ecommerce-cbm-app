@@ -1,6 +1,7 @@
 export type TakealotInventoryRow = {
   sku: string;
   shopName: string;
+  imageUrl: string;
   apiSalesQuantity: number;
   localStockQuantity: number;
   takealotStockQuantity: number;
@@ -47,6 +48,35 @@ function sumSalesUnits(value: unknown): number {
   return numberValue(value);
 }
 
+function isImageUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value) && /\.(jpg|jpeg|png|webp|gif)(\?|#|$)/i.test(value);
+}
+
+function findImageUrl(value: unknown, depth = 0): string {
+  if (depth > 5 || value === null || value === undefined) return '';
+  if (typeof value === 'string') return isImageUrl(value) ? value : '';
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findImageUrl(item, depth + 1);
+      if (found) return found;
+    }
+    return '';
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const priorityKeys = ['image_url', 'imageUrl', 'image', 'images', 'thumbnail', 'thumbnail_url', 'product_image', 'lead_image', 'main_image'];
+    for (const key of priorityKeys) {
+      const found = findImageUrl(record[key], depth + 1);
+      if (found) return found;
+    }
+    for (const item of Object.values(record)) {
+      const found = findImageUrl(item, depth + 1);
+      if (found) return found;
+    }
+  }
+  return '';
+}
+
 const LOCAL_STOCK_BUFFER = 4;
 
 export function normalizeTakealotInventoryRow(input: Record<string, unknown>, shopName: string): TakealotInventoryRow {
@@ -64,6 +94,7 @@ export function normalizeTakealotInventoryRow(input: Record<string, unknown>, sh
   return {
     sku: String(input.sku ?? input.seller_sku ?? input.merchant_sku ?? input.offer_sku ?? '').trim(),
     shopName,
+    imageUrl: findImageUrl(input),
     apiSalesQuantity: sumSalesUnits(input.sales_units),
     localStockQuantity,
     takealotStockQuantity,
