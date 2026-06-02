@@ -89,6 +89,31 @@ const emptyDraft: DraftSku = {
   updatedAt: '',
 };
 
+function mergeImportedSku(existing: SkuItem, imported: SkuItem, recognizedFields: Set<string>): SkuItem {
+  const hasField = (field: string) => recognizedFields.has(field);
+  return hydrateSku({
+    ...existing,
+    manufacturerName: imported.manufacturerName.trim() || existing.manufacturerName,
+    sku: imported.sku.trim() || existing.sku,
+    productName: imported.productName.trim() || existing.productName,
+    englishName: imported.englishName.trim() || existing.englishName,
+    imageUrl: imported.imageUrl.trim() || existing.imageUrl,
+    purchasePrice: imported.purchasePrice > 0 ? imported.purchasePrice : existing.purchasePrice,
+    manualUnitCbm: imported.manualUnitCbm > 0 ? imported.manualUnitCbm : existing.manualUnitCbm,
+    totalCbm: imported.totalCbm > 0 ? imported.totalCbm : existing.totalCbm,
+    totalQuantity: imported.totalQuantity > 0 ? imported.totalQuantity : existing.totalQuantity,
+    shopName: canonicalShopName(imported.shopName) || canonicalShopName(existing.shopName),
+    buyerName: imported.buyerName.trim() || existing.buyerName,
+    isSeasonal: hasField('isSeasonal') ? imported.isSeasonal : existing.isSeasonal,
+    cartonLengthCm: imported.cartonLengthCm > 0 ? imported.cartonLengthCm : existing.cartonLengthCm,
+    cartonWidthCm: imported.cartonWidthCm > 0 ? imported.cartonWidthCm : existing.cartonWidthCm,
+    cartonHeightCm: imported.cartonHeightCm > 0 ? imported.cartonHeightCm : existing.cartonHeightCm,
+    unitsPerCarton: imported.unitsPerCarton > 0 ? imported.unitsPerCarton : existing.unitsPerCarton,
+    notes: imported.notes.trim() || existing.notes,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 function toDraft(item: SkuItem): DraftSku {
   return {
     id: item.id,
@@ -220,6 +245,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
   async function confirmImport() {
     if (!importPreview) return;
     const mergedByKey = new Map(items.map((item) => [getSkuMatchKey(item) || item.id, item]));
+    const recognizedFields = new Set(importPreview.recognizedFields.map((field) => field.field));
     let createdCount = 0;
     let updatedCount = 0;
     let failedCount = 0;
@@ -235,7 +261,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
         updatedCount += 1;
         const existingKey = getSkuMatchKey(existing) || existing.id;
         mergedByKey.delete(existingKey);
-        mergedByKey.set(key, { ...row.item, id: existing.id, shopName: canonicalShopName(row.item.shopName), updatedAt: new Date().toISOString() });
+        mergedByKey.set(key, mergeImportedSku(existing, { ...row.item, id: existing.id, shopName: canonicalShopName(row.item.shopName) }, recognizedFields));
       } else {
         createdCount += 1;
         mergedByKey.set(key, { ...row.item, shopName: canonicalShopName(row.item.shopName), updatedAt: new Date().toISOString() });

@@ -3,6 +3,27 @@ import path from 'node:path';
 
 const STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
 const TAKEALOT_ENDPOINT = 'https://ecommerce-cbm-app.vercel.app/api/takealot-inventory';
+const SKU_UPSERT_COLUMNS = [
+  'id',
+  'sku',
+  'product_name',
+  'english_name',
+  'image_url',
+  'manufacturer_name',
+  'shop_name',
+  'buyer_name',
+  'is_seasonal',
+  'purchase_price',
+  'unit_cbm',
+  'box_length_cm',
+  'box_width_cm',
+  'box_height_cm',
+  'units_per_carton',
+  'total_quantity',
+  'total_cbm',
+  'notes',
+  'updated_at',
+];
 
 function canonicalShopName(value) {
   const trimmed = String(value ?? '').trim();
@@ -204,10 +225,32 @@ function createSkuRow({ sku, englishName, shopName, imageUrl }) {
   };
 }
 
+function sanitizeSkuRow(row) {
+  const next = {};
+  for (const column of SKU_UPSERT_COLUMNS) {
+    next[column] = row[column] ?? null;
+  }
+  next.sku = normalizeSku(next.sku) || null;
+  next.product_name = String(next.product_name ?? '');
+  next.english_name = String(next.english_name ?? '');
+  next.image_url = String(next.image_url ?? '');
+  next.manufacturer_name = String(next.manufacturer_name ?? '');
+  next.shop_name = canonicalShopName(next.shop_name ?? '');
+  next.buyer_name = String(next.buyer_name ?? '');
+  next.is_seasonal = Boolean(next.is_seasonal);
+  for (const column of ['purchase_price', 'unit_cbm', 'box_length_cm', 'box_width_cm', 'box_height_cm', 'units_per_carton', 'total_quantity', 'total_cbm']) {
+    const value = Number(next[column] ?? 0);
+    next[column] = Number.isFinite(value) ? value : 0;
+  }
+  next.notes = String(next.notes ?? '');
+  next.updated_at = String(next.updated_at || new Date().toISOString());
+  return next;
+}
+
 async function upsertSkuRows(rows) {
   const batchSize = 500;
   for (let index = 0; index < rows.length; index += batchSize) {
-    const batch = rows.slice(index, index + batchSize);
+    const batch = rows.slice(index, index + batchSize).map(sanitizeSkuRow);
     await fetchJson(supabaseRestUrl('sku_items?on_conflict=id'), {
       method: 'POST',
       headers: supabaseHeaders({ Prefer: 'resolution=merge-duplicates' }),
