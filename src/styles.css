@@ -57,7 +57,8 @@ button.danger,
 }
 
 .app-shell {
-  width: min(1920px, calc(100vw - 48px));
+  width: calc(100vw - 32px);
+  max-width: none;
   margin: 0 auto;
   padding: 28px 0;
 }
@@ -613,6 +614,15 @@ th.sticky-col {
 .sku-table .sticky-col {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.sku-table tbody tr:last-child td {
+  border-bottom: 1px solid #e5ebf0;
+}
+
+.sku-table th:last-child,
+.sku-table td:last-child {
+  min-width: 260px;
 }
 
 .column-settings {
