@@ -272,6 +272,15 @@ async function replaceSalesSuggestions(rows, storeNames = []) {
   }
 }
 
+async function fetchSkuItemsForSync() {
+  try {
+    return await supabaseSelectAll('sku_items?select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,is_seasonal,units_per_carton,unit_cbm,total_cbm,total_quantity');
+  } catch (error) {
+    if (!String(error?.message ?? error).includes('is_seasonal')) throw error;
+    return supabaseSelectAll('sku_items?select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity');
+  }
+}
+
 function skuKey(value) {
   return String(value ?? '').trim().replace(/\s+/g, '').toUpperCase();
 }
@@ -293,7 +302,7 @@ function jsonResponse(body, status = 200) {
 async function buildStoreSuggestions(storeName) {
   const [{ rows: takealotRows, pagesFetched, totalResults, fetchedRows, activeRows, disabledRows, duplicateRows }, skuItems, purchaseRecords] = await Promise.all([
     fetchTakealotRows(storeName),
-    supabaseSelectAll('sku_items?select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity'),
+    fetchSkuItemsForSync(),
     supabaseSelectAll('purchase_records?select=sku,purchase_quantity,shop_name,status'),
   ]);
 
@@ -351,6 +360,7 @@ async function buildStoreSuggestions(storeName) {
       estimated_cbm: unitCbm > 0 ? round(suggestedQuantity * unitCbm, 4) : null,
       messages: [
         ...(skuItem ? [] : ['未录入 SKU 资料']),
+        ...(skuItem?.is_seasonal ? ['季节性产品，请结合旺季/淡季人工确认采购量'] : []),
         ...(directSuggestion?.message ? [directSuggestion.message] : forecast.message ? [forecast.message] : []),
       ],
     };

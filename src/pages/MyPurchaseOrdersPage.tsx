@@ -159,6 +159,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       totalQuantity: 0,
       shopName: record.shopName,
       buyerName: record.assignedBuyerName,
+      isSeasonal: false,
       cartonLengthCm: 0,
       cartonWidthCm: 0,
       cartonHeightCm: 0,

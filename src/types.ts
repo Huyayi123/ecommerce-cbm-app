@@ -6,6 +6,7 @@ export type SkuItem = {
   manufacturerName: string;
   shopName: string;
   buyerName: string;
+  isSeasonal: boolean;
   purchasePrice: number;
   cartonLengthCm: number;
   cartonWidthCm: number;

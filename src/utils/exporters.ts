@@ -54,6 +54,7 @@ export function exportSkuItems(items: SkuItem[], format: ExportFormat): void {
       总数量: item.totalQuantity,
       店铺: item.shopName,
       采购人: item.buyerName,
+      是否季节性产品: item.isSeasonal ? '是' : '否',
       长cm: item.cartonLengthCm,
       宽cm: item.cartonWidthCm,
       高cm: item.cartonHeightCm,

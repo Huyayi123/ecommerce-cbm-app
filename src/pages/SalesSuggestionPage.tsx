@@ -4,7 +4,7 @@ import type { PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from '.
 import { parseSalesFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
 import { effectivePurchaseQuantity, isInventoryRecord } from '../utils/purchaseRecords';
-import { fetchTakealotInventory, type TakealotInventoryRow } from '../utils/takealot';
+import type { TakealotInventoryRow } from '../utils/takealot';
 
 type Props = {
   skuItems: SkuItem[];
@@ -118,6 +118,10 @@ function hasMissingSkuData(row: SalesSuggestionRow): boolean {
   return row.messages.some((message) => /未录入\s*SKU\s*资料/i.test(message));
 }
 
+function hasSeasonalWarning(row: SalesSuggestionRow): boolean {
+  return row.messages.some((message) => message.includes('季节性产品'));
+}
+
 function sortSuggestionRows(rows: SalesSuggestionRow[]): SalesSuggestionRow[] {
   return [...rows].sort((a, b) => (
     b.suggestedQuantity - a.suggestedQuantity
@@ -178,22 +182,6 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     setSalesRows(rows);
     setFileName(file.name);
     event.target.value = '';
-  }
-
-  async function syncTakealotInventory() {
-    if (!selectedStore) {
-      setSyncMessage('请先选择店铺。');
-      return;
-    }
-    try {
-      setSyncMessage('正在同步 Takealot 库存...');
-      const rows = await fetchTakealotInventory(selectedStore, []);
-      setInventoryRows(rows);
-      setSyncMessage(`已同步 ${rows.length} 条 Takealot 库存。`);
-    } catch (error) {
-      console.error(error);
-      setSyncMessage(error instanceof Error ? error.message : 'Takealot 库存同步失败');
-    }
   }
 
   async function refreshCloudSuggestions() {
@@ -304,6 +292,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
 
       if (!row.sku.trim()) messages.push('SKU 为空');
       if (!skuItem && row.sku.trim()) messages.push('未录入 SKU 资料');
+      if (skuItem?.isSeasonal) messages.push('季节性产品，请结合旺季/淡季人工确认采购量');
       if (directSuggestion?.message) {
         messages.push(directSuggestion.message);
       } else if (forecast.message) {
@@ -466,7 +455,6 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
             {storeOptions.map((store) => <option key={store} value={store}>{store}</option>)}
           </select>
         </label>
-        <button type="button" onClick={() => void syncTakealotInventory()} disabled={!selectedStore}>同步 Takealot 库存</button>
         <button type="button" onClick={() => void refreshCloudSuggestions()} disabled={!onRefreshData || isRefreshingCloud}>刷新云端建议</button>
         <span>{fileName ? `当前文件：${fileName}` : '备货规则：月销量 > 50 用 4 个月，21-50 用 3 个月，20 及以下用 2 个月'}</span>
       </div>
@@ -551,7 +539,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
           </thead>
           <tbody>
             {suggestions.map((row) => (
-              <tr key={row.rowId} className={hasMissingSkuData(row) ? 'error-row' : ''}>
+              <tr key={row.rowId} className={hasMissingSkuData(row) ? 'error-row' : hasSeasonalWarning(row) ? 'seasonal-row' : ''}>
                 <td className="suggestion-sticky suggestion-sticky-1">{row.sku || '-'}</td>
                 <td className="suggestion-sticky suggestion-sticky-2"><div className="suggestion-name-text" title={row.productName || ''}>{row.productName || '-'}</div></td>
                 <td>{row.monthlySales}</td>
@@ -580,7 +568,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.shopName || '-'}</td>
               </tr>
             ))}
-            {suggestions.length === 0 && <tr><td colSpan={12} className="empty">同步 Takealot 库存后生成采购建议。</td></tr>}
+            {suggestions.length === 0 && <tr><td colSpan={12} className="empty">上传月销量或刷新云端建议后生成采购建议。</td></tr>}
           </tbody>
         </table>
       </div>

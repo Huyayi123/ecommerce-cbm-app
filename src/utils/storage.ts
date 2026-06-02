@@ -19,6 +19,7 @@ export function loadSkuItems(): SkuItem[] {
         manufacturerName: String(item.manufacturerName ?? ''),
         shopName: String(item.shopName ?? item.category ?? ''),
         buyerName: String(item.buyerName ?? ''),
+        isSeasonal: Boolean(item.isSeasonal ?? item.is_seasonal ?? false),
         purchasePrice: nullableNumber(item.purchasePrice) ?? 0,
         cartonLengthCm: Number(item.cartonLengthCm ?? 0),
         cartonWidthCm: Number(item.cartonWidthCm ?? 0),

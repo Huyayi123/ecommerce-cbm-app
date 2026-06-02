@@ -30,6 +30,7 @@ create table if not exists public.sku_items (
   manufacturer_name text,
   shop_name text,
   buyer_name text,
+  is_seasonal boolean default false,
   purchase_price numeric default 0,
   unit_cbm numeric default 0,
   box_length_cm numeric default 0,
@@ -67,6 +68,9 @@ add column if not exists buyer_name text;
 
 alter table public.sku_items
 add column if not exists cbm_source text default 'missing';
+
+alter table public.sku_items
+add column if not exists is_seasonal boolean default false;
 
 alter table public.sku_items
 drop column if exists note;

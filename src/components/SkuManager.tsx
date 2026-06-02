@@ -18,6 +18,7 @@ type ColumnKey =
   | 'totalQuantity'
   | 'shopName'
   | 'buyerName'
+  | 'isSeasonal'
   | 'cartonLengthCm'
   | 'cartonWidthCm'
   | 'cartonHeightCm'
@@ -41,6 +42,7 @@ const columnOptions: Array<{ key: ColumnKey; label: string }> = [
   { key: 'totalQuantity', label: '总数量' },
   { key: 'shopName', label: '店铺' },
   { key: 'buyerName', label: '采购人' },
+  { key: 'isSeasonal', label: '季节性产品' },
   { key: 'cartonLengthCm', label: '长cm' },
   { key: 'cartonWidthCm', label: '宽cm' },
   { key: 'cartonHeightCm', label: '高cm' },
@@ -55,6 +57,7 @@ const defaultVisibleColumns = new Set<ColumnKey>([
   'unitCbm',
   'shopName',
   'buyerName',
+  'isSeasonal',
 ]);
 
 const emptyDraft: DraftSku = {
@@ -65,6 +68,7 @@ const emptyDraft: DraftSku = {
   manufacturerName: '',
   shopName: '',
   buyerName: '',
+  isSeasonal: false,
   purchasePrice: 0,
   cartonLengthCm: 0,
   cartonWidthCm: 0,
@@ -87,6 +91,7 @@ function toDraft(item: SkuItem): DraftSku {
     manufacturerName: item.manufacturerName,
     shopName: item.shopName,
     buyerName: item.buyerName,
+    isSeasonal: item.isSeasonal,
     purchasePrice: item.purchasePrice,
     cartonLengthCm: item.cartonLengthCm,
     cartonWidthCm: item.cartonWidthCm,
@@ -118,7 +123,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
     const keyword = searchText.trim().toLowerCase();
     if (!keyword) return items;
     return items.filter((item) =>
-      [item.manufacturerName, item.sku, item.productName, item.englishName, item.shopName, item.buyerName]
+      [item.manufacturerName, item.sku, item.productName, item.englishName, item.shopName, item.buyerName, item.isSeasonal ? '季节性产品' : '']
         .some((value) => value.toLowerCase().includes(keyword)),
     );
   }, [items, searchText]);
@@ -303,6 +308,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
         <label>总数量<input type="number" min="0" value={draft.totalQuantity} onChange={(event) => updateField('totalQuantity', Number(event.target.value))} /></label>
         <label>店铺<input value={draft.shopName} onChange={(event) => updateField('shopName', event.target.value)} /></label>
         <label>采购人<input value={draft.buyerName} onChange={(event) => updateField('buyerName', event.target.value)} /></label>
+        <label className="checkbox-field"><input type="checkbox" checked={draft.isSeasonal} onChange={(event) => updateField('isSeasonal', event.target.checked)} />季节性产品</label>
         <label>长cm<input type="number" min="0" value={draft.cartonLengthCm} onChange={(event) => updateField('cartonLengthCm', Number(event.target.value))} /></label>
         <label>宽cm<input type="number" min="0" value={draft.cartonWidthCm} onChange={(event) => updateField('cartonWidthCm', Number(event.target.value))} /></label>
         <label>高cm<input type="number" min="0" value={draft.cartonHeightCm} onChange={(event) => updateField('cartonHeightCm', Number(event.target.value))} /></label>
@@ -354,6 +360,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
               {visibleColumns.has('totalQuantity') && <th>总数量</th>}
               {visibleColumns.has('shopName') && <th>店铺</th>}
               {visibleColumns.has('buyerName') && <th>采购人</th>}
+              {visibleColumns.has('isSeasonal') && <th>季节性产品</th>}
               {visibleColumns.has('cartonLengthCm') && <th>长cm</th>}
               {visibleColumns.has('cartonWidthCm') && <th>宽cm</th>}
               {visibleColumns.has('cartonHeightCm') && <th>高cm</th>}
@@ -375,6 +382,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
                   {visibleColumns.has('totalQuantity') && <td>{item.totalQuantity || '-'}</td>}
                   {visibleColumns.has('shopName') && <td>{item.shopName}</td>}
                   {visibleColumns.has('buyerName') && <td>{item.buyerName}</td>}
+                  {visibleColumns.has('isSeasonal') && <td>{item.isSeasonal ? '是' : '-'}</td>}
                   {visibleColumns.has('cartonLengthCm') && <td>{item.cartonLengthCm || '-'}</td>}
                   {visibleColumns.has('cartonWidthCm') && <td>{item.cartonWidthCm || '-'}</td>}
                   {visibleColumns.has('cartonHeightCm') && <td>{item.cartonHeightCm || '-'}</td>}
@@ -395,6 +403,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
                         <span>长宽高：{item.cartonLengthCm} x {item.cartonWidthCm} x {item.cartonHeightCm}</span>
                         <span>每箱数量：{item.unitsPerCarton}</span>
                         <span>单箱CBM：{item.cartonCbm.toFixed(6)}</span>
+                        <span>季节性产品：{item.isSeasonal ? '是' : '否'}</span>
                         <span>更新时间：{item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-'}</span>
                       </div>
                     </td>

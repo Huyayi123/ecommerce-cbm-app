@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/takealot-weekly-sync",
-      "schedule": "0 1 15,30 * *"
-    }
-  ]
-}

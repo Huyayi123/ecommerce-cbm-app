@@ -46,6 +46,11 @@ button.primary {
   border-color: #136f63;
 }
 
+button.primary:hover:not(:disabled) {
+  background: #0f5f55;
+  border-color: #0f5f55;
+}
+
 button.danger,
 .danger-text {
   color: #b42318;
@@ -239,8 +244,9 @@ button.danger,
 }
 
 .panel {
-  padding: 18px;
+  padding: 20px;
   margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(22, 32, 42, 0.03);
 }
 
 .section-heading,
@@ -391,6 +397,10 @@ button.danger,
   align-items: flex-end;
   gap: 16px;
   margin: 18px 0;
+  padding: 12px;
+  border: 1px solid #e1e8ee;
+  border-radius: 8px;
+  background: #f8fafb;
 }
 
 .suggestion-controls label {
@@ -403,11 +413,21 @@ button.danger,
   padding-bottom: 8px;
 }
 
+.checkbox-field {
+  justify-content: center;
+  min-height: 58px;
+}
+
+.checkbox-field input {
+  width: auto;
+  height: auto;
+}
+
 .store-summary-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: -6px 0 16px;
+  margin: 0 0 16px;
   padding: 10px;
   border: 1px solid #e1e8ee;
   border-radius: 8px;
@@ -441,7 +461,7 @@ button.danger,
 }
 
 .suggestion-table-wrap {
-  max-height: 640px;
+  max-height: 680px;
 }
 
 .suggestion-table th {
@@ -475,7 +495,7 @@ button.danger,
 }
 
 .suggestion-name-text {
-  max-width: 340px;
+  max-width: 360px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -783,6 +803,15 @@ tbody tr:last-child td {
 .error-row td {
   background: #fff2f0;
   color: #8a1f13;
+}
+
+.seasonal-row td {
+  background: #fff9e8;
+}
+
+.seasonal-row td:last-child {
+  color: #8a5a00;
+  font-weight: 600;
 }
 
 .empty {

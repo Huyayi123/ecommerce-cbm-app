@@ -13,6 +13,7 @@ export const SKU_FIELD_ALIASES = {
   totalQuantity: ['总数量', '数量', 'total_quantity'],
   shopName: ['店铺', '店铺名', 'shop_name'],
   buyerName: ['采购人', '买手', 'buyer_name'],
+  isSeasonal: ['是否季节性产品', '季节性产品', '是否季节性', 'seasonal', 'is_seasonal'],
   cartonLengthCm: ['长cm', '长 cm', '长', 'box_length_cm'],
   cartonWidthCm: ['宽cm', '宽 cm', '宽', 'box_width_cm'],
   cartonHeightCm: ['高cm', '高 cm', '高', 'box_height_cm'],
@@ -34,6 +35,7 @@ export type SupabaseSkuRow = {
   total_quantity: number | null;
   shop_name: string | null;
   buyer_name: string | null;
+  is_seasonal?: boolean | null;
   box_length_cm: number | null;
   box_width_cm: number | null;
   box_height_cm: number | null;
@@ -78,6 +80,7 @@ export function supabaseSkuToFrontend(row: SupabaseSkuRow): SkuItem {
     totalQuantity: Number(row.total_quantity ?? 0),
     shopName: row.shop_name ?? '',
     buyerName: row.buyer_name ?? '',
+    isSeasonal: Boolean(row.is_seasonal ?? false),
     cartonLengthCm: Number(row.box_length_cm ?? row.carton_length_cm ?? 0),
     cartonWidthCm: Number(row.box_width_cm ?? row.carton_width_cm ?? 0),
     cartonHeightCm: Number(row.box_height_cm ?? row.carton_height_cm ?? 0),
@@ -101,6 +104,7 @@ export function frontendSkuToSupabase(item: SkuItem): SupabaseSkuRow {
     total_quantity: item.totalQuantity,
     shop_name: item.shopName,
     buyer_name: item.buyerName,
+    is_seasonal: item.isSeasonal,
     box_length_cm: item.cartonLengthCm,
     box_width_cm: item.cartonWidthCm,
     box_height_cm: item.cartonHeightCm,
@@ -114,6 +118,7 @@ export function skuExcelRowToFrontend(row: Record<string, unknown>, headers: str
   const manualUnitCbm = toNumber(pickSkuExcelField(row, headers, 'manualUnitCbm')) ?? 0;
   const totalCbm = toNumber(pickSkuExcelField(row, headers, 'totalCbm')) ?? 0;
   const totalQuantity = toNumber(pickSkuExcelField(row, headers, 'totalQuantity')) ?? 0;
+  const seasonalValue = String(pickSkuExcelField(row, headers, 'isSeasonal') ?? '').trim().toLowerCase();
 
   return hydrateSku({
     id,
@@ -127,6 +132,7 @@ export function skuExcelRowToFrontend(row: Record<string, unknown>, headers: str
     totalQuantity,
     shopName: String(pickSkuExcelField(row, headers, 'shopName') ?? '').trim(),
     buyerName: String(pickSkuExcelField(row, headers, 'buyerName') ?? '').trim(),
+    isSeasonal: ['是', 'yes', 'y', 'true', '1', '季节性'].includes(seasonalValue),
     cartonLengthCm: toNumber(pickSkuExcelField(row, headers, 'cartonLengthCm')) ?? 0,
     cartonWidthCm: toNumber(pickSkuExcelField(row, headers, 'cartonWidthCm')) ?? 0,
     cartonHeightCm: toNumber(pickSkuExcelField(row, headers, 'cartonHeightCm')) ?? 0,
