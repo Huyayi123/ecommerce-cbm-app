@@ -4,6 +4,25 @@ import { effectivePurchaseQuantity } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
 
+const SKU_TEMPLATE_HEADERS = [
+  '厂家名',
+  'SKU',
+  '产品名称',
+  '英文名称',
+  '采购单价',
+  '单品CBM',
+  '总CBM',
+  '总数量',
+  '店铺',
+  '采购人',
+  '是否季节性产品',
+  '长cm',
+  '宽cm',
+  '高cm',
+  '每箱数量',
+  '备注',
+];
+
 function dateStamp(): string {
   const now = new Date();
   const date = now.toISOString().slice(0, 10).replace(/-/g, '');
@@ -65,6 +84,13 @@ export function exportSkuItems(items: SkuItem[], format: ExportFormat): void {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'SKU体积资料库');
   writeWorkbook(workbook, 'SKU体积资料库', format);
+}
+
+export function exportSkuImportTemplate(): void {
+  const worksheet = XLSX.utils.aoa_to_sheet([SKU_TEMPLATE_HEADERS]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'SKU导入模板');
+  writeWorkbook(workbook, 'SKU导入模板', 'xlsx');
 }
 
 export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportFormat, moduleName = '采购在途库存'): void {

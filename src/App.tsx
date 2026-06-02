@@ -3,7 +3,6 @@ import { AuthPanel } from './components/AuthPanel';
 import { PasswordResetPanel } from './components/PasswordResetPanel';
 import { ProfileBinding } from './components/ProfileBinding';
 import { SkuManager } from './components/SkuManager';
-import { sampleSkus } from './data/sampleSkus';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { ContainerCalculatorPage } from './pages/ContainerCalculatorPage';
 import { MyPurchaseOrdersPage } from './pages/MyPurchaseOrdersPage';
@@ -179,11 +178,6 @@ function App() {
       console.error(error);
       setStatusMessage(`采购记录已保存，但操作记录写入失败：${formatErrorMessage(error)}`);
     });
-  }
-
-  async function loadSamples() {
-    const existing = new Set(skuItems.map((item) => item.sku.toUpperCase()));
-    await persistSkuItems([...sampleSkus.filter((item) => !existing.has(item.sku.toUpperCase())), ...skuItems]);
   }
 
   async function appendPurchaseRecords(records: PurchaseRecord[]) {
@@ -529,10 +523,7 @@ function App() {
       {statusMessage && <div className="inline-notice">{statusMessage}</div>}
 
       {activePage === 'sku' && (
-        <>
-          {editable && <button type="button" onClick={() => void loadSamples()}>载入示例 SKU</button>}
-          <SkuManager items={skuItems} onChange={persistSkuItems} canEditData={editable} canDeleteData={deletable} />
-        </>
+        <SkuManager items={skuItems} onChange={persistSkuItems} canEditData={editable} canDeleteData={deletable} />
       )}
 
       {activePage === 'calculator' && (

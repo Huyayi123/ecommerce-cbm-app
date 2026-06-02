@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import type { SkuImportPreview, SkuItem } from '../types';
 import { findMatchingSkuItem, getSkuMatchKey, hydrateSku } from '../utils/calculations';
 import { formatErrorMessage } from '../utils/errors';
-import { exportSkuItems } from '../utils/exporters';
+import { exportSkuImportTemplate, exportSkuItems } from '../utils/exporters';
 import { previewSkuFile } from '../utils/fileParsers';
 
 type DraftSku = Omit<SkuItem, 'cartonCbm' | 'unitCbm'>;
@@ -252,6 +252,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
             导入资料库
             <input type="file" accept=".xlsx,.xls,.csv" onChange={previewImport} />
           </label>}
+          <button type="button" onClick={exportSkuImportTemplate}>下载导入模板</button>
           <button type="button" onClick={() => exportSkuItems(items, 'xlsx')} disabled={items.length === 0}>导出资料库 Excel</button>
           <button type="button" onClick={() => exportSkuItems(items, 'csv')} disabled={items.length === 0}>导出资料库 CSV</button>
         </div>
