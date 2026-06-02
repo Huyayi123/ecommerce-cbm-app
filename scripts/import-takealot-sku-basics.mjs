@@ -4,6 +4,12 @@ import path from 'node:path';
 const STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
 const TAKEALOT_ENDPOINT = 'https://ecommerce-cbm-app.vercel.app/api/takealot-inventory';
 
+function canonicalShopName(value) {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) return '';
+  return STORES.find((shop) => shop.toLowerCase() === trimmed.toLowerCase()) ?? trimmed;
+}
+
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
   const content = fs.readFileSync(filePath, 'utf8');
@@ -181,7 +187,7 @@ function createSkuRow({ sku, englishName, shopName, imageUrl }) {
     english_name: englishName,
     image_url: imageUrl,
     manufacturer_name: '',
-    shop_name: shopName,
+    shop_name: canonicalShopName(shopName),
     buyer_name: '',
     is_seasonal: false,
     purchase_price: 0,
@@ -230,6 +236,7 @@ const stats = {
 };
 
 for (const store of STORES) {
+  const storeName = canonicalShopName(store);
   const rows = await fetchTakealotRows(store);
   console.log(`${store}: fetched ${rows.length}`);
   stats.fetched += rows.length;
@@ -257,14 +264,14 @@ for (const store of STORES) {
           ...existing,
           sku,
           english_name: englishName || existing.english_name || '',
-          shop_name: store,
+          shop_name: storeName,
           image_url: imageUrl || existing.image_url || '',
           updated_at: new Date().toISOString(),
         });
       }
       stats.updated += existingForSku.length;
     } else {
-      const created = createSkuRow({ sku, englishName, shopName: store, imageUrl });
+      const created = createSkuRow({ sku, englishName, shopName: storeName, imageUrl });
       pendingById.set(created.id, created);
       rowsBySku.set(sku, [created]);
       stats.inserted += 1;

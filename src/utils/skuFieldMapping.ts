@@ -1,5 +1,6 @@
 import type { SkuItem } from '../types';
 import { hydrateSku } from './calculations';
+import { canonicalShopName } from './shops';
 import { toNumber } from './number';
 
 export const SKU_FIELD_ALIASES = {
@@ -81,7 +82,7 @@ export function supabaseSkuToFrontend(row: SupabaseSkuRow): SkuItem {
     manualUnitCbm: Number(row.unit_cbm ?? row.manual_unit_cbm ?? 0),
     totalCbm: Number(row.total_cbm ?? 0),
     totalQuantity: Number(row.total_quantity ?? 0),
-    shopName: row.shop_name ?? '',
+    shopName: canonicalShopName(row.shop_name ?? ''),
     buyerName: row.buyer_name ?? '',
     isSeasonal: Boolean(row.is_seasonal ?? false),
     cartonLengthCm: Number(row.box_length_cm ?? row.carton_length_cm ?? 0),
@@ -106,7 +107,7 @@ export function frontendSkuToSupabase(item: SkuItem): SupabaseSkuRow {
     unit_cbm: item.unitCbm || item.manualUnitCbm,
     total_cbm: item.totalCbm,
     total_quantity: item.totalQuantity,
-    shop_name: item.shopName,
+    shop_name: canonicalShopName(item.shopName),
     buyer_name: item.buyerName,
     is_seasonal: item.isSeasonal,
     box_length_cm: item.cartonLengthCm,
@@ -135,7 +136,7 @@ export function skuExcelRowToFrontend(row: Record<string, unknown>, headers: str
     manualUnitCbm,
     totalCbm,
     totalQuantity,
-    shopName: String(pickSkuExcelField(row, headers, 'shopName') ?? '').trim(),
+    shopName: canonicalShopName(String(pickSkuExcelField(row, headers, 'shopName') ?? '')),
     buyerName: String(pickSkuExcelField(row, headers, 'buyerName') ?? '').trim(),
     isSeasonal: ['是', 'yes', 'y', 'true', '1', '季节性'].includes(seasonalValue),
     cartonLengthCm: toNumber(pickSkuExcelField(row, headers, 'cartonLengthCm')) ?? 0,

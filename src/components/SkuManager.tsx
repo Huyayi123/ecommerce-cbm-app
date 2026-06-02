@@ -5,6 +5,7 @@ import { findMatchingSkuItem, getSkuMatchKey, hydrateSku } from '../utils/calcul
 import { formatErrorMessage } from '../utils/errors';
 import { exportSkuImportTemplate, exportSkuItems } from '../utils/exporters';
 import { previewSkuFile } from '../utils/fileParsers';
+import { CANONICAL_SHOP_NAMES, canonicalShopName } from '../utils/shops';
 
 type DraftSku = Omit<SkuItem, 'cartonCbm' | 'unitCbm'>;
 type ColumnKey =
@@ -130,12 +131,12 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
   const [page, setPage] = useState(1);
   const calculated = useMemo(() => hydrateSku({ ...draft, id: draft.id || 'preview' }), [draft]);
   const shopOptions = useMemo(
-    () => Array.from(new Set(items.map((item) => item.shopName.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    () => CANONICAL_SHOP_NAMES.filter((shop) => items.some((item) => canonicalShopName(item.shopName) === shop)),
     [items],
   );
   const filteredItems = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
-    const shopMatchedItems = shopFilter ? items.filter((item) => item.shopName === shopFilter) : items;
+    const shopMatchedItems = shopFilter ? items.filter((item) => canonicalShopName(item.shopName) === shopFilter) : items;
     if (!keyword) return shopMatchedItems;
     return shopMatchedItems.filter((item) =>
       [item.manufacturerName, item.sku, item.productName, item.englishName, item.shopName, item.buyerName, item.isSeasonal ? '季节性产品' : '']
@@ -171,6 +172,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
       ...draft,
       id: editingId ?? crypto.randomUUID(),
       sku: draft.sku.trim(),
+      shopName: canonicalShopName(draft.shopName),
       updatedAt: new Date().toISOString(),
     });
 
@@ -233,10 +235,10 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
         updatedCount += 1;
         const existingKey = getSkuMatchKey(existing) || existing.id;
         mergedByKey.delete(existingKey);
-        mergedByKey.set(key, { ...row.item, id: existing.id, updatedAt: new Date().toISOString() });
+        mergedByKey.set(key, { ...row.item, id: existing.id, shopName: canonicalShopName(row.item.shopName), updatedAt: new Date().toISOString() });
       } else {
         createdCount += 1;
-        mergedByKey.set(key, { ...row.item, updatedAt: new Date().toISOString() });
+        mergedByKey.set(key, { ...row.item, shopName: canonicalShopName(row.item.shopName), updatedAt: new Date().toISOString() });
       }
     }
 
