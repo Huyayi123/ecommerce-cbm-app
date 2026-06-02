@@ -575,11 +575,13 @@ function App() {
 
       {activePage === 'suggestions' && (
         <SalesSuggestionPage
+          key={profile.email}
           skuItems={skuItems}
           purchaseRecords={purchaseRecords}
           onSendToCalculator={(rows, name) => void sendSuggestionsToCalculator(rows, name)}
           canEditData={editable}
           savedSuggestions={savedSalesSuggestions}
+          poolOwnerKey={profile.email}
         />
       )}
     </main>

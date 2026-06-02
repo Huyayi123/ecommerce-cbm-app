@@ -12,9 +12,11 @@ type Props = {
   onSendToCalculator: (rows: PurchaseRow[], fileName: string) => void;
   canEditData?: boolean;
   savedSuggestions?: SalesSuggestionRow[];
+  poolOwnerKey?: string;
 };
 
 const DEFAULT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
+const PURCHASE_POOL_STORAGE_PREFIX = 'sales-suggestion-purchase-pool:v1:';
 const STORE_NAME_MAP = new Map(DEFAULT_STORES.map((store) => [store.toLowerCase(), store]));
 const NEW_PRODUCT_RULES: Record<string, Array<{ limit: number; multiplier: number }>> = {
   Bestby: [
@@ -33,6 +35,20 @@ const NEW_PRODUCT_RULES: Record<string, Array<{ limit: number; multiplier: numbe
 
 function canonicalStoreName(value: string): string {
   return STORE_NAME_MAP.get(value.trim().toLowerCase()) ?? '';
+}
+
+function purchasePoolStorageKey(ownerKey: string): string {
+  return `${PURCHASE_POOL_STORAGE_PREFIX}${ownerKey.trim().toLowerCase() || 'shared'}`;
+}
+
+function loadStoredPurchasePool(ownerKey: string): SalesSuggestionRow[] {
+  try {
+    const raw = localStorage.getItem(purchasePoolStorageKey(ownerKey));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed as SalesSuggestionRow[] : [];
+  } catch {
+    return [];
+  }
 }
 
 function rawField(row: TakealotInventoryRow, keys: string[]): string {
@@ -133,12 +149,12 @@ function isInTransitStatus(status: string): boolean {
   return ['in_transit', 'ordered', '海运在途', '已下单'].includes(status);
 }
 
-export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [] }: Props) {
+export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [], poolOwnerKey = 'shared' }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
   const [selectedStore, setSelectedStore] = useState('');
   const [inventoryRows, setInventoryRows] = useState<TakealotInventoryRow[]>([]);
-  const [purchasePool, setPurchasePool] = useState<SalesSuggestionRow[]>([]);
+  const [purchasePool, setPurchasePool] = useState<SalesSuggestionRow[]>(() => loadStoredPurchasePool(poolOwnerKey));
   const [syncMessage, setSyncMessage] = useState('');
   const [suggestedQuantityDrafts, setSuggestedQuantityDrafts] = useState<Record<string, string>>({});
   const [suggestedQuantityOverrides, setSuggestedQuantityOverrides] = useState<Record<string, number>>({});
@@ -157,6 +173,14 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   useEffect(() => {
     if (selectedStore && !storeOptions.includes(selectedStore)) setSelectedStore('');
   }, [selectedStore, storeOptions]);
+
+  useEffect(() => {
+    setPurchasePool(loadStoredPurchasePool(poolOwnerKey));
+  }, [poolOwnerKey]);
+
+  useEffect(() => {
+    localStorage.setItem(purchasePoolStorageKey(poolOwnerKey), JSON.stringify(purchasePool));
+  }, [poolOwnerKey, purchasePool]);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -383,6 +407,11 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     setPurchasePool((current) => current.filter((row) => row.rowId !== rowId));
   }
 
+  function clearPurchasePool() {
+    setPurchasePool([]);
+    setSyncMessage('已清空本轮采购池。');
+  }
+
   function toCalculatorRows(sourceRows: SalesSuggestionRow[]): PurchaseRow[] {
     return validSuggestionRows(sourceRows)
       .filter((row) => row.suggestedQuantity > 0 && !hasMissingSkuData(row))
@@ -401,7 +430,9 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
 
   function sendPoolToCalculator() {
     const rows = toCalculatorRows(purchasePool);
+    const shouldClearPool = canEditData && rows.length > 0;
     if (canEditData && rows.length > 0) onSendToCalculator(rows, `本轮采购池-${new Date().toISOString().slice(0, 10)}`);
+    if (shouldClearPool) setPurchasePool([]);
   }
 
   function sendCurrentToCalculator() {
@@ -426,6 +457,9 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
           </button>
           <button className="primary" type="button" onClick={sendPoolToCalculator} disabled={!canEditData || purchasePool.length === 0}>
             发送采购池到装柜计算
+          </button>
+          <button type="button" onClick={clearPurchasePool} disabled={!canEditData || purchasePool.length === 0}>
+            清空采购池
           </button>
         </div>
       </div>
@@ -454,7 +488,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
               <p>已加入 {poolSummary.count} 条，建议采购数量 {poolSummary.quantity}，预计 {poolSummary.cbm.toFixed(4)} CBM。切换店铺继续同步并加入，最后统一发送到装柜计算。</p>
             </div>
             <div className="export-actions">
-              <button type="button" onClick={() => setPurchasePool([])}>清空采购池</button>
+              <button type="button" onClick={clearPurchasePool}>清空采购池</button>
               <button type="button" onClick={sendCurrentToCalculator} disabled={!canEditData || validSuggestionRows(suggestions).length === 0}>仅发送当前店铺</button>
             </div>
           </div>
