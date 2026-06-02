@@ -37,6 +37,14 @@ const statusLabels: Record<PurchaseStatus, string> = {
   cancelled: '已取消',
 };
 
+const statusFilterOptions: Array<{ value: PurchaseStatus | 'all'; label: string }> = [
+  { value: 'pending', label: '待采购' },
+  { value: 'in_transit', label: '海运在途' },
+  { value: 'arrived', label: '已到货' },
+  { value: 'cancelled', label: '已取消' },
+  { value: 'all', label: '全部' },
+];
+
 const editableFields = [
   'manufacturerName',
   'sku',
@@ -120,17 +128,22 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [newOrder, setNewOrder] = useState<NewOrderDraft>(() => createEmptyDraft());
   const [message, setMessage] = useState('');
+  const [statusFilter, setStatusFilter] = useState<PurchaseStatus | 'all'>('pending');
   const isAdmin = profile.role === 'admin';
   const isViewer = profile.role === 'viewer';
-  const visibleRecords = useMemo(
+  const assignedRecords = useMemo(
     () => records.filter((record) => record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()),
     [profile.email, records],
+  );
+  const visibleRecords = useMemo(
+    () => statusFilter === 'all' ? assignedRecords : assignedRecords.filter((record) => record.status === statusFilter),
+    [assignedRecords, statusFilter],
   );
   const imageUrlBySku = useMemo(
     () => new Map(skuItems.map((item) => [item.sku.trim().toUpperCase(), item.imageUrl])),
     [skuItems],
   );
-  const unconfirmedVisibleCount = visibleRecords.filter((record) => !record.isConfirmed).length;
+  const unconfirmedVisibleCount = visibleRecords.filter((record) => !record.isConfirmed && record.status === 'pending').length;
 
   function imageUrlFor(record: PurchaseRecord): string {
     return record.imageUrl || imageUrlBySku.get(record.sku.trim().toUpperCase()) || '';
@@ -306,7 +319,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
   async function confirmVisiblePurchases() {
     if (isViewer) return;
-    const visibleIds = new Set(visibleRecords.filter((record) => !record.isConfirmed).map((record) => record.id));
+    const visibleIds = new Set(visibleRecords.filter((record) => !record.isConfirmed && record.status === 'pending').map((record) => record.id));
     if (visibleIds.size === 0) return;
     try {
       await onChange(records.map((item) => (visibleIds.has(item.id) ? confirmedRecord(item) : item)));
@@ -384,6 +397,16 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         </div>
       </div>
       {message && <div className="inline-notice">{message}</div>}
+
+      <div className="order-filter-bar">
+        <label>
+          状态筛选
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as PurchaseStatus | 'all')}>
+            {statusFilterOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+        <span>当前 {visibleRecords.length} 条 / 我的订单 {assignedRecords.length} 条</span>
+      </div>
 
       {!isViewer && (
         <div className="record-form">
