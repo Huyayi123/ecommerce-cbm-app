@@ -133,9 +133,26 @@ function mergeSkuItemsForSave(items: SkuItem[], remote: SkuItem[]): SkuItem[] {
   for (const item of items) {
     const key = getSkuMatchKey(item) || item.id;
     const remoteItem = remoteByKey.get(key);
+    const baseItem = remoteItem ?? merged.get(key);
     merged.set(key, {
       ...item,
-      id: remoteItem?.id ?? merged.get(key)?.id ?? item.id,
+      id: baseItem?.id ?? item.id,
+      manufacturerName: item.manufacturerName.trim() || baseItem?.manufacturerName || '',
+      sku: item.sku.trim() || baseItem?.sku || '',
+      productName: item.productName.trim() || baseItem?.productName || '',
+      englishName: item.englishName.trim() || baseItem?.englishName || '',
+      imageUrl: item.imageUrl.trim() || baseItem?.imageUrl || '',
+      shopName: item.shopName.trim() || baseItem?.shopName || '',
+      buyerName: item.buyerName.trim() || baseItem?.buyerName || '',
+      purchasePrice: item.purchasePrice > 0 ? item.purchasePrice : baseItem?.purchasePrice ?? 0,
+      manualUnitCbm: item.manualUnitCbm > 0 ? item.manualUnitCbm : baseItem?.manualUnitCbm ?? 0,
+      totalCbm: item.totalCbm > 0 ? item.totalCbm : baseItem?.totalCbm ?? 0,
+      totalQuantity: item.totalQuantity > 0 ? item.totalQuantity : baseItem?.totalQuantity ?? 0,
+      cartonLengthCm: item.cartonLengthCm > 0 ? item.cartonLengthCm : baseItem?.cartonLengthCm ?? 0,
+      cartonWidthCm: item.cartonWidthCm > 0 ? item.cartonWidthCm : baseItem?.cartonWidthCm ?? 0,
+      cartonHeightCm: item.cartonHeightCm > 0 ? item.cartonHeightCm : baseItem?.cartonHeightCm ?? 0,
+      unitsPerCarton: item.unitsPerCarton > 0 ? item.unitsPerCarton : baseItem?.unitsPerCarton ?? 0,
+      notes: item.notes.trim() || baseItem?.notes || '',
       updatedAt: item.updatedAt || new Date().toISOString(),
     });
   }
