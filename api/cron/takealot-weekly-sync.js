@@ -1,4 +1,5 @@
 const DEFAULT_SYNC_STORES = ['MegaValue', 'KeepFit'];
+const LOCAL_STOCK_BUFFER = 4;
 const NEW_PRODUCT_RULES = {
   Bestby: [
     { limit: 60, multiplier: 3 },
@@ -326,7 +327,7 @@ async function buildStoreSuggestions(storeName) {
     const forecast = forecastMonthlySales(storeName, newProductRank, rawMonthlySales);
     const monthlySales = forecast.monthlySales;
     const stockMonths = stockMonthsForMonthlySales(monthlySales);
-    const localStockQuantity = sumQuantityAvailable(row.leadtime_stock ?? row.quantity_available);
+    const localStockQuantity = sumQuantityAvailable(row.leadtime_stock ?? row.quantity_available) + LOCAL_STOCK_BUFFER;
     const takealotStockQuantity = row.stock_at_takealot_total === undefined ? sumQuantityAvailable(row.stock_at_takealot) : numberValue(row.stock_at_takealot_total);
     const stockOnWayQuantity = row.total_stock_on_way === undefined ? sumQuantityAvailable(row.stock_on_way) : numberValue(row.total_stock_on_way);
     const inTransitQuantity = inTransitMap.get(key) ?? 0;

@@ -47,10 +47,13 @@ function sumSalesUnits(value: unknown): number {
   return numberValue(value);
 }
 
+const LOCAL_STOCK_BUFFER = 4;
+
 export function normalizeTakealotInventoryRow(input: Record<string, unknown>, shopName: string): TakealotInventoryRow {
-  const localStockQuantity = input.leadtime_stock === undefined
+  const apiLocalStockQuantity = input.leadtime_stock === undefined
     ? numberValue(input.quantity_available)
     : sumQuantityAvailable(input.leadtime_stock);
+  const localStockQuantity = apiLocalStockQuantity + LOCAL_STOCK_BUFFER;
   const takealotStockQuantity = input.stock_at_takealot_total === undefined
     ? sumQuantityAvailable(input.stock_at_takealot)
     : numberValue(input.stock_at_takealot_total);
