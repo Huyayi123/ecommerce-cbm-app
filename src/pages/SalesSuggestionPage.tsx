@@ -4,7 +4,7 @@ import type { PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from '.
 import { parseSalesFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
 import { effectivePurchaseQuantity, isInventoryRecord } from '../utils/purchaseRecords';
-import type { TakealotInventoryRow } from '../utils/takealot';
+import { fetchTakealotInventory, type TakealotInventoryRow } from '../utils/takealot';
 
 type Props = {
   skuItems: SkuItem[];
@@ -12,7 +12,6 @@ type Props = {
   onSendToCalculator: (rows: PurchaseRow[], fileName: string) => void;
   canEditData?: boolean;
   savedSuggestions?: SalesSuggestionRow[];
-  onRefreshData?: () => void | Promise<void>;
 };
 
 const DEFAULT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
@@ -134,7 +133,7 @@ function isInTransitStatus(status: string): boolean {
   return ['in_transit', 'ordered', '海运在途', '已下单'].includes(status);
 }
 
-export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [], onRefreshData }: Props) {
+export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [] }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
   const [selectedStore, setSelectedStore] = useState('');
@@ -143,7 +142,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
   const [syncMessage, setSyncMessage] = useState('');
   const [suggestedQuantityDrafts, setSuggestedQuantityDrafts] = useState<Record<string, string>>({});
   const [suggestedQuantityOverrides, setSuggestedQuantityOverrides] = useState<Record<string, number>>({});
-  const [isRefreshingCloud, setIsRefreshingCloud] = useState(false);
+  const [isSyncingTakealot, setIsSyncingTakealot] = useState(false);
 
   const storeOptions = useMemo(() => {
     const extraNames = skuItems
@@ -168,20 +167,23 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     event.target.value = '';
   }
 
-  async function refreshCloudSuggestions() {
-    if (!onRefreshData) return;
+  async function syncTakealotInventory() {
+    if (!selectedStore) {
+      setSyncMessage('请先选择店铺。');
+      return;
+    }
     try {
-      setIsRefreshingCloud(true);
-      setSyncMessage('正在刷新云端采购建议...');
-      await onRefreshData();
-      setInventoryRows([]);
+      setIsSyncingTakealot(true);
+      setSyncMessage(`正在同步 ${selectedStore} Takealot 库存...`);
+      const rows = await fetchTakealotInventory(selectedStore, []);
+      setInventoryRows(rows);
       setSalesRows([]);
-      setSyncMessage('云端采购建议已刷新。');
+      setSyncMessage(`已同步 ${rows.length} 条 ${selectedStore} Takealot 库存。`);
     } catch (error) {
       console.error(error);
-      setSyncMessage(error instanceof Error ? error.message : '云端采购建议刷新失败');
+      setSyncMessage(error instanceof Error ? error.message : 'Takealot 库存同步失败');
     } finally {
-      setIsRefreshingCloud(false);
+      setIsSyncingTakealot(false);
     }
   }
 
@@ -439,7 +441,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
             {storeOptions.map((store) => <option key={store} value={store}>{store}</option>)}
           </select>
         </label>
-        <button type="button" onClick={() => void refreshCloudSuggestions()} disabled={!onRefreshData || isRefreshingCloud}>刷新云端建议</button>
+        <button type="button" onClick={() => void syncTakealotInventory()} disabled={!selectedStore || isSyncingTakealot}>同步 Takealot 库存</button>
         <span>{fileName ? `当前文件：${fileName}` : '备货规则：月销量 > 50 用 4 个月，21-50 用 3 个月，20 及以下用 2 个月'}</span>
       </div>
       {syncMessage && <div className="inline-notice">{syncMessage}</div>}
@@ -525,7 +527,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.shopName || '-'}</td>
               </tr>
             ))}
-            {suggestions.length === 0 && <tr><td colSpan={12} className="empty">上传月销量或刷新云端建议后生成采购建议。</td></tr>}
+            {suggestions.length === 0 && <tr><td colSpan={12} className="empty">上传月销量或手动同步 Takealot 库存后生成采购建议。</td></tr>}
           </tbody>
         </table>
       </div>
