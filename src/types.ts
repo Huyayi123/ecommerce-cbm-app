@@ -61,6 +61,24 @@ export type AppProfile = {
   buyerName: string;
 };
 
+export type MixedCartonLine = {
+  id: string;
+  sku: string;
+  productName: string;
+  quantity: number;
+  purchasePrice: number;
+  unitCbm: number;
+  totalAmount: number;
+  totalCbm: number;
+};
+
+export type MixedCartonGroup = {
+  id: string;
+  groupName: string;
+  cartonCount: number;
+  lines: MixedCartonLine[];
+};
+
 export type PurchaseRecord = {
   id: string;
   manufacturerName: string;
@@ -86,6 +104,10 @@ export type PurchaseRecord = {
   containerDate: string;
   totalWeightKg: number | null;
   cartonCount: number | null;
+  unitsPerCarton: number | null;
+  tailQuantity: number;
+  isMixed: boolean;
+  mixedGroups: MixedCartonGroup[];
   logisticsTotalCbm: number | null;
   note: string;
 };

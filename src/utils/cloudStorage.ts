@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { getSkuMatchKey } from './calculations';
+import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
 import { frontendSkuToSupabase, supabaseSkuToFrontend, type SupabaseSkuRow } from './skuFieldMapping';
 
 type PurchaseRecordRow = {
@@ -29,6 +30,10 @@ type PurchaseRecordRow = {
   container_date?: string | null;
   total_weight_kg?: number | null;
   carton_count?: number | null;
+  units_per_carton?: number | null;
+  tail_quantity?: number | null;
+  is_mixed?: boolean | null;
+  mixed_groups?: unknown;
   logistics_total_cbm?: number | null;
   note: string | null;
 };
@@ -42,6 +47,10 @@ type LegacyPurchaseRecordRow = Omit<
   | 'container_date'
   | 'total_weight_kg'
   | 'carton_count'
+  | 'units_per_carton'
+  | 'tail_quantity'
+  | 'is_mixed'
+  | 'mixed_groups'
   | 'logistics_total_cbm'
 >;
 
@@ -162,7 +171,7 @@ function mergeSkuItemsForSave(items: SkuItem[], remote: SkuItem[]): SkuItem[] {
 
 function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
   const status = row.status === 'ordered' ? 'in_transit' : row.status;
-  return {
+  return withPurchaseTotals({
     id: row.id,
     manufacturerName: row.manufacturer_name ?? '',
     sku: row.sku,
@@ -187,9 +196,13 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     containerDate: row.container_date ?? '',
     totalWeightKg: row.total_weight_kg === null || row.total_weight_kg === undefined ? null : Number(row.total_weight_kg),
     cartonCount: row.carton_count === null || row.carton_count === undefined ? null : Number(row.carton_count),
+    unitsPerCarton: row.units_per_carton === null || row.units_per_carton === undefined ? null : Number(row.units_per_carton),
+    tailQuantity: Number(row.tail_quantity ?? 0),
+    isMixed: Boolean(row.is_mixed ?? false),
+    mixedGroups: normalizeMixedGroups(row.mixed_groups),
     logisticsTotalCbm: row.logistics_total_cbm === null || row.logistics_total_cbm === undefined ? null : Number(row.logistics_total_cbm),
     note: row.note ?? '',
-  };
+  });
 }
 
 function dateOrNull(value: string): string | null {
@@ -198,33 +211,38 @@ function dateOrNull(value: string): string | null {
 }
 
 function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
+  const normalized = withPurchaseTotals(record);
   return {
-    id: record.id,
-    manufacturer_name: record.manufacturerName,
-    sku: record.sku,
-    product_name: record.productName,
-    image_url: record.imageUrl,
-    shop_name: record.shopName,
-    buyer_name: record.buyerName,
-    assigned_buyer_name: record.assignedBuyerName,
-    assigned_buyer_email: record.assignedBuyerEmail,
-    is_confirmed: record.isConfirmed,
-    purchase_quantity: record.purchaseQuantity,
-    confirmed_purchase_quantity: record.confirmedPurchaseQuantity,
-    purchase_price: record.purchasePrice,
-    total_amount: record.totalAmount,
-    purchase_date: dateOrNull(record.purchaseDate),
-    estimated_arrival_date: dateOrNull(record.estimatedArrivalDate),
-    status: record.status,
-    english_name: record.englishName,
-    unit_cbm: record.unitCbm,
-    total_cbm: record.totalCbm,
-    loading_type: record.loadingType || null,
-    container_date: dateOrNull(record.containerDate),
-    total_weight_kg: record.totalWeightKg,
-    carton_count: record.cartonCount,
-    logistics_total_cbm: record.logisticsTotalCbm,
-    note: record.note,
+    id: normalized.id,
+    manufacturer_name: normalized.manufacturerName,
+    sku: normalized.sku,
+    product_name: normalized.productName,
+    image_url: normalized.imageUrl,
+    shop_name: normalized.shopName,
+    buyer_name: normalized.buyerName,
+    assigned_buyer_name: normalized.assignedBuyerName,
+    assigned_buyer_email: normalized.assignedBuyerEmail,
+    is_confirmed: normalized.isConfirmed,
+    purchase_quantity: normalized.purchaseQuantity,
+    confirmed_purchase_quantity: normalized.confirmedPurchaseQuantity,
+    purchase_price: normalized.purchasePrice,
+    total_amount: normalized.totalAmount,
+    purchase_date: dateOrNull(normalized.purchaseDate),
+    estimated_arrival_date: dateOrNull(normalized.estimatedArrivalDate),
+    status: normalized.status,
+    english_name: normalized.englishName,
+    unit_cbm: normalized.unitCbm,
+    total_cbm: normalized.totalCbm,
+    loading_type: normalized.loadingType || null,
+    container_date: dateOrNull(normalized.containerDate),
+    total_weight_kg: normalized.totalWeightKg,
+    carton_count: normalized.cartonCount,
+    units_per_carton: normalized.unitsPerCarton,
+    tail_quantity: normalized.tailQuantity,
+    is_mixed: normalized.isMixed,
+    mixed_groups: normalized.mixedGroups,
+    logistics_total_cbm: normalized.logisticsTotalCbm,
+    note: normalized.note,
   };
 }
 

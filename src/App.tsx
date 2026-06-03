@@ -26,7 +26,7 @@ import {
 } from './utils/cloudStorage';
 import { formatErrorMessage } from './utils/errors';
 import { canDelete, canEdit } from './utils/permissions';
-import { effectivePurchaseQuantity } from './utils/purchaseRecords';
+import { effectivePurchaseQuantity, withPurchaseTotals } from './utils/purchaseRecords';
 
 type PageKey = 'sku' | 'calculator' | 'inventory' | 'my-orders' | 'suggestions';
 
@@ -407,7 +407,7 @@ function App() {
       const mergeKey = `${skuKey}|${record.purchasePrice}`;
       const existing = mergeMap.get(mergeKey);
       if (!existing) {
-        mergeMap.set(mergeKey, { ...record });
+        mergeMap.set(mergeKey, withPurchaseTotals({ ...record }));
         continue;
       }
 
@@ -419,7 +419,10 @@ function App() {
       existing.totalAmount += record.totalAmount;
       existing.totalCbm += record.totalCbm;
       existing.imageUrl ||= record.imageUrl;
+      existing.isMixed = existing.isMixed || record.isMixed;
+      existing.mixedGroups = [...existing.mixedGroups, ...record.mixedGroups];
       existing.note = [existing.note, record.note].filter(Boolean).join('；');
+      mergeMap.set(mergeKey, withPurchaseTotals(existing));
     }
 
     const conflicts = Array.from(pricesBySku.entries())

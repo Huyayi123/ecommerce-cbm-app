@@ -1,5 +1,6 @@
 import type { PurchaseRecord, PurchaseRow, PurchaseStatus, SkuItem } from '../types';
 import { hydrateSku } from './calculations';
+import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
 
 const STORAGE_KEY = 'container-cbm-calculator:sku-items';
 
@@ -98,7 +99,7 @@ export function loadPurchaseRecords(): PurchaseRecord[] {
       const confirmedQuantity = nullableNumber(record.confirmedPurchaseQuantity);
       const price = nullableNumber(record.purchasePrice) ?? 0;
       const effectiveQuantity = confirmedQuantity ?? quantity;
-      return {
+      return withPurchaseTotals({
         id: String(record.id ?? crypto.randomUUID()),
         manufacturerName: String(record.manufacturerName ?? ''),
         sku: String(record.sku ?? ''),
@@ -123,9 +124,13 @@ export function loadPurchaseRecords(): PurchaseRecord[] {
         containerDate: String(record.containerDate ?? ''),
         totalWeightKg: nullableNumber(record.totalWeightKg),
         cartonCount: nullableNumber(record.cartonCount),
+        unitsPerCarton: nullableNumber(record.unitsPerCarton ?? record.units_per_carton),
+        tailQuantity: nullableNumber(record.tailQuantity ?? record.tail_quantity) ?? 0,
+        isMixed: Boolean(record.isMixed ?? record.is_mixed ?? false),
+        mixedGroups: normalizeMixedGroups(record.mixedGroups ?? record.mixed_groups),
         logisticsTotalCbm: nullableNumber(record.logisticsTotalCbm),
         note: String(record.note ?? ''),
-      };
+      });
     });
   } catch {
     return [];

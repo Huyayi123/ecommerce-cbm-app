@@ -1,7 +1,8 @@
 import * as XLSX from 'xlsx';
-import type { AppProfile, PurchaseRecord, PurchaseRow, PurchaseStatus, SkuImportPreview, SkuImportPreviewRow, SkuItem } from '../types';
+import type { AppProfile, MixedCartonGroup, PurchaseRecord, PurchaseRow, PurchaseStatus, SkuImportPreview, SkuImportPreviewRow, SkuItem } from '../types';
 import { findMatchingSkuItem } from './calculations';
 import { toNumber } from './number';
+import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
 import {
   findSkuHeader,
   normalizeHeader,
@@ -32,7 +33,11 @@ const PURCHASE_RECORD_HEADERS = {
   loadingType: ['装货方式', 'loading_type'],
   containerDate: ['装柜日期', 'container_date'],
   totalWeightKg: ['总重量kg', '总重量', '重量kg', 'total_weight_kg'],
-  cartonCount: ['件数', '箱数', 'carton_count'],
+  cartonCount: ['整箱件数', '件数', '箱数', 'carton_count'],
+  unitsPerCarton: ['每箱数量', '箱规', 'units_per_carton'],
+  tailQuantity: ['尾箱数量', '尾数', 'tail_quantity'],
+  isMixed: ['是否混装', '混装', 'is_mixed', 'isMixed'],
+  mixedGroups: ['混装组', '混装明细', 'mixed_groups', 'mixedGroups'],
   logisticsTotalCbm: ['物流总CBM', '物流商回传总CBM', '总CBM', '总 CBM', 'logistics_total_cbm'],
   status: ['状态', 'status'],
   note: ['备注', 'remark', 'notes', 'note'],
@@ -229,6 +234,21 @@ function nonEmptyText(value: unknown, fallback = ''): string {
   return text || fallback;
 }
 
+function parseBoolean(value: unknown): boolean {
+  const text = String(value ?? '').trim().toLowerCase();
+  return ['是', 'yes', 'y', 'true', '1', '混装'].includes(text);
+}
+
+function parseMixedGroups(value: unknown): MixedCartonGroup[] {
+  const text = String(value ?? '').trim();
+  if (!text) return [];
+  try {
+    return normalizeMixedGroups(JSON.parse(text));
+  } catch {
+    return [];
+  }
+}
+
 function pickPurchaseRecordField(row: Record<string, unknown>, headers: string[], field: keyof typeof PURCHASE_RECORD_HEADERS): unknown {
   return pickField(row, headers, PURCHASE_RECORD_HEADERS[field]);
 }
@@ -252,7 +272,7 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
     const effectiveQuantity = confirmedPurchaseQuantity ?? purchaseQuantity;
     const buyerName = String(pickPurchaseRecordField(row, headers, 'buyerName') ?? profile.buyerName).trim() || profile.buyerName;
 
-    return [{
+    return [withPurchaseTotals({
       id: crypto.randomUUID(),
       manufacturerName: String(pickPurchaseRecordField(row, headers, 'manufacturerName') ?? '').trim(),
       sku,
@@ -277,9 +297,13 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
       containerDate: nonEmptyText(pickPurchaseRecordField(row, headers, 'containerDate')),
       totalWeightKg: toNumber(pickPurchaseRecordField(row, headers, 'totalWeightKg')),
       cartonCount: toNumber(pickPurchaseRecordField(row, headers, 'cartonCount')),
+      unitsPerCarton: toNumber(pickPurchaseRecordField(row, headers, 'unitsPerCarton')),
+      tailQuantity: toNumber(pickPurchaseRecordField(row, headers, 'tailQuantity')) ?? 0,
+      isMixed: parseBoolean(pickPurchaseRecordField(row, headers, 'isMixed')),
+      mixedGroups: parseMixedGroups(pickPurchaseRecordField(row, headers, 'mixedGroups')),
       logisticsTotalCbm,
       note: String(pickPurchaseRecordField(row, headers, 'note') ?? `导入行 ${index + 2}`).trim(),
-    }];
+    })];
   });
 }
 

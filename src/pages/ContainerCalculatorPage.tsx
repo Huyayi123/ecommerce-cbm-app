@@ -45,6 +45,10 @@ function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
       containerDate: '',
       totalWeightKg: null,
       cartonCount: null,
+      unitsPerCarton: null,
+      tailQuantity: 0,
+      isMixed: false,
+      mixedGroups: [],
       logisticsTotalCbm: null,
       note: '',
     }));

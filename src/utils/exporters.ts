@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { AuditLog, CalculationRow, PurchaseRecord, SkuItem } from '../types';
-import { effectivePurchaseQuantity } from './purchaseRecords';
+import { effectivePurchaseQuantity, mixedGroupsSummary, packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
 
@@ -97,32 +97,42 @@ export function exportSkuImportTemplate(): void {
 }
 
 export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportFormat, moduleName = '采购在途库存'): void {
+  const includeBuyerEmail = moduleName !== '我的采购订单';
   const worksheet = XLSX.utils.json_to_sheet(
-    records.map((record) => ({
-      厂家名: record.manufacturerName,
-      SKU: record.sku,
-      产品名称: record.productName,
-      英文名称: record.englishName,
-      图片链接: record.imageUrl,
-      店铺: record.shopName,
-      采购人: record.assignedBuyerName || record.buyerName,
-      采购人邮箱: record.assignedBuyerEmail,
-      计划采购数量: record.purchaseQuantity,
-      实际采购数量: record.confirmedPurchaseQuantity ?? '',
-      采购数量: effectivePurchaseQuantity(record),
-      采购单价: record.purchasePrice,
-      总金额: record.totalAmount,
-      单品CBM: record.unitCbm,
-      采购日期: record.purchaseDate,
-      状态: record.status,
-      '总 CBM': record.totalCbm,
-      装货方式: record.loadingType,
-      装柜日期: record.containerDate,
-      件数: record.cartonCount ?? '',
-      总重量kg: record.totalWeightKg ?? '',
-      物流总CBM: record.logisticsTotalCbm ?? '',
-      备注: record.note,
-    })),
+    records.map((record) => {
+      const normalized = withPurchaseTotals(record);
+      const row = {
+        厂家名: normalized.manufacturerName,
+        SKU: normalized.sku,
+        产品名称: normalized.productName,
+        英文名称: normalized.englishName,
+        图片链接: normalized.imageUrl,
+        店铺: normalized.shopName,
+        采购人: normalized.assignedBuyerName || normalized.buyerName,
+        ...(includeBuyerEmail ? { 采购人邮箱: normalized.assignedBuyerEmail } : {}),
+        计划采购数量: normalized.purchaseQuantity,
+        实际采购数量: normalized.confirmedPurchaseQuantity ?? '',
+        整箱件数: normalized.cartonCount ?? '',
+        每箱数量: normalized.unitsPerCarton ?? '',
+        尾箱数量: normalized.tailQuantity,
+        含混装采购数量: purchaseQuantityWithMixed(normalized),
+        采购单价: normalized.purchasePrice,
+        含混装总金额: normalized.totalAmount,
+        单品CBM: normalized.unitCbm,
+        采购日期: normalized.purchaseDate,
+        状态: normalized.status,
+        '含混装总 CBM': normalized.totalCbm,
+        装货方式: normalized.loadingType,
+        装柜日期: normalized.containerDate,
+        件数: packageCountFor(normalized) || '',
+        是否混装: normalized.isMixed ? '是' : '否',
+        混装组: mixedGroupsSummary(normalized),
+        总重量kg: normalized.totalWeightKg ?? '',
+        物流总CBM: normalized.logisticsTotalCbm ?? '',
+        备注: normalized.note,
+      };
+      return row;
+    }),
   );
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, moduleName);
@@ -131,16 +141,36 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
 
 export function exportInspectionChecklist(records: PurchaseRecord[], format: ExportFormat): void {
   const worksheet = XLSX.utils.json_to_sheet(
-    records.map((record) => ({
-      SKU: record.sku,
-      产品名称: record.productName,
-      英文名称: record.englishName,
-      店铺: record.shopName,
-      采购数量: effectivePurchaseQuantity(record),
-      件数: record.cartonCount ?? '',
-      总重量kg: logisticsValue(record, record.totalWeightKg),
-      总CBM: logisticsValue(record, record.logisticsTotalCbm),
-    })),
+    records.flatMap((record) => {
+      const normalized = withPurchaseTotals(record);
+      const rows = [{
+        SKU: normalized.sku,
+        产品名称: normalized.productName,
+        英文名称: normalized.englishName,
+        店铺: normalized.shopName,
+        采购数量: effectivePurchaseQuantity(normalized),
+        件数: packageCountFor(normalized) || '',
+        是否混装: normalized.isMixed ? '是' : '否',
+        混装组: mixedGroupsSummary(normalized),
+        总重量kg: logisticsValue(normalized, normalized.totalWeightKg),
+        总CBM: logisticsValue(normalized, normalized.logisticsTotalCbm),
+      }];
+      return [
+        ...rows,
+        ...normalized.mixedGroups.flatMap((group) => group.lines.map((line) => ({
+          SKU: line.sku,
+          产品名称: line.productName,
+          英文名称: '',
+          店铺: normalized.shopName,
+          采购数量: line.quantity,
+          件数: group.cartonCount,
+          是否混装: '混装子行',
+          混装组: group.groupName,
+          总重量kg: '',
+          总CBM: line.totalCbm,
+        }))),
+      ];
+    }),
   );
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, '验货单');

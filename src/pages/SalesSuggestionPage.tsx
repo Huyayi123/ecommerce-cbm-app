@@ -3,7 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from '../types';
 import { parseSalesFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
-import { effectivePurchaseQuantity, isInventoryRecord } from '../utils/purchaseRecords';
+import { effectivePurchaseQuantity, isInventoryRecord, withPurchaseTotals } from '../utils/purchaseRecords';
 import { fetchTakealotInventory, type TakealotInventoryRow } from '../utils/takealot';
 
 type Props = {
@@ -245,8 +245,13 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     for (const record of purchaseRecords) {
       if (!isInventoryRecord(record)) continue;
       if (!isInTransitStatus(record.status)) continue;
-      const key = skuKey(record.sku);
-      inTransitBySku.set(key, (inTransitBySku.get(key) ?? 0) + effectivePurchaseQuantity(record));
+      const normalized = withPurchaseTotals(record);
+      const key = skuKey(normalized.sku);
+      inTransitBySku.set(key, (inTransitBySku.get(key) ?? 0) + effectivePurchaseQuantity(normalized));
+      for (const line of normalized.mixedGroups.flatMap((group) => group.lines).filter((mixedLine) => skuKey(mixedLine.sku))) {
+        const mixedKey = skuKey(line.sku);
+        inTransitBySku.set(mixedKey, (inTransitBySku.get(mixedKey) ?? 0) + line.quantity);
+      }
     }
 
     const applySavedOverride = (row: SalesSuggestionRow): SalesSuggestionRow => {

@@ -163,6 +163,24 @@ alter table public.purchase_records
 add column if not exists carton_count numeric;
 
 alter table public.purchase_records
+drop column if exists packing_details;
+
+alter table public.purchase_records
+drop column if exists packing_items;
+
+alter table public.purchase_records
+add column if not exists is_mixed boolean not null default false;
+
+alter table public.purchase_records
+add column if not exists units_per_carton numeric;
+
+alter table public.purchase_records
+add column if not exists tail_quantity numeric not null default 0;
+
+alter table public.purchase_records
+add column if not exists mixed_groups jsonb not null default '[]'::jsonb;
+
+alter table public.purchase_records
 add column if not exists logistics_total_cbm numeric;
 
 alter table public.purchase_records

@@ -714,6 +714,52 @@ th.sticky-col {
   padding-bottom: 8px;
 }
 
+.packing-detail-row td {
+  background: #fbfcfd;
+  padding: 14px;
+}
+
+.packing-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.packing-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  padding: 12px;
+  border: 1px solid #e1e8ee;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.packing-summary strong {
+  font-size: 18px;
+  color: #24313d;
+}
+
+.inline-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #40505c;
+}
+
+.packing-table {
+  min-width: 1120px;
+}
+
+.packing-table input {
+  width: 130px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #cbd6df;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
 .column-settings label {
   display: inline-flex;
   align-items: center;

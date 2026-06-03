@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { AuditLog, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
 import { exportAuditLogs, exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
 import { round } from '../utils/number';
-import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText } from '../utils/purchaseRecords';
+import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
 
 type Props = {
   records: PurchaseRecord[];
@@ -46,6 +46,10 @@ const emptyDraft: DraftRecord = {
   containerDate: '',
   totalWeightKg: null,
   cartonCount: null,
+  unitsPerCarton: null,
+  tailQuantity: 0,
+  isMixed: false,
+  mixedGroups: [],
   logisticsTotalCbm: null,
   note: '',
 };
@@ -61,12 +65,12 @@ function recentMonthOptions(count = 3): string[] {
 }
 
 function withTotalAmount(record: DraftRecord): PurchaseRecord {
-  return {
+  return withPurchaseTotals({
     ...record,
     isConfirmed: true,
     totalAmount: round(effectivePurchaseQuantity(record) * record.purchasePrice, 2),
     totalCbm: record.totalCbm || round(effectivePurchaseQuantity(record) * record.unitCbm, 4),
-  };
+  });
 }
 
 function uniqueValues(records: PurchaseRecord[], field: keyof PurchaseRecord): string[] {
@@ -150,7 +154,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
 
   const inTransitRecords = inventoryRecords.filter((record) => record.status === 'in_transit');
   const inTransitSkuCount = new Set(inTransitRecords.map((record) => record.sku)).size;
-  const inTransitQuantity = inTransitRecords.reduce((sum, record) => sum + effectivePurchaseQuantity(record), 0);
+  const inTransitQuantity = inTransitRecords.reduce((sum, record) => sum + purchaseQuantityWithMixed(withPurchaseTotals(record)), 0);
   const inTransitAmount = inTransitRecords.reduce((sum, record) => sum + record.totalAmount, 0);
   const inTransitCbm = inTransitRecords.reduce((sum, record) => sum + logisticsCbmFor(record), 0);
   const loadingBatchCount = new Set(inTransitRecords.map((record) => record.containerDate).filter(Boolean)).size;
@@ -225,6 +229,10 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
       containerDate: record.containerDate,
       totalWeightKg: record.totalWeightKg,
       cartonCount: record.cartonCount,
+      unitsPerCarton: record.unitsPerCarton,
+      tailQuantity: record.tailQuantity,
+      isMixed: record.isMixed,
+      mixedGroups: record.mixedGroups,
       logisticsTotalCbm: record.logisticsTotalCbm,
       note: record.note,
     });
@@ -322,7 +330,9 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
           <label>总CBM<input type="number" min="0" step="0.0001" value={draft.totalCbm} onChange={(event) => patchDraft('totalCbm', Number(event.target.value))} /></label>
           <label>装货方式<select value={draft.loadingType || '整柜'} onChange={(event) => patchDraft('loadingType', event.target.value as PurchaseRecord['loadingType'])}><option value="整柜">整柜</option><option value="冠通">冠通</option></select></label>
           <label>装柜日期<input type="date" value={draft.containerDate} onChange={(event) => patchDraft('containerDate', event.target.value)} /></label>
-          <label>件数<input type="number" min="0" value={draft.cartonCount ?? ''} onChange={(event) => patchDraft('cartonCount', event.target.value === '' ? null : Number(event.target.value))} /></label>
+          <label>整箱件数<input type="number" min="0" value={draft.cartonCount ?? ''} onChange={(event) => patchDraft('cartonCount', event.target.value === '' ? null : Number(event.target.value))} /></label>
+          <label>每箱数量<input type="number" min="0" value={draft.unitsPerCarton ?? ''} onChange={(event) => patchDraft('unitsPerCarton', event.target.value === '' ? null : Number(event.target.value))} /></label>
+          <label>尾箱数量<input type="number" min="0" value={draft.tailQuantity} onChange={(event) => patchDraft('tailQuantity', Number(event.target.value))} /></label>
           {needsLogisticsMetrics(draft) && <>
             <label>总重量kg<input type="number" min="0" step="0.01" value={draft.totalWeightKg ?? ''} onChange={(event) => patchDraft('totalWeightKg', event.target.value === '' ? null : Number(event.target.value))} /></label>
             <label>物流总CBM<input type="number" min="0" step="0.0001" value={draft.logisticsTotalCbm ?? ''} onChange={(event) => patchDraft('logisticsTotalCbm', event.target.value === '' ? null : Number(event.target.value))} /></label>
@@ -339,25 +349,31 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
           <table>
             <thead>
               <tr>
-                <th>选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>件数</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
+                <th>选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>件数</th><th>是否混装</th><th>混装组</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
-              {pagedRecords.map((record) => (
-                <tr key={record.id}>
+              {pagedRecords.map((record) => {
+                const normalized = withPurchaseTotals(record);
+                return <tr key={record.id}>
                   <td><input type="checkbox" checked={selectedIds.has(record.id)} onChange={() => toggleSelection(record.id)} /></td>
                   <td className="pin-col pin-image">{imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                   <td className="pin-col pin-manufacturer">{record.manufacturerName}</td>
                   <td className="pin-col pin-sku">{record.sku}</td>
                   <td className="pin-col pin-product">{record.productName}</td>
-                  <td>{logisticsText(record.cartonCount)}</td>
+                  <td>{record.cartonCount ?? ''}</td>
+                  <td>{record.unitsPerCarton ?? ''}</td>
+                  <td>{record.tailQuantity}</td>
+                  <td>{packageCountFor(normalized) || logisticsText(record.cartonCount)}</td>
+                  <td>{normalized.isMixed ? '是' : '否'}</td>
+                  <td>{mixedGroupsSummary(normalized)}</td>
                   <td>{needsLogisticsMetrics(record) ? logisticsText(record.totalWeightKg, 2) : ''}</td>
                   <td>{needsLogisticsMetrics(record) ? logisticsText(record.logisticsTotalCbm, 4) : ''}</td>
                   <td>{record.shopName}</td>
                   <td>{record.assignedBuyerName || record.buyerName}</td>
-                  <td>{effectivePurchaseQuantity(record)}</td>
+                  <td>{purchaseQuantityWithMixed(normalized)}</td>
                   <td>{record.purchasePrice}</td>
-                  <td>{record.totalAmount.toFixed(2)}</td>
+                  <td>{normalized.totalAmount.toFixed(2)}</td>
                   <td>{record.purchaseDate}</td>
                   <td>{statusLabels[record.status]}</td>
                   <td>{record.loadingType || '整柜'}</td>
@@ -368,9 +384,9 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
                     {canEditData && <button type="button" onClick={() => editRecord(record)}>编辑</button>}
                     {canDeleteData && <button className="danger" type="button" onClick={() => deleteRecord(record.id)}>删除</button>}
                   </td>
-                </tr>
-              ))}
-              {filteredRecords.length === 0 && <tr><td colSpan={20} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
+                </tr>;
+              })}
+              {filteredRecords.length === 0 && <tr><td colSpan={25} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
             </tbody>
           </table>
         </div>
