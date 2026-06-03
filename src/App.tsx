@@ -31,11 +31,11 @@ import { effectivePurchaseQuantity } from './utils/purchaseRecords';
 type PageKey = 'sku' | 'calculator' | 'inventory' | 'my-orders' | 'suggestions';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
-  { key: 'sku', label: 'SKU 资料库' },
-  { key: 'calculator', label: '装柜计算' },
-  { key: 'inventory', label: '采购 / 在途库存' },
-  { key: 'my-orders', label: '我的采购订单' },
   { key: 'suggestions', label: '月销量采购建议' },
+  { key: 'calculator', label: '装柜计算' },
+  { key: 'my-orders', label: '我的采购订单' },
+  { key: 'inventory', label: '采购 / 在途库存' },
+  { key: 'sku', label: 'SKU 资料库' },
 ];
 
 function isOptionalProfileLoadError(index: number, error: unknown): boolean {
@@ -43,7 +43,7 @@ function isOptionalProfileLoadError(index: number, error: unknown): boolean {
 }
 
 function App() {
-  const [activePage, setActivePage] = useState<PageKey>('calculator');
+  const [activePage, setActivePage] = useState<PageKey>('suggestions');
   const [profile, setProfile] = useState<AppProfile | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
