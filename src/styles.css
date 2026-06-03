@@ -542,6 +542,16 @@ button.danger,
   background: #eaf2f6;
 }
 
+.mixed-child-row td {
+  background: #f8fbfc;
+  color: #40505c;
+}
+
+.mixed-child-row .pin-sku,
+.mixed-child-row .pin-product {
+  font-weight: 600;
+}
+
 .pin-image {
   left: 42px;
   min-width: 82px;

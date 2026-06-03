@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { AuditLog, CalculationRow, PurchaseRecord, SkuItem } from '../types';
-import { effectivePurchaseQuantity, mixedGroupsSummary, packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from './purchaseRecords';
+import { mixedGroupsSummary, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
 
@@ -38,6 +38,10 @@ function writeWorkbook(workbook: XLSX.WorkBook, moduleName: string, format: Expo
 function logisticsValue(record: PurchaseRecord, value: number | null): number | string {
   if (record.loadingType !== '冠通') return '';
   return value ?? '待物流商回传';
+}
+
+function skuKey(value: string): string {
+  return value.trim().toUpperCase();
 }
 
 export function exportResults(rows: CalculationRow[], format: ExportFormat): void {
@@ -115,7 +119,7 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
         整箱件数: normalized.cartonCount ?? '',
         每箱数量: normalized.unitsPerCarton ?? '',
         尾箱数量: normalized.tailQuantity,
-        含混装采购数量: purchaseQuantityWithMixed(normalized),
+        含本SKU混装采购数量: purchaseQuantityForRecordSku(normalized),
         采购单价: normalized.purchasePrice,
         含混装总金额: normalized.totalAmount,
         单品CBM: normalized.unitCbm,
@@ -148,7 +152,7 @@ export function exportInspectionChecklist(records: PurchaseRecord[], format: Exp
         产品名称: normalized.productName,
         英文名称: normalized.englishName,
         店铺: normalized.shopName,
-        采购数量: effectivePurchaseQuantity(normalized),
+        采购数量: purchaseQuantityForRecordSku(normalized),
         件数: packageCountFor(normalized) || '',
         是否混装: normalized.isMixed ? '是' : '否',
         混装组: mixedGroupsSummary(normalized),
@@ -157,7 +161,7 @@ export function exportInspectionChecklist(records: PurchaseRecord[], format: Exp
       }];
       return [
         ...rows,
-        ...normalized.mixedGroups.flatMap((group) => group.lines.map((line) => ({
+        ...normalized.mixedGroups.flatMap((group) => group.lines.filter((line) => skuKey(line.sku) !== skuKey(normalized.sku)).map((line) => ({
           SKU: line.sku,
           产品名称: line.productName,
           英文名称: '',

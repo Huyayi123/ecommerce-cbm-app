@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { AuditLog, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import type { AuditLog, MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
 import { exportAuditLogs, exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
 import { round } from '../utils/number';
-import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
+import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseAmountForRecordSku, purchaseQuantityForRecordSku, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
 
 type Props = {
   records: PurchaseRecord[];
@@ -14,6 +14,11 @@ type Props = {
 };
 
 type DraftRecord = Omit<PurchaseRecord, 'totalAmount'>;
+
+type MixedChildRow = {
+  group: MixedCartonGroup;
+  line: MixedCartonLine;
+};
 
 const statusLabels: Record<PurchaseStatus, string> = {
   pending: '待采购',
@@ -89,6 +94,10 @@ function needsLogisticsMetrics(record: Pick<PurchaseRecord, 'loadingType'>): boo
   return record.loadingType === '冠通';
 }
 
+function skuKey(value: string): string {
+  return value.trim().toUpperCase();
+}
+
 export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onChange, canEditData = true, canDeleteData = true }: Props) {
   const [draft, setDraft] = useState<DraftRecord>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -128,9 +137,11 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
         }
         const search = filters.search.trim().toLowerCase();
         if (search) {
+          const mixedSearchable = record.mixedGroups.flatMap((group) => group.lines.map((line) => `${line.sku} ${line.productName}`)).join(' ');
           const searchable = [
             record.sku,
             record.productName,
+            mixedSearchable,
             needsLogisticsMetrics(record) && record.totalWeightKg !== null ? String(record.totalWeightKg) : '',
           ].join(' ').toLowerCase();
           if (!searchable.includes(search)) return false;
@@ -153,9 +164,12 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
   }, [totalPages]);
 
   const inTransitRecords = inventoryRecords.filter((record) => record.status === 'in_transit');
-  const inTransitSkuCount = new Set(inTransitRecords.map((record) => record.sku)).size;
+  const inTransitSkuCount = new Set(inTransitRecords.flatMap((record) => {
+    const normalized = withPurchaseTotals(record);
+    return [normalized.sku, ...mixedChildRows(normalized).map(({ line }) => line.sku)].filter(Boolean);
+  })).size;
   const inTransitQuantity = inTransitRecords.reduce((sum, record) => sum + purchaseQuantityWithMixed(withPurchaseTotals(record)), 0);
-  const inTransitAmount = inTransitRecords.reduce((sum, record) => sum + record.totalAmount, 0);
+  const inTransitAmount = inTransitRecords.reduce((sum, record) => sum + withPurchaseTotals(record).totalAmount, 0);
   const inTransitCbm = inTransitRecords.reduce((sum, record) => sum + logisticsCbmFor(record), 0);
   const loadingBatchCount = new Set(inTransitRecords.map((record) => record.containerDate).filter(Boolean)).size;
   const selectedRecords = inventoryRecords.filter((record) => selectedIds.has(record.id));
@@ -163,9 +177,40 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
     () => new Map(skuItems.map((item) => [item.sku.trim().toUpperCase(), item.imageUrl])),
     [skuItems],
   );
+  const skuBySku = useMemo(
+    () => new Map(skuItems.map((item) => [item.sku.trim().toUpperCase(), item])),
+    [skuItems],
+  );
 
   function imageUrlFor(record: PurchaseRecord): string {
     return record.imageUrl || imageUrlBySku.get(record.sku.trim().toUpperCase()) || '';
+  }
+
+  function imageUrlForMixedLine(line: MixedCartonLine): string {
+    return imageUrlBySku.get(line.sku.trim().toUpperCase()) || '';
+  }
+
+  function recordWithSkuDefaults(record: PurchaseRecord): PurchaseRecord {
+    const skuItem = skuBySku.get(record.sku.trim().toUpperCase());
+    if (!skuItem) return record;
+    return {
+      ...record,
+      unitsPerCarton: record.unitsPerCarton ?? (skuItem.unitsPerCarton > 0 ? skuItem.unitsPerCarton : null),
+      purchasePrice: record.purchasePrice || skuItem.purchasePrice,
+      unitCbm: record.unitCbm || skuItem.unitCbm,
+      imageUrl: record.imageUrl || skuItem.imageUrl,
+      productName: record.productName || skuItem.productName,
+      englishName: record.englishName || skuItem.englishName,
+      manufacturerName: record.manufacturerName || skuItem.manufacturerName,
+      shopName: record.shopName || skuItem.shopName,
+    };
+  }
+
+  function mixedChildRows(record: PurchaseRecord): MixedChildRow[] {
+    const mainSku = skuKey(record.sku);
+    return record.mixedGroups.flatMap((group) => group.lines
+      .filter((line) => skuKey(line.sku) && skuKey(line.sku) !== mainSku)
+      .map((line) => ({ group, line })));
   }
 
   function patchDraft<K extends keyof DraftRecord>(field: K, value: DraftRecord[K]) {
@@ -184,6 +229,9 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
       buyerName: item?.buyerName ?? current.buyerName,
       assignedBuyerName: item?.buyerName ?? current.assignedBuyerName,
       englishName: item?.englishName ?? current.englishName,
+      unitsPerCarton: current.unitsPerCarton ?? (item && item.unitsPerCarton > 0 ? item.unitsPerCarton : null),
+      purchasePrice: current.purchasePrice || item?.purchasePrice || 0,
+      unitCbm: current.unitCbm || item?.unitCbm || 0,
       totalCbm: calcRecordCbm(item, effectivePurchaseQuantity(current)) || current.totalCbm,
     }));
   }
@@ -354,40 +402,78 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
             </thead>
             <tbody>
               {pagedRecords.map((record) => {
-                const normalized = withPurchaseTotals(record);
-                return <tr key={record.id}>
-                  <td><input type="checkbox" checked={selectedIds.has(record.id)} onChange={() => toggleSelection(record.id)} /></td>
-                  <td className="pin-col pin-image">{imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
-                  <td className="pin-col pin-manufacturer">{record.manufacturerName}</td>
-                  <td className="pin-col pin-sku">{record.sku}</td>
-                  <td className="pin-col pin-product">{record.productName}</td>
-                  <td>{record.purchaseQuantity}</td>
-                  <td>{record.cartonCount ?? ''}</td>
-                  <td>{record.unitsPerCarton ?? ''}</td>
-                  <td>{record.tailQuantity}</td>
-                  <td>{packageCountFor(normalized) || logisticsText(record.cartonCount)}</td>
+                const normalized = withPurchaseTotals(recordWithSkuDefaults(record));
+                const childRows = mixedChildRows(normalized);
+                return (
+                  <Fragment key={record.id}>
+                    <tr>
+                  <td><input type="checkbox" checked={selectedIds.has(normalized.id)} onChange={() => toggleSelection(normalized.id)} /></td>
+                  <td className="pin-col pin-image">{imageUrlFor(normalized) ? <img className="sku-thumb" src={imageUrlFor(normalized)} alt={normalized.productName || normalized.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                  <td className="pin-col pin-manufacturer">{normalized.manufacturerName}</td>
+                  <td className="pin-col pin-sku">{normalized.sku}</td>
+                  <td className="pin-col pin-product">{normalized.productName}</td>
+                  <td>{normalized.purchaseQuantity}</td>
+                  <td>{normalized.cartonCount ?? ''}</td>
+                  <td>{normalized.unitsPerCarton ?? ''}</td>
+                  <td>{normalized.tailQuantity}</td>
+                  <td>{packageCountFor(normalized) || logisticsText(normalized.cartonCount)}</td>
                   <td>{normalized.isMixed ? '是' : '否'}</td>
                   <td>{mixedGroupsSummary(normalized)}</td>
-                  <td>{needsLogisticsMetrics(record) ? logisticsText(record.totalWeightKg, 2) : ''}</td>
-                  <td>{needsLogisticsMetrics(record) ? logisticsText(record.logisticsTotalCbm, 4) : ''}</td>
-                  <td>{record.shopName}</td>
-                  <td>{record.assignedBuyerName || record.buyerName}</td>
-                  <td>{purchaseQuantityWithMixed(normalized)}</td>
-                  <td>{record.purchasePrice}</td>
-                  <td>{normalized.totalAmount.toFixed(2)}</td>
-                  <td>{record.purchaseDate}</td>
-                  <td>{statusLabels[record.status]}</td>
-                  <td>{record.loadingType || '整柜'}</td>
-                  <td>{record.containerDate || '-'}</td>
-                  <td>{record.unitCbm.toFixed(8)}</td>
-                  <td>{record.note}</td>
+                  <td>{needsLogisticsMetrics(normalized) ? logisticsText(normalized.totalWeightKg, 2) : ''}</td>
+                  <td>{needsLogisticsMetrics(normalized) ? logisticsText(normalized.logisticsTotalCbm, 4) : ''}</td>
+                  <td>{normalized.shopName}</td>
+                  <td>{normalized.assignedBuyerName || normalized.buyerName}</td>
+                  <td>{purchaseQuantityForRecordSku(normalized)}</td>
+                  <td>{normalized.purchasePrice}</td>
+                  <td>{purchaseAmountForRecordSku(normalized).toFixed(2)}</td>
+                  <td>{normalized.purchaseDate}</td>
+                  <td>{statusLabels[normalized.status]}</td>
+                  <td>{normalized.loadingType || '整柜'}</td>
+                  <td>{normalized.containerDate || '-'}</td>
+                  <td>{normalized.unitCbm.toFixed(8)}</td>
+                  <td>{normalized.note}</td>
                   <td className="row-actions">
-                    {canEditData && <button type="button" onClick={() => editRecord(record)}>编辑</button>}
-                    {canDeleteData && <button className="danger" type="button" onClick={() => deleteRecord(record.id)}>删除</button>}
+                    {canEditData && <button type="button" onClick={() => editRecord(normalized)}>编辑</button>}
+                    {canDeleteData && <button className="danger" type="button" onClick={() => deleteRecord(normalized.id)}>删除</button>}
                   </td>
-                </tr>;
+                    </tr>
+                    {childRows.map(({ group, line }) => {
+                      const childImageUrl = imageUrlForMixedLine(line);
+                      return (
+                        <tr className="mixed-child-row" key={`${normalized.id}:${group.id}:${line.id}`}>
+                          <td />
+                          <td className="pin-col pin-image">{childImageUrl ? <img className="sku-thumb" src={childImageUrl} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                          <td className="pin-col pin-manufacturer">{normalized.manufacturerName}</td>
+                          <td className="pin-col pin-sku">{line.sku}</td>
+                          <td className="pin-col pin-product">{line.productName}</td>
+                          <td />
+                          <td />
+                          <td />
+                          <td />
+                          <td />
+                          <td>混装子行</td>
+                          <td>{`${group.groupName} ${group.cartonCount}件`}</td>
+                          <td />
+                          <td />
+                          <td>{normalized.shopName}</td>
+                          <td>{normalized.assignedBuyerName || normalized.buyerName}</td>
+                          <td>{line.quantity}</td>
+                          <td>{line.purchasePrice}</td>
+                          <td>{line.totalAmount.toFixed(2)}</td>
+                          <td>{normalized.purchaseDate}</td>
+                          <td>{statusLabels[normalized.status]}</td>
+                          <td>{normalized.loadingType || '整柜'}</td>
+                          <td>{normalized.containerDate || '-'}</td>
+                          <td>{line.unitCbm.toFixed(8)}</td>
+                          <td>{`与 ${normalized.sku || normalized.productName || '主商品'} 混装`}</td>
+                          <td />
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                );
               })}
-              {filteredRecords.length === 0 && <tr><td colSpan={25} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
+              {filteredRecords.length === 0 && <tr><td colSpan={26} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
             </tbody>
           </table>
         </div>

@@ -5,7 +5,7 @@ import { formatErrorMessage } from '../utils/errors';
 import { exportPurchaseRecords } from '../utils/exporters';
 import { parsePurchaseRecordsFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
-import { effectivePurchaseQuantity, packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
+import { effectivePurchaseQuantity, mixedQuantityForOtherSkus, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
 
 type Props = {
   records: PurchaseRecord[];
@@ -169,6 +169,22 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
   function imageUrlFor(record: PurchaseRecord): string {
     return record.imageUrl || imageUrlBySku.get(record.sku.trim().toUpperCase()) || '';
+  }
+
+  function recordWithSkuDefaults(record: PurchaseRecord): PurchaseRecord {
+    const skuItem = skuBySku.get(record.sku.trim().toUpperCase());
+    if (!skuItem) return record;
+    return {
+      ...record,
+      unitsPerCarton: record.unitsPerCarton ?? (skuItem.unitsPerCarton > 0 ? skuItem.unitsPerCarton : null),
+      purchasePrice: record.purchasePrice || skuItem.purchasePrice,
+      unitCbm: record.unitCbm || skuItem.unitCbm,
+      imageUrl: record.imageUrl || skuItem.imageUrl,
+      productName: record.productName || skuItem.productName,
+      englishName: record.englishName || skuItem.englishName,
+      manufacturerName: record.manufacturerName || skuItem.manufacturerName,
+      shopName: record.shopName || skuItem.shopName,
+    };
   }
 
   function draftKey(recordId: string, field: EditableField): string {
@@ -358,7 +374,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   }
 
   function confirmedRecord(record: PurchaseRecord): PurchaseRecord {
-    const normalized = withPurchaseTotals(record);
+    const normalized = withPurchaseTotals(recordWithSkuDefaults(record));
     return {
       ...normalized,
       isConfirmed: true,
@@ -532,8 +548,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <td colSpan={20}>
           <div className="packing-panel">
             <div className="packing-summary">
-              <strong>主SKU数量：{effectivePurchaseQuantity(normalized)}</strong>
-              <strong>混装数量：{purchaseQuantityWithMixed(normalized) - effectivePurchaseQuantity(normalized)}</strong>
+              <strong>主SKU数量：{purchaseQuantityForRecordSku(normalized)}</strong>
+              <strong>其他SKU混装数量：{mixedQuantityForOtherSkus(normalized)}</strong>
               <strong>总件数：{packageCountFor(normalized)}</strong>
               {!isViewer && <button type="button" onClick={() => void addMixedGroup(normalized)}>新增混装组</button>}
             </div>
@@ -646,30 +662,30 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           </thead>
           <tbody>
             {visibleRecords.map((record) => {
-              const normalized = withPurchaseTotals(record);
+              const normalized = withPurchaseTotals(recordWithSkuDefaults(record));
               return (
                 <Fragment key={record.id}>
                   <tr>
                     <td>{imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
-                    <td>{input(record, 'manufacturerName')}</td>
-                    <td>{isAdmin ? input(record, 'sku') : record.sku}</td>
-                    <td>{input(record, 'productName')}</td>
-                    <td>{input(record, 'englishName')}</td>
-                    <td>{input(record, 'shopName')}</td>
-                    <td>{isAdmin ? input(record, 'assignedBuyerName') : record.assignedBuyerName}</td>
-                    <td>{input(record, 'purchaseQuantity', 'number')}</td>
-                    <td>{input(record, 'cartonCount', 'number')}</td>
-                    <td>{input(record, 'unitsPerCarton', 'number')}</td>
-                    <td>{input(record, 'tailQuantity', 'number')}</td>
+                    <td>{input(normalized, 'manufacturerName')}</td>
+                    <td>{isAdmin ? input(normalized, 'sku') : normalized.sku}</td>
+                    <td>{input(normalized, 'productName')}</td>
+                    <td>{input(normalized, 'englishName')}</td>
+                    <td>{input(normalized, 'shopName')}</td>
+                    <td>{isAdmin ? input(normalized, 'assignedBuyerName') : normalized.assignedBuyerName}</td>
+                    <td>{input(normalized, 'purchaseQuantity', 'number')}</td>
+                    <td>{input(normalized, 'cartonCount', 'number')}</td>
+                    <td>{input(normalized, 'unitsPerCarton', 'number')}</td>
+                    <td>{input(normalized, 'tailQuantity', 'number')}</td>
                     <td>{packageCountFor(normalized)}</td>
-                    <td>{effectivePurchaseQuantity(normalized)}</td>
+                    <td>{purchaseQuantityForRecordSku(normalized)}</td>
                     <td>{normalized.isMixed ? '是' : '否'}</td>
-                    <td>{input(record, 'purchasePrice', 'number')}</td>
+                    <td>{input(normalized, 'purchasePrice', 'number')}</td>
                     <td>{normalized.totalAmount.toFixed(2)}</td>
-                    <td>{input(record, 'unitCbm', 'number')}</td>
+                    <td>{input(normalized, 'unitCbm', 'number')}</td>
                     <td>{normalized.totalCbm.toFixed(4)}</td>
-                    <td>{input(record, 'status')}</td>
-                    <td>{input(record, 'note')}</td>
+                    <td>{input(normalized, 'status')}</td>
+                    <td>{input(normalized, 'note')}</td>
                     <td className="row-actions">
                       <button type="button" onClick={() => toggleExpanded(record.id)}>{expandedRows.has(record.id) ? '收起混装' : '混装'}</button>
                       {!isViewer && <button className="danger" type="button" onClick={() => void deleteRecord(record.id)}>删除</button>}
