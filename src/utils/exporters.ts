@@ -102,6 +102,7 @@ export function exportSkuImportTemplate(): void {
 
 export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportFormat, moduleName = '采购在途库存'): void {
   const includeBuyerEmail = moduleName !== '我的采购订单';
+  const includePlanQuantity = moduleName === '我的采购订单';
   const worksheet = XLSX.utils.json_to_sheet(
     records.map((record) => {
       const normalized = withPurchaseTotals(record);
@@ -114,7 +115,7 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
         店铺: normalized.shopName,
         采购人: normalized.assignedBuyerName || normalized.buyerName,
         ...(includeBuyerEmail ? { 采购人邮箱: normalized.assignedBuyerEmail } : {}),
-        计划采购数量: normalized.purchaseQuantity,
+        ...(includePlanQuantity ? { 计划采购数量: normalized.purchaseQuantity } : {}),
         实际采购数量: normalized.confirmedPurchaseQuantity ?? '',
         整箱件数: normalized.cartonCount ?? '',
         每箱数量: normalized.unitsPerCarton ?? '',

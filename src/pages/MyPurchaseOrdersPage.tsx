@@ -355,6 +355,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     return withPurchaseTotals(next);
   }
 
+  function recordWithLocalDrafts(record: PurchaseRecord): PurchaseRecord {
+    return editableFields.reduce((current, field) => {
+      const key = draftKey(record.id, field);
+      return key in drafts ? patchRecord(current, field, drafts[key]) : current;
+    }, record);
+  }
+
   async function commit(record: PurchaseRecord, field: EditableField) {
     const key = draftKey(record.id, field);
     if (!(key in drafts)) return;
@@ -374,7 +381,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   }
 
   function confirmedRecord(record: PurchaseRecord): PurchaseRecord {
-    const normalized = withPurchaseTotals(recordWithSkuDefaults(record));
+    const normalized = withPurchaseTotals(recordWithSkuDefaults(recordWithLocalDrafts(record)));
     return {
       ...normalized,
       isConfirmed: true,
@@ -389,6 +396,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     if (visibleIds.size === 0) return;
     try {
       await onChange(records.map((item) => (visibleIds.has(item.id) ? confirmedRecord(item) : item)));
+      setDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleIds.has(key.split(':')[0]))));
       setMessage(`已确认 ${visibleIds.size} 条采购订单，采购 / 在途库存将按回传数据统计。`);
     } catch (error) {
       console.error(error);

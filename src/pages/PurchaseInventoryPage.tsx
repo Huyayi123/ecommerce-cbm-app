@@ -397,7 +397,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
           <table>
             <thead>
               <tr>
-                <th>选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>是否混装</th><th>混装组</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
+                <th>选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>是否混装</th><th>混装组</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -412,7 +412,6 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
                   <td className="pin-col pin-manufacturer">{normalized.manufacturerName}</td>
                   <td className="pin-col pin-sku">{normalized.sku}</td>
                   <td className="pin-col pin-product">{normalized.productName}</td>
-                  <td>{normalized.purchaseQuantity}</td>
                   <td>{normalized.cartonCount ?? ''}</td>
                   <td>{normalized.unitsPerCarton ?? ''}</td>
                   <td>{normalized.tailQuantity}</td>
@@ -450,7 +449,6 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
                           <td />
                           <td />
                           <td />
-                          <td />
                           <td>混装子行</td>
                           <td>{`${group.groupName} ${group.cartonCount}件`}</td>
                           <td />
@@ -473,7 +471,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
                   </Fragment>
                 );
               })}
-              {filteredRecords.length === 0 && <tr><td colSpan={26} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
+              {filteredRecords.length === 0 && <tr><td colSpan={25} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
             </tbody>
           </table>
         </div>
