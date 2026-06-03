@@ -38,22 +38,6 @@ type PurchaseRecordRow = {
   note: string | null;
 };
 
-type LegacyPurchaseRecordRow = Omit<
-  PurchaseRecordRow,
-  | 'image_url'
-  | 'is_confirmed'
-  | 'confirmed_purchase_quantity'
-  | 'loading_type'
-  | 'container_date'
-  | 'total_weight_kg'
-  | 'carton_count'
-  | 'units_per_carton'
-  | 'tail_quantity'
-  | 'is_mixed'
-  | 'mixed_groups'
-  | 'logistics_total_cbm'
->;
-
 type ContainerRow = {
   id: string;
   row_number: number | null;
@@ -246,29 +230,6 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
   };
 }
 
-function toLegacyPurchaseRecordRow(record: PurchaseRecord): LegacyPurchaseRecordRow {
-  return {
-    id: record.id,
-    manufacturer_name: record.manufacturerName,
-    sku: record.sku,
-    product_name: record.productName,
-    shop_name: record.shopName,
-    buyer_name: record.buyerName,
-    assigned_buyer_name: record.assignedBuyerName,
-    assigned_buyer_email: record.assignedBuyerEmail,
-    purchase_quantity: record.confirmedPurchaseQuantity ?? record.purchaseQuantity,
-    purchase_price: record.purchasePrice,
-    total_amount: record.totalAmount,
-    purchase_date: dateOrNull(record.purchaseDate),
-    estimated_arrival_date: dateOrNull(record.estimatedArrivalDate),
-    status: record.status,
-    english_name: record.englishName,
-    unit_cbm: record.unitCbm,
-    total_cbm: record.totalCbm,
-    note: record.note,
-  };
-}
-
 function mapContainerRow(row: ContainerRow): PurchaseRow {
   return {
     rowId: row.id,
@@ -415,9 +376,10 @@ export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise
     const { error } = await client.from('purchase_records').upsert(records.map(toPurchaseRecordRow));
     if (error) {
       console.error(error);
-      if (!isMissingColumnError(error)) throw new Error(formatErrorMessage(error));
-      const { error: legacyError } = await client.from('purchase_records').upsert(records.map(toLegacyPurchaseRecordRow));
-      if (legacyError) throwSupabaseError(legacyError);
+      if (isMissingColumnError(error)) {
+        throw new Error(`purchase_records 表缺少新字段，混装/箱规数据无法保存。请先在 Supabase SQL Editor 执行采购记录字段迁移 SQL。原始错误：${formatErrorMessage(error)}`);
+      }
+      throw new Error(formatErrorMessage(error));
     }
   }
   if (deleteIds.length > 0) {
