@@ -72,7 +72,8 @@ export function purchaseQuantityWithMixed(record: PurchaseRecord): number {
 
 export function packageCountFor(record: PurchaseRecord): number {
   const mixedCartons = record.mixedGroups.reduce((sum, group) => sum + group.cartonCount, 0);
-  return (record.cartonCount ?? 0) + mixedCartons;
+  const tailCartons = (record.tailQuantity ?? 0) > 0 ? 1 : 0;
+  return (record.cartonCount ?? 0) + tailCartons + mixedCartons;
 }
 
 export function mixedAmountFor(record: PurchaseRecord): number {

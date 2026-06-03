@@ -349,7 +349,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
           <table>
             <thead>
               <tr>
-                <th>选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>件数</th><th>是否混装</th><th>混装组</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
+                <th>选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>是否混装</th><th>混装组</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -361,6 +361,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
                   <td className="pin-col pin-manufacturer">{record.manufacturerName}</td>
                   <td className="pin-col pin-sku">{record.sku}</td>
                   <td className="pin-col pin-product">{record.productName}</td>
+                  <td>{record.purchaseQuantity}</td>
                   <td>{record.cartonCount ?? ''}</td>
                   <td>{record.unitsPerCarton ?? ''}</td>
                   <td>{record.tailQuantity}</td>

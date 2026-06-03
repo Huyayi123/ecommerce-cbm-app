@@ -641,7 +641,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <table>
           <thead>
             <tr>
-              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th><th>操作</th>
+              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -657,10 +657,12 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td>{input(record, 'englishName')}</td>
                     <td>{input(record, 'shopName')}</td>
                     <td>{isAdmin ? input(record, 'assignedBuyerName') : record.assignedBuyerName}</td>
+                    <td>{input(record, 'purchaseQuantity', 'number')}</td>
                     <td>{input(record, 'cartonCount', 'number')}</td>
                     <td>{input(record, 'unitsPerCarton', 'number')}</td>
                     <td>{input(record, 'tailQuantity', 'number')}</td>
-                    <td>{purchaseQuantityWithMixed(normalized)}</td>
+                    <td>{packageCountFor(normalized)}</td>
+                    <td>{effectivePurchaseQuantity(normalized)}</td>
                     <td>{normalized.isMixed ? '是' : '否'}</td>
                     <td>{input(record, 'purchasePrice', 'number')}</td>
                     <td>{normalized.totalAmount.toFixed(2)}</td>
@@ -677,7 +679,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 </Fragment>
               );
             })}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={19}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={21}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>
