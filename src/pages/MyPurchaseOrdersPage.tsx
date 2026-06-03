@@ -435,6 +435,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     }, record);
   }
 
+  function mixedChildRows(record: PurchaseRecord) {
+    const mainSku = record.sku.trim().toUpperCase();
+    return record.mixedGroups.flatMap((group) => group.lines
+      .filter((line) => line.sku.trim().toUpperCase() && line.sku.trim().toUpperCase() !== mainSku)
+      .map((line) => ({ group, line })));
+  }
+
   async function commit(record: PurchaseRecord, field: EditableField) {
     const key = draftKey(record.id, field);
     if (!(key in drafts)) return;
@@ -454,7 +461,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   }
 
   function confirmedRecord(record: PurchaseRecord): PurchaseRecord {
-    const normalized = withPurchaseTotals(recordWithSkuDefaults(recordWithLocalDrafts(record)));
+    const withMixedDrafts = applyMixedDraftsToRecord(recordWithLocalDrafts(record), mixedDrafts);
+    const normalized = withPurchaseTotals(recordWithSkuDefaults(withMixedDrafts));
     return {
       ...normalized,
       isConfirmed: true,
@@ -470,6 +478,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     try {
       await onChange(records.map((item) => (visibleIds.has(item.id) ? confirmedRecord(item) : item)));
       setDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleIds.has(key.split(':')[0]))));
+      setMixedDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleIds.has(key.split(':')[0]))));
       setMessage(`已确认 ${visibleIds.size} 条采购订单，采购 / 在途库存将按回传数据统计。`);
     } catch (error) {
       console.error(error);
@@ -744,6 +753,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <tbody>
             {visibleRecords.map((record) => {
               const normalized = withPurchaseTotals(recordWithSkuDefaults(record));
+              const childRows = mixedChildRows(normalized);
               return (
                 <Fragment key={record.id}>
                   <tr>
@@ -771,8 +781,33 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                       <button type="button" onClick={() => toggleExpanded(record.id)}>{expandedRows.has(record.id) ? '收起混装' : '混装'}</button>
                       {!isViewer && <button className="danger" type="button" onClick={() => void deleteRecord(record.id)}>删除</button>}
                     </td>
-                  </tr>
-                  {expandedRows.has(record.id) && renderMixedPanel(normalized)}
+	                  </tr>
+                  {childRows.map(({ group, line }) => (
+                    <tr className="mixed-child-row" key={`${normalized.id}:${group.id}:${line.id}`}>
+                      <td>{imageUrlBySku.get(line.sku.trim().toUpperCase()) ? <img className="sku-thumb" src={imageUrlBySku.get(line.sku.trim().toUpperCase())} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                      <td>{normalized.manufacturerName}</td>
+                      <td><strong>{line.sku}</strong></td>
+                      <td><strong>{line.productName}</strong></td>
+                      <td />
+                      <td>{normalized.shopName}</td>
+                      <td>{normalized.assignedBuyerName}</td>
+                      <td />
+                      <td />
+                      <td />
+                      <td />
+                      <td>{group.cartonCount}</td>
+                      <td>{line.quantity}</td>
+                      <td>混装子行</td>
+                      <td>{line.purchasePrice}</td>
+                      <td>{line.totalAmount.toFixed(2)}</td>
+                      <td>{line.unitCbm.toFixed(8)}</td>
+                      <td>{line.totalCbm.toFixed(4)}</td>
+                      <td>{statusLabels[normalized.status]}</td>
+                      <td>{`${group.groupName} ${group.cartonCount}件，与 ${normalized.sku || normalized.productName || '主商品'} 混装`}</td>
+                      <td />
+                    </tr>
+                  ))}
+	                  {expandedRows.has(record.id) && renderMixedPanel(normalized)}
                 </Fragment>
               );
             })}
