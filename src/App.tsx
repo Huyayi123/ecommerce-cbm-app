@@ -26,7 +26,7 @@ import {
 } from './utils/cloudStorage';
 import { formatErrorMessage } from './utils/errors';
 import { canDelete, canEdit } from './utils/permissions';
-import { effectivePurchaseQuantity, withPurchaseTotals } from './utils/purchaseRecords';
+import { withPurchaseTotals } from './utils/purchaseRecords';
 
 type PageKey = 'sku' | 'calculator' | 'inventory' | 'my-orders' | 'suggestions';
 
@@ -385,51 +385,21 @@ function App() {
   }
 
   function normalizePurchaseRecords(records: PurchaseRecord[]): { records: PurchaseRecord[]; conflicts: string[] } {
-    const result: PurchaseRecord[] = [];
-    const mergeMap = new Map<string, PurchaseRecord>();
     const pricesBySku = new Map<string, Set<number>>();
 
     for (const record of records) {
-      if (record.status !== 'in_transit') {
-        result.push(record);
-        continue;
-      }
-
       const skuKey = record.sku.trim().toUpperCase();
-      if (!skuKey) {
-        result.push(record);
-        continue;
-      }
+      if (!skuKey) continue;
 
       if (!pricesBySku.has(skuKey)) pricesBySku.set(skuKey, new Set());
       pricesBySku.get(skuKey)!.add(record.purchasePrice);
-
-      const mergeKey = `${skuKey}|${record.purchasePrice}`;
-      const existing = mergeMap.get(mergeKey);
-      if (!existing) {
-        mergeMap.set(mergeKey, withPurchaseTotals({ ...record }));
-        continue;
-      }
-
-      existing.purchaseQuantity += record.purchaseQuantity;
-      existing.confirmedPurchaseQuantity =
-        existing.confirmedPurchaseQuantity !== null || record.confirmedPurchaseQuantity !== null
-          ? effectivePurchaseQuantity(existing) + effectivePurchaseQuantity(record)
-          : null;
-      existing.totalAmount += record.totalAmount;
-      existing.totalCbm += record.totalCbm;
-      existing.imageUrl ||= record.imageUrl;
-      existing.isMixed = existing.isMixed || record.isMixed;
-      existing.mixedGroups = [...existing.mixedGroups, ...record.mixedGroups];
-      existing.note = [existing.note, record.note].filter(Boolean).join('；');
-      mergeMap.set(mergeKey, withPurchaseTotals(existing));
     }
 
     const conflicts = Array.from(pricesBySku.entries())
       .filter(([, prices]) => prices.size > 1)
       .map(([sku]) => sku);
 
-    return { records: [...Array.from(mergeMap.values()), ...result], conflicts };
+    return { records: records.map((record) => withPurchaseTotals(record)), conflicts };
   }
 
   async function sendSuggestionsToCalculator(rows: PurchaseRow[], nextFileName: string) {
