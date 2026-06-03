@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppProfile, MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
 import { getSkuMatchKey, hydrateSku } from '../utils/calculations';
 import { formatErrorMessage } from '../utils/errors';
@@ -137,6 +137,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [newOrder, setNewOrder] = useState<NewOrderDraft>(() => createEmptyDraft());
   const [message, setMessage] = useState('');
+  const mixedAutoSaveTimer = useRef<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<PurchaseStatus | 'all'>('pending');
   const isAdmin = profile.role === 'admin';
   const isViewer = profile.role === 'viewer';
@@ -268,6 +269,78 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     const normalized = withPurchaseTotals(nextRecord);
     await onChange(records.map((item) => (item.id === normalized.id ? normalized : item)));
   }
+
+  function applyMixedDraftsToRecord(record: PurchaseRecord, draftSnapshot: Record<string, string>): PurchaseRecord {
+    let hasChanges = false;
+    const mixedGroups = record.mixedGroups.map((group) => {
+      const nextGroup = { ...group };
+      const groupNameKey = groupKey(record.id, group.id, 'groupName');
+      const cartonCountKey = groupKey(record.id, group.id, 'cartonCount');
+      if (groupNameKey in draftSnapshot) {
+        nextGroup.groupName = draftSnapshot[groupNameKey];
+        hasChanges = true;
+      }
+      if (cartonCountKey in draftSnapshot) {
+        nextGroup.cartonCount = parseNumber(draftSnapshot[cartonCountKey]);
+        hasChanges = true;
+      }
+
+      nextGroup.lines = group.lines.map((line) => {
+        let nextLine = { ...line };
+        let lineChanged = false;
+        for (const field of ['sku', 'productName', 'quantity', 'purchasePrice', 'unitCbm'] as MixedLineField[]) {
+          const key = mixedKey(record.id, group.id, line.id, field);
+          if (!(key in draftSnapshot)) continue;
+          const value = draftSnapshot[key];
+          if (field === 'quantity' || field === 'purchasePrice' || field === 'unitCbm') nextLine[field] = parseNumber(value);
+          else nextLine[field] = value;
+          lineChanged = true;
+          hasChanges = true;
+        }
+        if (lineChanged) {
+          const skuItem = skuBySku.get(nextLine.sku.trim().toUpperCase());
+          if (skuItem && !nextLine.productName.trim()) nextLine.productName = skuItem.productName;
+          if (skuItem && nextLine.purchasePrice === 0) nextLine.purchasePrice = skuItem.purchasePrice;
+          if (skuItem && nextLine.unitCbm === 0) nextLine.unitCbm = skuItem.unitCbm;
+          nextLine = recalcMixedLine(nextLine);
+        }
+        return nextLine;
+      });
+      return nextGroup;
+    });
+
+    return hasChanges ? withPurchaseTotals({ ...record, mixedGroups, isMixed: mixedGroups.length > 0 }) : record;
+  }
+
+  async function flushMixedDrafts(draftSnapshot: Record<string, string>) {
+    if (isViewer || Object.keys(draftSnapshot).length === 0) return;
+    try {
+      await onChange(records.map((record) => applyMixedDraftsToRecord(record, draftSnapshot)));
+      setMixedDrafts((current) => {
+        const next = { ...current };
+        for (const [key, value] of Object.entries(draftSnapshot)) {
+          if (next[key] === value) delete next[key];
+        }
+        return next;
+      });
+      setMessage('混装已自动保存');
+    } catch (error) {
+      console.error(error);
+      setMessage(`混装自动保存失败：${formatErrorMessage(error)}`);
+    }
+  }
+
+  useEffect(() => {
+    if (mixedAutoSaveTimer.current !== null) window.clearTimeout(mixedAutoSaveTimer.current);
+    const draftSnapshot = { ...mixedDrafts };
+    if (Object.keys(draftSnapshot).length === 0) return;
+    mixedAutoSaveTimer.current = window.setTimeout(() => {
+      void flushMixedDrafts(draftSnapshot);
+    }, 700);
+    return () => {
+      if (mixedAutoSaveTimer.current !== null) window.clearTimeout(mixedAutoSaveTimer.current);
+    };
+  }, [mixedDrafts]);
 
   async function addNewOrder() {
     if (isViewer) return;
