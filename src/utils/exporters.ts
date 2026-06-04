@@ -50,6 +50,22 @@ function skuLookup(items: SkuItem[]): Map<string, SkuItem> {
   return result;
 }
 
+function barcodeFor(sku: string): string {
+  const trimmed = sku.trim();
+  return trimmed && trimmed.toUpperCase() !== 'NEW' ? trimmed : 'New Product';
+}
+
+function quantityFormula(cartonCount: number | null, unitsPerCarton: number | null, tailQuantity: number): string {
+  const cartons = cartonCount ?? 0;
+  const units = unitsPerCarton ?? 0;
+  const tail = tailQuantity ?? 0;
+  if (cartons > 0 && units > 0) {
+    const total = cartons * units + tail;
+    return tail > 0 ? `${cartons}×${units}+1×${tail}=${total}PCS` : `${cartons}×${units}=${total}PCS`;
+  }
+  return tail > 0 ? `${tail}PCS` : '';
+}
+
 export function exportResults(rows: CalculationRow[], format: ExportFormat): void {
   const worksheet = XLSX.utils.json_to_sheet(
     rows.map((row) => ({
@@ -158,32 +174,89 @@ export function exportInspectionChecklist(records: PurchaseRecord[], format: Exp
   const storageLocationFor = (sku: string) => skuBySku.get(skuKey(sku))?.storageLocation ?? '';
   const englishNameFor = (record: PurchaseRecord) => record.englishName || skuBySku.get(skuKey(record.sku))?.englishName || record.productName;
   const lineProductFor = (line: { sku: string; productName: string }) => skuBySku.get(skuKey(line.sku))?.englishName || line.productName;
-  const worksheet = XLSX.utils.json_to_sheet(
-    records.flatMap((record) => {
-      const normalized = withPurchaseTotals(record);
-      const rows = [{
-        Barcode: normalized.sku,
-        Product: englishNameFor(normalized),
-        整箱件数: normalized.cartonCount ?? '',
-        每箱数量: normalized.unitsPerCarton ?? '',
-        尾箱数量: normalized.tailQuantity || '',
-        总件数: packageCountFor(normalized) || '',
-        'Warehouse Allocatior': storageLocationFor(normalized.sku),
-      }];
-      return [
-        ...rows,
-        ...normalized.mixedGroups.flatMap((group) => group.lines.filter((line) => skuKey(line.sku) !== skuKey(normalized.sku)).map((line) => ({
-          Barcode: line.sku,
-          Product: lineProductFor(line),
-          整箱件数: '',
-          每箱数量: '',
-          尾箱数量: line.quantity || '',
-          总件数: group.cartonCount || '',
-          'Warehouse Allocatior': storageLocationFor(line.sku),
-        }))),
-      ];
-    }),
-  );
+  const todayText = new Date().toLocaleDateString('en-GB').replace(/\//g, '/');
+  const rows: unknown[][] = [
+    [`New Stock Inspection & Storage Report (${todayText})`, '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '☑  China Suppliers', '☐  SA Local Market', '', '☐  Return from TAL', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', ''],
+    ['SN', 'Product', 'Barcode', 'Quantity Purchased', '', 'Verified Quantity', 'Discrepancy with PO', 'Damage or Quality Issues', 'Confirmation Signature', 'Signature for Pospal & MySoh updated', 'Warehouse Allocatior', 'Signature for Storage in Bin'],
+  ];
+  const merges: XLSX.Range[] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 11 } },
+    { s: { r: 2, c: 3 }, e: { r: 2, c: 4 } },
+    { s: { r: 2, c: 6 }, e: { r: 2, c: 7 } },
+    { s: { r: 4, c: 3 }, e: { r: 4, c: 4 } },
+  ];
+  let serial = 1;
+
+  for (const record of records) {
+    const normalized = withPurchaseTotals(record);
+    const baseQuantityText = quantityFormula(normalized.cartonCount, normalized.unitsPerCarton, normalized.tailQuantity);
+    const hasBaseCartons = Boolean(baseQuantityText);
+    if (hasBaseCartons || normalized.mixedGroups.length === 0) {
+      rows.push([
+        serial,
+        englishNameFor(normalized),
+        barcodeFor(normalized.sku),
+        baseQuantityText || `${purchaseQuantityForRecordSku(normalized)}PCS`,
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        storageLocationFor(normalized.sku),
+        '',
+      ]);
+      serial += 1;
+    }
+
+    for (const group of normalized.mixedGroups) {
+      const mixedStartRow = rows.length;
+      const lines = group.lines.filter((line) => line.quantity > 0);
+      for (const line of lines) {
+        rows.push([
+          serial,
+          lineProductFor(line),
+          barcodeFor(line.sku),
+          `${line.quantity}PCS`,
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          storageLocationFor(line.sku),
+          '',
+        ]);
+        serial += 1;
+      }
+      if (lines.length > 0) {
+        rows[mixedStartRow][4] = group.cartonCount || '';
+        if (lines.length > 1) {
+          merges.push({ s: { r: mixedStartRow, c: 4 }, e: { r: rows.length - 1, c: 4 } });
+        }
+      }
+    }
+  }
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  worksheet['!merges'] = merges;
+  worksheet['!cols'] = [
+    { wch: 5 },
+    { wch: 48 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 6 },
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 20 },
+    { wch: 18 },
+    { wch: 24 },
+    { wch: 18 },
+    { wch: 28 },
+  ];
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, '验货单');
   writeWorkbook(workbook, '验货单', format);
