@@ -15,7 +15,9 @@ export function calcUnitCbm(cartonCbm: number, unitsPerCarton: number): number {
   return round(cartonCbm, 8);
 }
 
-export function hydrateSku(item: Omit<SkuItem, 'cartonCbm' | 'unitCbm'>): SkuItem {
+type HydratableSku = Omit<SkuItem, 'cartonCbm' | 'unitCbm' | 'storageLocation' | 'purchaseUrl'> & Partial<Pick<SkuItem, 'storageLocation' | 'purchaseUrl'>>;
+
+export function hydrateSku(item: HydratableSku): SkuItem {
   const cartonCbm = calcCartonCbm(item.cartonLengthCm, item.cartonWidthCm, item.cartonHeightCm);
   const unitCbmFromManual = item.manualUnitCbm > 0 ? round(item.manualUnitCbm, 8) : 0;
   const unitCbmFromTotal = item.totalQuantity > 0 && item.totalCbm > 0 ? round(item.totalCbm / item.totalQuantity, 8) : 0;
@@ -24,6 +26,8 @@ export function hydrateSku(item: Omit<SkuItem, 'cartonCbm' | 'unitCbm'>): SkuIte
   const cbmSource = unitCbmFromManual ? 'imported' : unitCbmFromTotal ? 'total' : unitCbmFromCarton ? 'carton' : 'missing';
   return {
     ...item,
+    storageLocation: item.storageLocation ?? '',
+    purchaseUrl: item.purchaseUrl ?? '',
     cartonCbm,
     unitCbm,
     cbmSource,

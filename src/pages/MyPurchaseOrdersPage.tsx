@@ -26,6 +26,7 @@ type NewOrderDraft = {
   unitsPerCarton: string;
   tailQuantity: string;
   purchasePrice: string;
+  freightCost: string;
   unitCbm: string;
   status: PurchaseStatus;
   note: string;
@@ -61,6 +62,7 @@ const editableFields = [
   'unitsPerCarton',
   'tailQuantity',
   'purchasePrice',
+  'freightCost',
   'unitCbm',
   'status',
   'note',
@@ -90,6 +92,7 @@ function createEmptyDraft(): NewOrderDraft {
     unitsPerCarton: '',
     tailQuantity: '0',
     purchasePrice: '',
+    freightCost: '',
     unitCbm: '',
     status: 'pending',
     note: '',
@@ -375,6 +378,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       purchaseQuantity: newQuantity,
       confirmedPurchaseQuantity: null,
       purchasePrice: newPrice,
+      freightCost: parseNumber(newOrder.freightCost),
       totalAmount: newTotalAmount,
       purchaseDate: today(),
       estimatedArrivalDate: '',
@@ -423,7 +427,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
   function patchRecord(record: PurchaseRecord, field: EditableField, value: string): PurchaseRecord {
     const next: PurchaseRecord = { ...record };
-    if (field === 'purchaseQuantity' || field === 'confirmedPurchaseQuantity' || field === 'purchasePrice' || field === 'unitCbm' || field === 'cartonCount' || field === 'unitsPerCarton' || field === 'tailQuantity') {
+    if (field === 'purchaseQuantity' || field === 'confirmedPurchaseQuantity' || field === 'purchasePrice' || field === 'freightCost' || field === 'unitCbm' || field === 'cartonCount' || field === 'unitsPerCarton' || field === 'tailQuantity') {
       next[field] = parseNumber(value);
     } else if (field === 'status') {
       next.status = value as PurchaseStatus;
@@ -643,7 +647,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     const normalized = withPurchaseTotals(record);
     return (
       <tr className="packing-detail-row">
-        <td colSpan={20}>
+        <td colSpan={22}>
           <div className="packing-panel">
             <div className="packing-summary">
               <strong>主SKU数量：{purchaseQuantityForRecordSku(normalized)}</strong>
@@ -738,6 +742,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <label>每箱数量<input type="number" min="0" value={newOrder.unitsPerCarton} placeholder={defaultUnitsPerCartonText(newOrder.sku)} title={defaultUnitsPerCartonText(newOrder.sku)} onChange={(event) => patchNewOrder('unitsPerCarton', event.target.value)} /></label>
           <label>尾箱数量<input type="number" min="0" value={newOrder.tailQuantity} onChange={(event) => patchNewOrder('tailQuantity', event.target.value)} /></label>
           <label>采购单价<input type="number" min="0" step="0.01" value={newOrder.purchasePrice} onChange={(event) => patchNewOrder('purchasePrice', event.target.value)} /></label>
+          <label>运费<input type="number" min="0" step="0.01" value={newOrder.freightCost} onChange={(event) => patchNewOrder('freightCost', event.target.value)} /></label>
           <label>实际数量<input value={newQuantity} readOnly /></label>
           <label>总金额<input value={newTotalAmount.toFixed(2)} readOnly /></label>
           <label>单品CBM<input type="number" min="0" step="0.00000001" value={newOrder.unitCbm} onChange={(event) => patchNewOrder('unitCbm', event.target.value)} /></label>
@@ -755,7 +760,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <table>
           <thead>
             <tr>
-              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th><th>操作</th>
+              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -780,6 +785,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td>{purchaseQuantityForRecordSku(normalized)}</td>
                     <td>{normalized.isMixed ? '是' : '否'}</td>
                     <td>{input(normalized, 'purchasePrice', 'number')}</td>
+                    <td>{input(normalized, 'freightCost', 'number')}</td>
                     <td>{normalized.totalAmount.toFixed(2)}</td>
                     <td>{input(normalized, 'unitCbm', 'number')}</td>
                     <td>{normalized.totalCbm.toFixed(4)}</td>
@@ -807,6 +813,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                       <td>{line.quantity}</td>
                       <td>混装子行</td>
                       <td>{line.purchasePrice}</td>
+                      <td />
                       <td>{line.totalAmount.toFixed(2)}</td>
                       <td>{line.unitCbm.toFixed(8)}</td>
                       <td>{line.totalCbm.toFixed(4)}</td>
@@ -819,7 +826,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 </Fragment>
               );
             })}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={21}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={22}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>

@@ -11,6 +11,7 @@ type PurchaseRecordRow = {
   sku: string;
   product_name: string | null;
   image_url?: string | null;
+  freight_cost?: number | null;
   shop_name: string | null;
   buyer_name: string | null;
   assigned_buyer_name: string | null;
@@ -135,6 +136,8 @@ function mergeSkuItemsForSave(items: SkuItem[], remote: SkuItem[]): SkuItem[] {
       productName: item.productName.trim() || baseItem?.productName || '',
       englishName: item.englishName.trim() || baseItem?.englishName || '',
       imageUrl: item.imageUrl.trim() || baseItem?.imageUrl || '',
+      storageLocation: item.storageLocation.trim() || baseItem?.storageLocation || '',
+      purchaseUrl: item.purchaseUrl.trim() || baseItem?.purchaseUrl || '',
       shopName: item.shopName.trim() || baseItem?.shopName || '',
       buyerName: item.buyerName.trim() || baseItem?.buyerName || '',
       purchasePrice: item.purchasePrice > 0 ? item.purchasePrice : baseItem?.purchasePrice ?? 0,
@@ -170,6 +173,7 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     purchaseQuantity: Number(row.purchase_quantity ?? 0),
     confirmedPurchaseQuantity: row.confirmed_purchase_quantity === null || row.confirmed_purchase_quantity === undefined ? null : Number(row.confirmed_purchase_quantity),
     purchasePrice: Number(row.purchase_price ?? 0),
+    freightCost: Number(row.freight_cost ?? 0),
     totalAmount: Number(row.total_amount ?? 0),
     purchaseDate: row.purchase_date ?? '',
     estimatedArrivalDate: row.estimated_arrival_date ?? '',
@@ -210,6 +214,7 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     purchase_quantity: normalized.purchaseQuantity,
     confirmed_purchase_quantity: normalized.confirmedPurchaseQuantity,
     purchase_price: normalized.purchasePrice,
+    freight_cost: normalized.freightCost,
     total_amount: normalized.totalAmount,
     purchase_date: dateOrNull(normalized.purchaseDate),
     estimated_arrival_date: dateOrNull(normalized.estimatedArrivalDate),

@@ -5,6 +5,8 @@ export type SkuItem = {
   englishName: string;
   imageUrl: string;
   manufacturerName: string;
+  storageLocation: string;
+  purchaseUrl: string;
   shopName: string;
   buyerName: string;
   isSeasonal: boolean;
@@ -94,6 +96,7 @@ export type PurchaseRecord = {
   purchaseQuantity: number;
   confirmedPurchaseQuantity: number | null;
   purchasePrice: number;
+  freightCost: number;
   totalAmount: number;
   purchaseDate: string;
   estimatedArrivalDate: string;

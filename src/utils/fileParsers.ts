@@ -26,6 +26,7 @@ const PURCHASE_RECORD_HEADERS = {
   purchaseQuantity: ['采购数量', '数量', 'purchase_quantity'],
   confirmedPurchaseQuantity: ['实际采购数量', '确认采购数量', '实际数量', 'confirmed_purchase_quantity'],
   purchasePrice: ['采购单价', '单价', '成本价', 'purchase_price'],
+  freightCost: ['运费', 'freight_cost', 'freightCost'],
   totalAmount: ['总金额', '金额', 'total_amount'],
   unitCbm: ['单品CBM', '单品 CBM', 'unit_cbm'],
   totalCbm: ['总CBM', '总 CBM', 'total_cbm'],
@@ -128,7 +129,7 @@ function fillMergedCells(worksheet: XLSX.WorkSheet): void {
 }
 
 function fillDownRows(rows: Record<string, unknown>[], headers: string[]): Record<string, unknown>[] {
-  const fillFields: SkuFrontendField[] = ['manufacturerName', 'shopName', 'buyerName', 'notes'];
+  const fillFields: SkuFrontendField[] = ['manufacturerName', 'shopName', 'buyerName', 'storageLocation', 'notes'];
   const fillHeaders = fillFields
     .map((field) => findSkuHeader(headers, field))
     .filter((header): header is string => Boolean(header));
@@ -265,6 +266,7 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
     const purchaseQuantity = toNumber(pickPurchaseRecordField(row, headers, 'purchaseQuantity')) ?? 0;
     const confirmedPurchaseQuantity = toNumber(pickPurchaseRecordField(row, headers, 'confirmedPurchaseQuantity'));
     const purchasePrice = toNumber(pickPurchaseRecordField(row, headers, 'purchasePrice')) ?? 0;
+    const freightCost = toNumber(pickPurchaseRecordField(row, headers, 'freightCost')) ?? 0;
     const unitCbm = toNumber(pickPurchaseRecordField(row, headers, 'unitCbm')) ?? 0;
     const importedTotalAmount = toNumber(pickPurchaseRecordField(row, headers, 'totalAmount'));
     const importedTotalCbm = toNumber(pickPurchaseRecordField(row, headers, 'totalCbm'));
@@ -287,6 +289,7 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
       purchaseQuantity,
       confirmedPurchaseQuantity,
       purchasePrice,
+      freightCost,
       totalAmount: importedTotalAmount ?? Math.round(effectiveQuantity * purchasePrice * 100) / 100,
       purchaseDate: nonEmptyText(pickPurchaseRecordField(row, headers, 'purchaseDate'), new Date().toISOString().slice(0, 10)),
       estimatedArrivalDate: '',

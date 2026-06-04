@@ -9,6 +9,8 @@ export const SKU_FIELD_ALIASES = {
   productName: ['产品名称', '品名', '中文名称', 'product_name'],
   englishName: ['英文名称', '英文名', 'English Name', 'english_name'],
   imageUrl: ['图片', '图片链接', '图片URL', 'image_url', 'imageUrl', 'image'],
+  storageLocation: ['库位', '仓库库位', 'storage_location', 'storageLocation'],
+  purchaseUrl: ['采购链接', '采购网址', '采购地址', 'purchase_url', 'purchaseUrl'],
   purchasePrice: ['采购单价', '单价', '成本价', 'purchase_price'],
   manualUnitCbm: ['单品CBM', '单品 CBM', 'unit_cbm', '单个体积'],
   totalCbm: ['总CBM', '总 CBM', 'total_cbm'],
@@ -32,6 +34,8 @@ export type SupabaseSkuRow = {
   product_name: string | null;
   english_name: string | null;
   image_url?: string | null;
+  storage_location?: string | null;
+  purchase_url?: string | null;
   purchase_price: number | null;
   unit_cbm: number | null;
   total_cbm: number | null;
@@ -78,6 +82,8 @@ export function supabaseSkuToFrontend(row: SupabaseSkuRow): SkuItem {
     productName: row.product_name ?? '',
     englishName: row.english_name ?? '',
     imageUrl: row.image_url ?? '',
+    storageLocation: row.storage_location ?? '',
+    purchaseUrl: row.purchase_url ?? '',
     purchasePrice: Number(row.purchase_price ?? 0),
     manualUnitCbm: Number(row.unit_cbm ?? row.manual_unit_cbm ?? 0),
     totalCbm: Number(row.total_cbm ?? 0),
@@ -103,6 +109,8 @@ export function frontendSkuToSupabase(item: SkuItem): SupabaseSkuRow {
     product_name: item.productName,
     english_name: item.englishName,
     image_url: item.imageUrl,
+    storage_location: item.storageLocation,
+    purchase_url: item.purchaseUrl,
     purchase_price: item.purchasePrice,
     unit_cbm: item.unitCbm || item.manualUnitCbm,
     total_cbm: item.totalCbm,
@@ -132,6 +140,8 @@ export function skuExcelRowToFrontend(row: Record<string, unknown>, headers: str
     productName: String(pickSkuExcelField(row, headers, 'productName') ?? '').trim(),
     englishName: String(pickSkuExcelField(row, headers, 'englishName') ?? '').trim(),
     imageUrl: String(pickSkuExcelField(row, headers, 'imageUrl') ?? '').trim(),
+    storageLocation: String(pickSkuExcelField(row, headers, 'storageLocation') ?? '').trim(),
+    purchaseUrl: String(pickSkuExcelField(row, headers, 'purchaseUrl') ?? '').trim(),
     purchasePrice: toNumber(pickSkuExcelField(row, headers, 'purchasePrice')) ?? 0,
     manualUnitCbm,
     totalCbm,

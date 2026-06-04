@@ -35,6 +35,7 @@ function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
       purchaseQuantity: row.purchaseQuantity ?? 0,
       confirmedPurchaseQuantity: null,
       purchasePrice: row.purchasePrice ?? 0,
+      freightCost: 0,
       totalAmount: round((row.purchaseQuantity ?? 0) * (row.purchasePrice ?? 0), 2),
       purchaseDate: today.toISOString().slice(0, 10),
       estimatedArrivalDate: '',

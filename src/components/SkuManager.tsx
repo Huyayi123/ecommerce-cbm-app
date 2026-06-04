@@ -14,6 +14,8 @@ type ColumnKey =
   | 'sku'
   | 'productName'
   | 'englishName'
+  | 'storageLocation'
+  | 'purchaseUrl'
   | 'purchasePrice'
   | 'unitCbm'
   | 'totalCbm'
@@ -39,6 +41,8 @@ const columnOptions: Array<{ key: ColumnKey; label: string }> = [
   { key: 'sku', label: 'SKU' },
   { key: 'productName', label: '产品名称' },
   { key: 'englishName', label: '英文名称' },
+  { key: 'storageLocation', label: '库位' },
+  { key: 'purchaseUrl', label: '采购链接' },
   { key: 'purchasePrice', label: '采购单价' },
   { key: 'unitCbm', label: '单品CBM' },
   { key: 'totalCbm', label: '总CBM' },
@@ -73,6 +77,8 @@ const emptyDraft: DraftSku = {
   englishName: '',
   imageUrl: '',
   manufacturerName: '',
+  storageLocation: '',
+  purchaseUrl: '',
   shopName: '',
   buyerName: '',
   isSeasonal: false,
@@ -98,6 +104,8 @@ function mergeImportedSku(existing: SkuItem, imported: SkuItem, recognizedFields
     productName: imported.productName.trim() || existing.productName,
     englishName: imported.englishName.trim() || existing.englishName,
     imageUrl: imported.imageUrl.trim() || existing.imageUrl,
+    storageLocation: imported.storageLocation.trim() || existing.storageLocation,
+    purchaseUrl: imported.purchaseUrl.trim() || existing.purchaseUrl,
     purchasePrice: imported.purchasePrice > 0 ? imported.purchasePrice : existing.purchasePrice,
     manualUnitCbm: imported.manualUnitCbm > 0 ? imported.manualUnitCbm : existing.manualUnitCbm,
     totalCbm: imported.totalCbm > 0 ? imported.totalCbm : existing.totalCbm,
@@ -121,6 +129,8 @@ function toDraft(item: SkuItem): DraftSku {
     productName: item.productName,
     englishName: item.englishName,
     imageUrl: item.imageUrl,
+    storageLocation: item.storageLocation,
+    purchaseUrl: item.purchaseUrl,
     manufacturerName: item.manufacturerName,
     shopName: item.shopName,
     buyerName: item.buyerName,
@@ -155,6 +165,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
   const [pageSize, setPageSize] = useState(100);
   const [page, setPage] = useState(1);
   const calculated = useMemo(() => hydrateSku({ ...draft, id: draft.id || 'preview' }), [draft]);
+  const tableColSpan = visibleColumns.size + 1;
   const shopOptions = useMemo(
     () => CANONICAL_SHOP_NAMES.filter((shop) => items.some((item) => canonicalShopName(item.shopName) === shop)),
     [items],
@@ -164,7 +175,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
     const shopMatchedItems = shopFilter ? items.filter((item) => canonicalShopName(item.shopName) === shopFilter) : items;
     if (!keyword) return shopMatchedItems;
     return shopMatchedItems.filter((item) =>
-      [item.manufacturerName, item.sku, item.productName, item.englishName, item.shopName, item.buyerName, item.isSeasonal ? '季节性产品' : '']
+      [item.manufacturerName, item.sku, item.productName, item.englishName, item.storageLocation, item.purchaseUrl, item.shopName, item.buyerName, item.isSeasonal ? '季节性产品' : '']
         .some((value) => value.toLowerCase().includes(keyword)),
     );
   }, [items, searchText, shopFilter]);
@@ -359,6 +370,8 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
         <label>产品名称<input value={draft.productName} onChange={(event) => updateField('productName', event.target.value)} /></label>
         <label>英文名称<input value={draft.englishName} onChange={(event) => updateField('englishName', event.target.value)} /></label>
         <label>图片链接<input value={draft.imageUrl} onChange={(event) => updateField('imageUrl', event.target.value)} /></label>
+        <label>库位<input value={draft.storageLocation} onChange={(event) => updateField('storageLocation', event.target.value)} /></label>
+        <label>采购链接<input value={draft.purchaseUrl} onChange={(event) => updateField('purchaseUrl', event.target.value)} /></label>
         <label>厂家名<input value={draft.manufacturerName} onChange={(event) => updateField('manufacturerName', event.target.value)} /></label>
         <label>采购单价<input type="number" min="0" step="0.01" value={draft.purchasePrice} onChange={(event) => updateField('purchasePrice', Number(event.target.value))} /></label>
         <label>单品CBM<input type="number" min="0" step="0.00000001" value={draft.manualUnitCbm} onChange={(event) => updateField('manualUnitCbm', Number(event.target.value))} /></label>
@@ -430,6 +443,8 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
               {visibleColumns.has('sku') && <th className="sticky-col sticky-col-3">SKU</th>}
               {visibleColumns.has('productName') && <th className="sticky-col sticky-col-4">产品名称</th>}
               {visibleColumns.has('englishName') && <th>英文名称</th>}
+              {visibleColumns.has('storageLocation') && <th>库位</th>}
+              {visibleColumns.has('purchaseUrl') && <th>采购链接</th>}
               {visibleColumns.has('purchasePrice') && <th>采购单价</th>}
               {visibleColumns.has('unitCbm') && <th>单品CBM</th>}
               {visibleColumns.has('totalCbm') && <th>总CBM</th>}
@@ -453,6 +468,8 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
                   {visibleColumns.has('sku') && <td className="sticky-col sticky-col-3">{item.sku}</td>}
                   {visibleColumns.has('productName') && <td className="sticky-col sticky-col-4">{item.productName}</td>}
                   {visibleColumns.has('englishName') && <td>{item.englishName}</td>}
+                  {visibleColumns.has('storageLocation') && <td>{item.storageLocation}</td>}
+                  {visibleColumns.has('purchaseUrl') && <td>{item.purchaseUrl ? <a href={item.purchaseUrl} target="_blank" rel="noreferrer">打开</a> : '-'}</td>}
                   {visibleColumns.has('purchasePrice') && <td>{item.purchasePrice}</td>}
                   {visibleColumns.has('unitCbm') && <td>{item.unitCbm.toFixed(8)}</td>}
                   {visibleColumns.has('totalCbm') && <td>{item.totalCbm || '-'}</td>}
@@ -472,10 +489,12 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
                 </tr>
                 {expandedIds.has(item.id) && (
                   <tr key={`${item.id}-detail`}>
-                    <td colSpan={16} className="detail-row">
+                    <td colSpan={tableColSpan} className="detail-row">
                       <div className="detail-grid">
                         <span>英文名称：{item.englishName || '-'}</span>
                         <span>图片链接：{item.imageUrl || '-'}</span>
+                        <span>库位：{item.storageLocation || '-'}</span>
+                        <span>采购链接：{item.purchaseUrl || '-'}</span>
                         <span>总CBM：{item.totalCbm || '-'}</span>
                         <span>总数量：{item.totalQuantity || '-'}</span>
                         <span>长宽高：{item.cartonLengthCm} x {item.cartonWidthCm} x {item.cartonHeightCm}</span>
@@ -489,7 +508,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
                 )}
               </Fragment>
             ))}
-            {filteredItems.length === 0 && <tr><td colSpan={16} className="empty">暂无匹配的 SKU 资料。</td></tr>}
+            {filteredItems.length === 0 && <tr><td colSpan={tableColSpan} className="empty">暂无匹配的 SKU 资料。</td></tr>}
           </tbody>
         </table>
       </div>
