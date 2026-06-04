@@ -177,7 +177,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     if (!skuItem) return record;
     return {
       ...record,
-      unitsPerCarton: record.unitsPerCarton ?? (skuItem.unitsPerCarton > 0 ? skuItem.unitsPerCarton : null),
       purchasePrice: record.purchasePrice || skuItem.purchasePrice,
       unitCbm: record.unitCbm || skuItem.unitCbm,
       imageUrl: record.imageUrl || skuItem.imageUrl,
@@ -186,6 +185,12 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       manufacturerName: record.manufacturerName || skuItem.manufacturerName,
       shopName: record.shopName || skuItem.shopName,
     };
+  }
+
+  function defaultUnitsPerCartonText(sku: string): string {
+    const skuItem = skuBySku.get(sku.trim().toUpperCase());
+    if (!skuItem || skuItem.unitsPerCarton <= 0) return '未配置默认装箱数';
+    return `默认装箱数：${skuItem.unitsPerCarton}`;
   }
 
   function draftKey(recordId: string, field: EditableField): string {
@@ -586,6 +591,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
   function input(record: PurchaseRecord, field: EditableField, type = 'text') {
     if (!canEditField(field)) return <span>{String(record[field] ?? '')}</span>;
+    const placeholder = field === 'unitsPerCarton' ? defaultUnitsPerCartonText(record.sku) : undefined;
     if (field === 'status') {
       return (
         <select
@@ -601,6 +607,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       <input
         type={type}
         value={valueFor(record, field)}
+        placeholder={placeholder}
+        title={placeholder}
         onChange={(event) => setDrafts((current) => ({ ...current, [draftKey(record.id, field)]: event.target.value }))}
         onBlur={() => void commit(record, field)}
       />
@@ -727,7 +735,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <label>店铺<input value={newOrder.shopName} onChange={(event) => patchNewOrder('shopName', event.target.value)} /></label>
           <label>采购人<input value={profile.buyerName} readOnly /></label>
           <label>整箱件数<input type="number" min="0" value={newOrder.cartonCount} onChange={(event) => patchNewOrder('cartonCount', event.target.value)} /></label>
-          <label>每箱数量<input type="number" min="0" value={newOrder.unitsPerCarton} onChange={(event) => patchNewOrder('unitsPerCarton', event.target.value)} /></label>
+          <label>每箱数量<input type="number" min="0" value={newOrder.unitsPerCarton} placeholder={defaultUnitsPerCartonText(newOrder.sku)} title={defaultUnitsPerCartonText(newOrder.sku)} onChange={(event) => patchNewOrder('unitsPerCarton', event.target.value)} /></label>
           <label>尾箱数量<input type="number" min="0" value={newOrder.tailQuantity} onChange={(event) => patchNewOrder('tailQuantity', event.target.value)} /></label>
           <label>采购单价<input type="number" min="0" step="0.01" value={newOrder.purchasePrice} onChange={(event) => patchNewOrder('purchasePrice', event.target.value)} /></label>
           <label>实际数量<input value={newQuantity} readOnly /></label>
