@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import type { AuditLog, CalculationRow, PurchaseRecord, SkuItem } from '../types';
 import { mixedGroupsSummary, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from './purchaseRecords';
 
@@ -64,6 +64,45 @@ function quantityFormula(cartonCount: number | null, unitsPerCarton: number | nu
     return tail > 0 ? `${cartons}×${units}+1×${tail}=${total}PCS` : `${cartons}×${units}=${total}PCS`;
   }
   return tail > 0 ? `${tail}PCS` : '';
+}
+
+function applyInspectionStyles(worksheet: XLSX.WorkSheet, rowCount: number, colCount: number): void {
+  const thinBorder = { style: 'thin', color: { rgb: '000000' } };
+  const border = { top: thinBorder, right: thinBorder, bottom: thinBorder, left: thinBorder };
+  const center = { horizontal: 'center', vertical: 'center', wrapText: true };
+  const left = { horizontal: 'left', vertical: 'center', wrapText: true };
+
+  for (let row = 0; row < rowCount; row += 1) {
+    for (let col = 0; col < colCount; col += 1) {
+      const address = XLSX.utils.encode_cell({ r: row, c: col });
+      if (!worksheet[address]) worksheet[address] = { t: 's', v: '' };
+      worksheet[address].s = {
+        border,
+        alignment: col === 1 ? left : center,
+        font: row === 4 ? { bold: true } : undefined,
+      };
+    }
+  }
+
+  const titleCell = worksheet[XLSX.utils.encode_cell({ r: 0, c: 0 })];
+  if (titleCell) {
+    titleCell.s = {
+      border,
+      alignment: center,
+      font: { bold: true, sz: 16, name: 'Times New Roman' },
+    };
+  }
+
+  for (let col = 0; col < colCount; col += 1) {
+    const header = worksheet[XLSX.utils.encode_cell({ r: 4, c: col })];
+    if (header) {
+      header.s = {
+        border,
+        alignment: center,
+        font: { bold: true },
+      };
+    }
+  }
 }
 
 export function exportResults(rows: CalculationRow[], format: ExportFormat): void {
@@ -257,6 +296,7 @@ export function exportInspectionChecklist(records: PurchaseRecord[], format: Exp
     { wch: 18 },
     { wch: 28 },
   ];
+  applyInspectionStyles(worksheet, rows.length, 12);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, '验货单');
   writeWorkbook(workbook, '验货单', format);
