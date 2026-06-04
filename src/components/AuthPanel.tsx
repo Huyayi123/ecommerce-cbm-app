@@ -35,6 +35,26 @@ export function AuthPanel({ onAuthed }: Props) {
     }
   }
 
+  async function sendPasswordReset() {
+    if (!supabase || !email.trim()) {
+      setMessage('请先填写邮箱。');
+      return;
+    }
+    setLoading(true);
+    setMessage('');
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin + window.location.pathname,
+    });
+    if (error) {
+      console.error(error);
+      setMessage(error.message);
+      setLoading(false);
+      return;
+    }
+    setMessage('重置密码邮件已发送，请从邮箱打开链接后设置新密码。');
+    setLoading(false);
+  }
+
   if (!isSupabaseConfigured) {
     return (
       <section className="auth-shell">
@@ -62,6 +82,9 @@ export function AuthPanel({ onAuthed }: Props) {
         {message && <div className="inline-notice">{message}</div>}
         <button className="primary" type="button" onClick={submit} disabled={loading || !email || !password}>
           {loading ? '处理中...' : '登录'}
+        </button>
+        <button type="button" onClick={sendPasswordReset} disabled={loading || !email}>
+          忘记密码，发送重置邮件
         </button>
         <p className="muted-text">账号由内部管理员创建，请勿自行注册。</p>
       </div>

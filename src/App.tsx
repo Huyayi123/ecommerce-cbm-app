@@ -56,6 +56,11 @@ function App() {
   const [fileName, setFileName] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
 
+  function hasPasswordRecoveryToken(): boolean {
+    const urlText = `${window.location.search}${window.location.hash}`.toLowerCase();
+    return urlText.includes('type=recovery') || sessionStorage.getItem('passwordRecovery') === 'true';
+  }
+
   async function loadCloudData() {
     if (!supabase) return;
     const results = await Promise.allSettled([
@@ -119,7 +124,8 @@ function App() {
   }
 
   useEffect(() => {
-    if (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery')) {
+    if (hasPasswordRecoveryToken()) {
+      sessionStorage.setItem('passwordRecovery', 'true');
       setPasswordRecovery(true);
     }
     void loadSession();
@@ -127,6 +133,7 @@ function App() {
 
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        sessionStorage.setItem('passwordRecovery', 'true');
         setPasswordRecovery(true);
       }
       const user = session?.user;
@@ -445,6 +452,7 @@ function App() {
   if (passwordRecovery) {
     return <PasswordResetPanel onDone={async () => {
       setPasswordRecovery(false);
+      sessionStorage.removeItem('passwordRecovery');
       window.history.replaceState(null, '', window.location.pathname);
       await loadSession();
     }} />;
