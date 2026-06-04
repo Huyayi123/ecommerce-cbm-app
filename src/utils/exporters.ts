@@ -37,13 +37,17 @@ function writeWorkbook(workbook: XLSX.WorkBook, moduleName: string, format: Expo
   XLSX.writeFile(workbook, `${moduleName}_${dateStamp()}.${format}`, { bookType: format });
 }
 
-function logisticsValue(record: PurchaseRecord, value: number | null): number | string {
-  if (record.loadingType !== '冠通') return '';
-  return value ?? '待物流商回传';
-}
-
 function skuKey(value: string): string {
   return value.trim().toUpperCase();
+}
+
+function skuLookup(items: SkuItem[]): Map<string, SkuItem> {
+  const result = new Map<string, SkuItem>();
+  for (const item of items) {
+    const key = skuKey(item.sku);
+    if (key) result.set(key, item);
+  }
+  return result;
 }
 
 export function exportResults(rows: CalculationRow[], format: ExportFormat): void {
@@ -149,35 +153,33 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
   writeWorkbook(workbook, moduleName, format);
 }
 
-export function exportInspectionChecklist(records: PurchaseRecord[], format: ExportFormat): void {
+export function exportInspectionChecklist(records: PurchaseRecord[], format: ExportFormat, skuItems: SkuItem[] = []): void {
+  const skuBySku = skuLookup(skuItems);
+  const storageLocationFor = (sku: string) => skuBySku.get(skuKey(sku))?.storageLocation ?? '';
+  const englishNameFor = (record: PurchaseRecord) => record.englishName || skuBySku.get(skuKey(record.sku))?.englishName || record.productName;
+  const lineProductFor = (line: { sku: string; productName: string }) => skuBySku.get(skuKey(line.sku))?.englishName || line.productName;
   const worksheet = XLSX.utils.json_to_sheet(
     records.flatMap((record) => {
       const normalized = withPurchaseTotals(record);
       const rows = [{
-        SKU: normalized.sku,
-        产品名称: normalized.productName,
-        英文名称: normalized.englishName,
-        店铺: normalized.shopName,
-        采购数量: purchaseQuantityForRecordSku(normalized),
-        件数: packageCountFor(normalized) || '',
-        是否混装: normalized.isMixed ? '是' : '否',
-        混装组: mixedGroupsSummary(normalized),
-        总重量kg: logisticsValue(normalized, normalized.totalWeightKg),
-        总CBM: logisticsValue(normalized, normalized.logisticsTotalCbm),
+        Barcode: normalized.sku,
+        Product: englishNameFor(normalized),
+        整箱件数: normalized.cartonCount ?? '',
+        每箱数量: normalized.unitsPerCarton ?? '',
+        尾箱数量: normalized.tailQuantity || '',
+        总件数: packageCountFor(normalized) || '',
+        'Warehouse Allocatior': storageLocationFor(normalized.sku),
       }];
       return [
         ...rows,
         ...normalized.mixedGroups.flatMap((group) => group.lines.filter((line) => skuKey(line.sku) !== skuKey(normalized.sku)).map((line) => ({
-          SKU: line.sku,
-          产品名称: line.productName,
-          英文名称: '',
-          店铺: normalized.shopName,
-          采购数量: line.quantity,
-          件数: group.cartonCount,
-          是否混装: '混装子行',
-          混装组: group.groupName,
-          总重量kg: '',
-          总CBM: line.totalCbm,
+          Barcode: line.sku,
+          Product: lineProductFor(line),
+          整箱件数: '',
+          每箱数量: '',
+          尾箱数量: line.quantity || '',
+          总件数: group.cartonCount || '',
+          'Warehouse Allocatior': storageLocationFor(line.sku),
         }))),
       ];
     }),

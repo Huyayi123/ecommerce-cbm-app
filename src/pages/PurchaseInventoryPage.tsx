@@ -309,7 +309,7 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
 
   function exportSelectedInspectionChecklist() {
     if (selectedRecords.length === 0) return;
-    exportInspectionChecklist(selectedRecords, 'xlsx');
+    exportInspectionChecklist(selectedRecords, 'xlsx', skuItems);
     if (!canEditData) return;
     onChange(records.map((record) => (selectedIds.has(record.id) ? { ...record, status: 'arrived' } : record)));
     setSelectedIds(new Set());

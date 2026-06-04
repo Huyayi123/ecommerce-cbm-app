@@ -50,7 +50,7 @@ export function effectivePurchaseQuantity(record: PurchaseQuantityLike): number 
   if (cartonCount !== null && unitsPerCarton !== null && unitsPerCarton > 0) {
     return cartonCount * unitsPerCarton + tailQuantity;
   }
-  return record.confirmedPurchaseQuantity ?? record.purchaseQuantity;
+  return record.confirmedPurchaseQuantity ?? 0;
 }
 
 export function isInventoryRecord(record: PurchaseRecord): boolean {
