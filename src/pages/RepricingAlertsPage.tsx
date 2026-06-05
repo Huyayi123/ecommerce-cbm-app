@@ -66,7 +66,7 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
     setIsSyncing(true);
     setSyncMessage('');
     try {
-      const response = await fetch('/api/repricing-monitor?store=MegaValue&limit=20', { method: 'POST' });
+      const response = await fetch('/api/repricing-monitor?store=MegaValue&limit=3', { method: 'POST' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
       await onRefresh?.();
