@@ -572,7 +572,7 @@ function App() {
       )}
 
       {activePage === 'repricing' && (
-        <RepricingAlertsPage alerts={repricingAlerts} skuItems={skuItems} />
+        <RepricingAlertsPage alerts={repricingAlerts} skuItems={skuItems} onRefresh={loadCloudData} />
       )}
     </main>
   );

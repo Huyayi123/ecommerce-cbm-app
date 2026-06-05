@@ -4,6 +4,7 @@ import type { RepricingAlert, SkuItem } from '../types';
 type Props = {
   alerts: RepricingAlert[];
   skuItems: SkuItem[];
+  onRefresh?: () => Promise<void>;
 };
 
 function money(value: number | null): string {
@@ -34,14 +35,16 @@ function enrichAlerts(alerts: RepricingAlert[], skuItems: SkuItem[]): RepricingA
   });
 }
 
-export function RepricingAlertsPage({ alerts, skuItems }: Props) {
+export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
   const [shopFilter, setShopFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [syncMessage, setSyncMessage] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const enrichedAlerts = useMemo(() => enrichAlerts(alerts, skuItems), [alerts, skuItems]);
   const shops = useMemo(() => Array.from(new Set(enrichedAlerts.map((alert) => alert.shopName).filter(Boolean))).sort(), [enrichedAlerts]);
   const summary = useMemo(() => {
-    const active = enrichedAlerts.filter((alert) => alert.isActive && alert.alertLevel !== 'none');
+    const active = enrichedAlerts.filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'));
     return {
       total: active.length,
       lostBuyBox: active.filter((alert) => alert.alertType === 'lost_buy_box').length,
@@ -56,13 +59,25 @@ export function RepricingAlertsPage({ alerts, skuItems }: Props) {
       .filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'))
       .filter((alert) => shopFilter === 'all' || alert.shopName === shopFilter)
       .filter((alert) => !term || [alert.sku, alert.productName, alert.title, alert.lowestCompetitorSeller].some((value) => value.toLowerCase().includes(term)))
-      .sort((a, b) => {
-        const priority = { high: 0, medium: 1, review: 2, none: 3 };
-        const byLevel = priority[a.alertLevel] - priority[b.alertLevel];
-        if (byLevel !== 0) return byLevel;
-        return (b.priceGap ?? 0) - (a.priceGap ?? 0);
-      });
+      .sort((a, b) => (b.priceGap ?? 0) - (a.priceGap ?? 0));
   }, [enrichedAlerts, search, shopFilter]);
+
+  async function syncMegaValue() {
+    setIsSyncing(true);
+    setSyncMessage('');
+    try {
+      const response = await fetch('/api/repricing-monitor?store=MegaValue&limit=20', { method: 'POST' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      await onRefresh?.();
+      setSyncMessage(`MegaValue 测试完成：检查 ${payload.checked ?? 0} 条，确定被跟价 ${payload.confirmedAlerts ?? 0} 条。`);
+    } catch (error) {
+      console.error(error);
+      setSyncMessage(`MegaValue 测试失败：${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  }
 
   return (
     <section className="panel repricing-page">
@@ -71,7 +86,12 @@ export function RepricingAlertsPage({ alerts, skuItems }: Props) {
           <h2>价格预警</h2>
           <p>只显示已经确认有竞争卖家低于我方价格的商品，不会自动改价。</p>
         </div>
+        <button type="button" onClick={() => void syncMegaValue()} disabled={isSyncing}>
+          {isSyncing ? '正在测试 MegaValue...' : '测试 MegaValue'}
+        </button>
       </div>
+
+      {syncMessage && <div className="inline-notice">{syncMessage}</div>}
 
       <div className="repricing-summary">
         <div className="metric"><span>确定被跟价</span><strong>{summary.total}</strong></div>
@@ -104,7 +124,7 @@ export function RepricingAlertsPage({ alerts, skuItems }: Props) {
               <th>产品名称</th>
               <th>当前售价</th>
               <th>Buy Box</th>
-              <th>最低竞争价</th>
+              <th>最低竞品价</th>
               <th>竞争卖家</th>
               <th>差价</th>
               <th>最后检测</th>
