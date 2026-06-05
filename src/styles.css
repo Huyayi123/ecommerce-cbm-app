@@ -383,6 +383,91 @@ button.danger,
   color: #16202a;
 }
 
+.repricing-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 18px 0 12px;
+}
+
+.repricing-filter-grid {
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+}
+
+.repricing-table-wrap {
+  max-height: 680px;
+}
+
+.repricing-table {
+  min-width: 1500px;
+}
+
+.repricing-table small {
+  display: block;
+  max-width: 360px;
+  overflow: hidden;
+  color: #667784;
+  text-overflow: ellipsis;
+}
+
+.repricing-product-name {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.product-thumb {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  border: 1px solid #dce4ea;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.repricing-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.repricing-badge.high {
+  background: #fff2f0;
+  color: #b42318;
+}
+
+.repricing-badge.medium {
+  background: #fff7e6;
+  color: #8a5a00;
+}
+
+.repricing-badge.review {
+  background: #eef4ff;
+  color: #1d4ed8;
+}
+
+.repricing-badge.none {
+  background: #eef2f4;
+  color: #53616c;
+}
+
+.repricing-high td {
+  background: #fff7f5;
+}
+
+.repricing-review td {
+  background: #f7fbff;
+}
+
+.repricing-notice {
+  border-color: #f3a63b;
+  background: #fff4df;
+}
+
 .audit-panel summary {
   cursor: pointer;
   font-size: 20px;

@@ -166,6 +166,29 @@ export type SalesSuggestionRow = {
   messages: string[];
 };
 
+export type RepricingAlertLevel = 'high' | 'medium' | 'review' | 'none';
+
+export type RepricingAlert = {
+  id: string;
+  shopName: string;
+  storeId: string;
+  sku: string;
+  title: string;
+  imageUrl: string;
+  productName: string;
+  myPrice: number | null;
+  buyBoxPrice: number | null;
+  lowestCompetitorPrice: number | null;
+  lowestCompetitorSeller: string;
+  priceGap: number | null;
+  alertLevel: RepricingAlertLevel;
+  alertType: string;
+  alertMessage: string;
+  isActive: boolean;
+  checkedAt: string;
+  updatedAt: string;
+};
+
 export type AuditLog = {
   id: string;
   actorId: string;

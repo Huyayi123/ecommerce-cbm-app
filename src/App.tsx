@@ -7,8 +7,9 @@ import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { ContainerCalculatorPage } from './pages/ContainerCalculatorPage';
 import { MyPurchaseOrdersPage } from './pages/MyPurchaseOrdersPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
+import { RepricingAlertsPage } from './pages/RepricingAlertsPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
-import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from './types';
+import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
 import {
   createAuditLog,
   fetchAuditLogs,
@@ -16,6 +17,7 @@ import {
   fetchProfile,
   fetchProfiles,
   fetchPurchaseRecords,
+  fetchRepricingAlerts,
   fetchSalesSuggestions,
   fetchSkuItems,
   replaceContainerRows,
@@ -28,7 +30,7 @@ import { formatErrorMessage } from './utils/errors';
 import { canDelete, canEdit } from './utils/permissions';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'my-orders' | 'suggestions';
+type PageKey = 'sku' | 'calculator' | 'inventory' | 'my-orders' | 'suggestions' | 'repricing';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'suggestions', label: '月销量采购建议' },
@@ -38,8 +40,10 @@ const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'sku', label: 'SKU 资料库' },
 ];
 
+navItems.unshift({ key: 'repricing', label: '价格预警' });
+
 function isOptionalProfileLoadError(index: number, error: unknown): boolean {
-  return (index === 4 || index === 5) && /failed to fetch|fetch/i.test(formatErrorMessage(error));
+  return (index === 4 || index === 5 || index === 6) && /failed to fetch|fetch/i.test(formatErrorMessage(error));
 }
 
 function App() {
@@ -51,6 +55,7 @@ function App() {
   const [purchaseRows, setPurchaseRows] = useState<PurchaseRow[]>([]);
   const [purchaseRecords, setPurchaseRecords] = useState<PurchaseRecord[]>([]);
   const [savedSalesSuggestions, setSavedSalesSuggestions] = useState<SalesSuggestionRow[]>([]);
+  const [repricingAlerts, setRepricingAlerts] = useState<RepricingAlert[]>([]);
   const [profiles, setProfiles] = useState<AppProfile[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [fileName, setFileName] = useState('');
@@ -70,6 +75,7 @@ function App() {
       fetchAuditLogs(),
       fetchProfiles(),
       fetchSalesSuggestions(),
+      fetchRepricingAlerts(),
     ]);
     const errors = results.flatMap((result, index) => {
       if (result.status !== 'rejected') return [];
@@ -88,6 +94,7 @@ function App() {
       setProfiles((current) => (current.some((item) => item.id === profile.id) ? current : [...current, profile]));
     }
     if (results[5].status === 'fulfilled') setSavedSalesSuggestions(results[5].value);
+    if (results[6].status === 'fulfilled') setRepricingAlerts(results[6].value);
 
     if (errors.length > 0) {
       setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
@@ -144,6 +151,7 @@ function App() {
         setPurchaseRecords([]);
         setAuditLogs([]);
         setProfiles([]);
+        setRepricingAlerts([]);
         return;
       }
       void fetchProfile(user.id, user.email ?? '').then(setProfile);
@@ -468,6 +476,7 @@ function App() {
     record.status === 'pending'
     && record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()
   ));
+  const activeRepricingAlerts = repricingAlerts.filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'));
 
   return (
     <main className="app-shell">
@@ -486,6 +495,12 @@ function App() {
       {pendingAssignedTasks.length > 0 && (
         <button type="button" className="task-notice" onClick={() => setActivePage('my-orders')}>
           你有 {pendingAssignedTasks.length} 条新的待采购任务，点击查看
+        </button>
+      )}
+
+      {activeRepricingAlerts.length > 0 && (
+        <button type="button" className="task-notice repricing-notice" onClick={() => setActivePage('repricing')}>
+          发现 {activeRepricingAlerts.length} 个确定被跟价商品，点击查看
         </button>
       )}
 
@@ -554,6 +569,10 @@ function App() {
           canEditData={editable}
           savedSuggestions={savedSalesSuggestions}
         />
+      )}
+
+      {activePage === 'repricing' && (
+        <RepricingAlertsPage alerts={repricingAlerts} skuItems={skuItems} />
       )}
     </main>
   );

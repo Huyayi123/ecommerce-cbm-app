@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem, UserRole } from '../types';
+import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { getSkuMatchKey } from './calculations';
 import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
@@ -62,6 +62,25 @@ type AuditLogRow = {
   summary: string;
   metadata: Record<string, unknown> | null;
   created_at: string;
+};
+
+type RepricingAlertRow = {
+  id: string;
+  shop_name: string | null;
+  store_id: string | null;
+  sku: string | null;
+  title: string | null;
+  my_price: number | null;
+  buy_box_price: number | null;
+  lowest_competitor_price: number | null;
+  lowest_competitor_seller: string | null;
+  price_gap: number | null;
+  alert_level: string | null;
+  alert_type: string | null;
+  alert_message: string | null;
+  is_active: boolean | null;
+  checked_at: string | null;
+  updated_at: string | null;
 };
 
 type LegacySkuRow = {
@@ -498,6 +517,47 @@ export async function fetchSalesSuggestions(): Promise<SalesSuggestionRow[]> {
   }));
 }
 
+function mapRepricingAlert(row: RepricingAlertRow): RepricingAlert {
+  const level = row.alert_level === 'high' || row.alert_level === 'medium' || row.alert_level === 'review' ? row.alert_level : 'none';
+  return {
+    id: row.id,
+    shopName: row.shop_name ?? '',
+    storeId: row.store_id ?? '',
+    sku: row.sku ?? '',
+    title: row.title ?? '',
+    imageUrl: '',
+    productName: '',
+    myPrice: row.my_price === null || row.my_price === undefined ? null : Number(row.my_price),
+    buyBoxPrice: row.buy_box_price === null || row.buy_box_price === undefined ? null : Number(row.buy_box_price),
+    lowestCompetitorPrice: row.lowest_competitor_price === null || row.lowest_competitor_price === undefined ? null : Number(row.lowest_competitor_price),
+    lowestCompetitorSeller: row.lowest_competitor_seller ?? '',
+    priceGap: row.price_gap === null || row.price_gap === undefined ? null : Number(row.price_gap),
+    alertLevel: level,
+    alertType: row.alert_type ?? 'none',
+    alertMessage: row.alert_message ?? '',
+    isActive: Boolean(row.is_active),
+    checkedAt: row.checked_at ?? '',
+    updatedAt: row.updated_at ?? '',
+  };
+}
+
+export async function fetchRepricingAlerts(): Promise<RepricingAlert[]> {
+  const { data, error } = await requireSupabase()
+    .from('repricing_alerts')
+    .select('*')
+    .eq('is_active', true)
+    .order('alert_level', { ascending: true })
+    .order('checked_at', { ascending: false });
+  if (error) {
+    console.error(error);
+    if (isMissingColumnError(error) || /repricing_alerts/i.test(formatErrorMessage(error))) {
+      throw new Error(`价格预警表还没有创建，请先在 Supabase SQL Editor 执行 repricing 表结构 SQL。原始错误：${formatErrorMessage(error)}`);
+    }
+    throw new Error(formatErrorMessage(error));
+  }
+  return (data ?? []).map((row) => mapRepricingAlert(row as RepricingAlertRow));
+}
+
 function mapAuditLog(row: AuditLogRow): AuditLog {
   return {
     id: row.id,
@@ -548,6 +608,7 @@ export function subscribeToSharedTables(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'container_rows' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_suggestions' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'repricing_alerts' }, onChange)
     .subscribe();
 
   return () => {
