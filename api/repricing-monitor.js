@@ -18,6 +18,12 @@ function apiKeyForStore(storeName) {
   return process.env.TAKEALOT_API_KEY || '';
 }
 
+function takealotHeaders(storeName) {
+  const apiKey = apiKeyForStore(storeName);
+  if (!apiKey) throw new Error(`Store ${storeName} has no Takealot API Key configured`);
+  return { Accept: 'application/json', Authorization: `Key ${apiKey}` };
+}
+
 function numberFromEnv(name, fallback) {
   const parsed = Number(process.env[name]);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -250,9 +256,94 @@ async function fetchPublicPageDetails(row) {
   }
 }
 
-async function fetchProductDetails(row) {
+function findSignals(value, path = '', output = []) {
+  if (output.length >= 80 || value === null || value === undefined) return output;
+  if (Array.isArray(value)) {
+    value.slice(0, 5).forEach((item, index) => findSignals(item, `${path}[${index}]`, output));
+    return output;
+  }
+  if (typeof value !== 'object') return output;
+
+  for (const [key, child] of Object.entries(value)) {
+    const nextPath = path ? `${path}.${key}` : key;
+    if (/seller|buy.?box|winner|offer|merchant/i.test(key)) {
+      output.push({
+        path: nextPath,
+        value: typeof child === 'object' ? JSON.stringify(child).slice(0, 300) : String(child).slice(0, 300),
+      });
+    }
+    findSignals(child, nextPath, output);
+  }
+  return output;
+}
+
+function parseSellerOfferDetails(data) {
+  const candidates = [
+    data?.buybox,
+    data?.buy_box,
+    data?.buy_box_winner,
+    data?.buybox_winner,
+    data?.winning_offer,
+    data?.winner,
+    data?.offer,
+    data,
+  ].filter(Boolean);
+
+  let buyBoxSeller = '';
+  let buyBoxPrice = null;
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    const sellerDetail = candidate.seller || candidate.seller_detail || candidate.seller_info || candidate.merchant || candidate.merchant_detail || {};
+    buyBoxSeller = buyBoxSeller || firstText(
+      candidate.seller_name,
+      candidate.seller_display_name,
+      candidate.display_name,
+      candidate.merchant_name,
+      sellerDetail.display_name,
+      sellerDetail.name,
+      sellerDetail.seller_name,
+      sellerDetail.trading_name,
+    );
+    buyBoxPrice = buyBoxPrice || positiveNumber(
+      candidate.price
+      ?? candidate.selling_price
+      ?? candidate.offer_price
+      ?? candidate.buy_box_price
+      ?? candidate?.prices?.selling_price
+      ?? candidate?.pricing?.selling_price,
+    );
+  }
+
+  return { buyBoxSeller, buyBoxPrice, signals: findSignals(data) };
+}
+
+async function fetchSellerOfferDetails(storeName, row) {
+  const sku = skuFor(row);
+  if (!sku) return { source: 'seller_offer_no_sku', buyBoxPrice: null, buyBoxSeller: '', offers: [], signals: [] };
+  const baseUrl = process.env.TAKEALOT_API_BASE_URL || 'https://seller-api.takealot.com';
+  const url = new URL(`/v2/offers/offer/${encodeURIComponent(sku)}`, baseUrl);
+  try {
+    const upstream = await fetch(url, { headers: takealotHeaders(storeName) });
+    const data = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) {
+      return { source: `seller_offer_http_${upstream.status}`, buyBoxPrice: null, buyBoxSeller: '', offers: [], signals: findSignals(data) };
+    }
+    const parsed = parseSellerOfferDetails(data);
+    return {
+      source: 'seller_offer_api',
+      buyBoxPrice: parsed.buyBoxPrice,
+      buyBoxSeller: parsed.buyBoxSeller,
+      offers: parsed.buyBoxPrice && parsed.buyBoxSeller ? [{ seller: parsed.buyBoxSeller, price: parsed.buyBoxPrice, inStock: true, isBuyBox: true }] : [],
+      signals: parsed.signals,
+    };
+  } catch {
+    return { source: 'seller_offer_error', buyBoxPrice: null, buyBoxSeller: '', offers: [], signals: [] };
+  }
+}
+
+async function fetchProductDetails(row, storeName) {
   const plid = extractPlid(offerUrlFor(row));
-  if (!plid) return fetchPublicPageDetails(row);
+  if (!plid) return fetchSellerOfferDetails(storeName, row);
   const url = `https://api.takealot.com/rest/v-1-10-0/product-details/PLID${plid}`;
   let productDetails = { source: 'no_product_details', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   try {
@@ -275,15 +366,31 @@ async function fetchProductDetails(row) {
 
   if (sellerIsKnown(productDetails.buyBoxSeller)) return productDetails;
 
+  const sellerOfferDetails = await fetchSellerOfferDetails(storeName, row);
+  if (sellerIsKnown(sellerOfferDetails.buyBoxSeller)) {
+    return {
+      source: `${productDetails.source}+${sellerOfferDetails.source}`,
+      buyBoxPrice: sellerOfferDetails.buyBoxPrice ?? productDetails.buyBoxPrice,
+      buyBoxSeller: sellerOfferDetails.buyBoxSeller,
+      offers: [
+        ...(sellerOfferDetails.offers || []),
+        ...(productDetails.offers || []),
+      ],
+      signals: sellerOfferDetails.signals,
+    };
+  }
+
   const pageDetails = await fetchPublicPageDetails(row);
   return {
-    source: `${productDetails.source}+${pageDetails.source}`,
+    source: `${productDetails.source}+${sellerOfferDetails.source}+${pageDetails.source}`,
     buyBoxPrice: pageDetails.buyBoxPrice ?? productDetails.buyBoxPrice,
     buyBoxSeller: pageDetails.buyBoxSeller || productDetails.buyBoxSeller,
     offers: [
       ...(pageDetails.offers || []),
+      ...(sellerOfferDetails.offers || []),
       ...(productDetails.offers || []),
     ],
+    signals: sellerOfferDetails.signals,
   };
 }
 
@@ -567,7 +674,7 @@ export default async function handler(request, response) {
 
     for (const row of rows) {
       try {
-        const productDetails = await fetchProductDetails(row);
+        const productDetails = await fetchProductDetails(row, storeName);
         const alert = evaluateAlert({ row, storeName, productDetails });
         await syncRepricingResult({ storeName, storeId, row, alert, checkedAt });
         checked += 1;
@@ -585,6 +692,7 @@ export default async function handler(request, response) {
           alertType: alert.alertType,
           isActive: alert.isActive,
           source: alert.source,
+          signals: request.query.debug ? productDetails.signals : undefined,
         };
         details.push(detail);
         if (alert.isActive) alertDetails.push(detail);
