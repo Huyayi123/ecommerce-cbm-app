@@ -108,6 +108,14 @@ function samePrice(a, b) {
   return a !== null && b !== null && Math.round(Number(a) * 100) === Math.round(Number(b) * 100);
 }
 
+function hasVariantSuffix(title) {
+  const suffix = String(title ?? '').split(' - ').pop()?.trim().toLowerCase() || '';
+  if (!suffix) return false;
+  if (/\b(black|white|blue|green|red|pink|purple|yellow|orange|grey|gray|brown|beige|natural|walnut|silver|gold|clear)\b/.test(suffix)) return true;
+  if (/\b\d+(?:\.\d+)?\s*(cm|mm|m|inch|in|kg|g|l|ml)\b/.test(suffix)) return true;
+  return false;
+}
+
 function offerUrlFor(row) {
   return String(row?.offer_url ?? row?.canonical_url ?? row?.product_url ?? row?.url ?? '').trim();
 }
@@ -560,6 +568,24 @@ function evaluateAlert({ row, storeName, productDetails, ownRows = [] }) {
         isActive: false,
         isOutOfStock: false,
         source: `${productDetails.source}+own_variant:${skuFor(ownVariant)}`,
+      };
+    }
+
+    if (!sellerIsKnown(buyBoxSeller) && hasVariantSuffix(title)) {
+      return {
+        sku,
+        title,
+        myPrice,
+        buyBoxPrice: productDetails.buyBoxPrice,
+        lowestCompetitorPrice: null,
+        lowestCompetitorSeller: '',
+        priceGap: null,
+        alertLevel: 'none',
+        alertType: 'variant_uncertain',
+        alertMessage: 'Variant product has unknown Buy Box seller; skip confirmed alert to avoid color/size mismatch.',
+        isActive: false,
+        isOutOfStock: false,
+        source: `${productDetails.source}+variant_uncertain`,
       };
     }
 
