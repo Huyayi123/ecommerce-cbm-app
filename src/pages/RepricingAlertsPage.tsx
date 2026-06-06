@@ -73,8 +73,8 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
       const response = await fetch(`/api/repricing-monitor?store=${encodeURIComponent(store)}&limit=500`, { method: 'POST' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-      setShopFilter(store);
       await onRefresh?.();
+      setShopFilter(store);
       setSyncMessage(`${store} 同步完成：检查 ${payload.checked ?? 0} 条，确定被跟价 ${payload.confirmedAlerts ?? 0} 条。`);
     } catch (error) {
       console.error(error);
