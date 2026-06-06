@@ -105,6 +105,15 @@ function sameSeller(a, b) {
   return normalizeSeller(a) === normalizeSeller(b);
 }
 
+function firstText(...values) {
+  for (const value of values) {
+    if (value && typeof value === 'object') continue;
+    const text = String(value ?? '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
 function parseRawOffers(rawOffers) {
   if (!Array.isArray(rawOffers)) return [];
   return rawOffers.flatMap((item) => {
@@ -127,7 +136,20 @@ function parseRawOffers(rawOffers) {
 function parseProductDetails(data) {
   const buybox = data?.buybox || {};
   const sellerDetail = data?.seller_detail || {};
-  const seller = String(sellerDetail.display_name ?? sellerDetail.name ?? '').trim();
+  const selected = (buybox.items || []).find((item) => item?.is_selected) || (buybox.items || [])[0] || {};
+  const buyboxSellerDetail = buybox.seller_detail || buybox.seller || selected.seller_detail || selected.seller || {};
+  const seller = firstText(
+    buybox.seller_name,
+    buybox.seller,
+    buybox.display_name,
+    buyboxSellerDetail.display_name,
+    buyboxSellerDetail.name,
+    selected.seller_name,
+    selected.seller,
+    selected.display_name,
+    sellerDetail.display_name,
+    sellerDetail.name,
+  );
   let buyBoxPrice = positiveNumber(
     buybox.pretty_price
     ?? buybox.price
@@ -136,7 +158,6 @@ function parseProductDetails(data) {
   );
 
   if (!buyBoxPrice) {
-    const selected = (buybox.items || []).find((item) => item?.is_selected) || (buybox.items || [])[0];
     buyBoxPrice = positiveNumber(selected?.pretty_price ?? selected?.price ?? selected?.selling_price);
   }
 
@@ -213,6 +234,30 @@ function evaluateAlert({ row, storeName, productDetails }) {
       alertMessage: '',
       isActive: false,
       isOutOfStock: true,
+      source: productDetails.source,
+    };
+  }
+
+  const buyBoxSeller = productDetails.buyBoxSeller || '';
+  if (
+    productDetails.buyBoxPrice !== null
+    && sellerIsKnown(buyBoxSeller)
+    && !sameSeller(buyBoxSeller, storeName)
+  ) {
+    const priceGap = Number((myPrice - productDetails.buyBoxPrice).toFixed(2));
+    return {
+      sku,
+      title,
+      myPrice,
+      buyBoxPrice: productDetails.buyBoxPrice,
+      lowestCompetitorPrice: productDetails.buyBoxPrice,
+      lowestCompetitorSeller: buyBoxSeller,
+      priceGap,
+      alertLevel: 'high',
+      alertType: 'lost_buy_box',
+      alertMessage: `${sku} Buy Box is occupied by ${buyBoxSeller}. My price R ${myPrice.toFixed(2)}, Buy Box R ${productDetails.buyBoxPrice.toFixed(2)}.`,
+      isActive: true,
+      isOutOfStock: false,
       source: productDetails.source,
     };
   }
