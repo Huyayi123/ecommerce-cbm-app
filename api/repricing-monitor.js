@@ -58,6 +58,26 @@ function titleFor(row) {
   return String(row?.title ?? row?.product_title ?? row?.name ?? row?.product_name ?? '').trim();
 }
 
+function normalizeVariantTitle(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/\b(bestby|arfast|aicom|megavalue|keepfit|lifon|patpaw)\b/g, ' ')
+    .replace(/\b\d+(?:\.\d+)?\s*(cm|mm|m|pcs?|pieces?|pack|set)\b/g, ' ')
+    .replace(/\b\d+(?:\.\d+)?\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function sharedPrefixLength(a, b) {
+  const left = normalizeVariantTitle(a);
+  const right = normalizeVariantTitle(b);
+  const max = Math.min(left.length, right.length);
+  let index = 0;
+  while (index < max && left[index] === right[index]) index += 1;
+  return index;
+}
+
 function rowKey(row) {
   return String(row?.offer_id ?? row?.sku ?? row?.barcode ?? JSON.stringify(row)).trim();
 }
@@ -82,6 +102,10 @@ function stockFor(row) {
 
 function myPriceFor(row) {
   return positiveNumber(row?.selling_price ?? row?.price ?? row?.offer_price ?? row?.current_price);
+}
+
+function samePrice(a, b) {
+  return a !== null && b !== null && Math.round(Number(a) * 100) === Math.round(Number(b) * 100);
 }
 
 function offerUrlFor(row) {
@@ -406,7 +430,27 @@ async function fetchProductDetails(row, storeName) {
   };
 }
 
-function evaluateAlert({ row, storeName, productDetails }) {
+function findOwnVariantAtBuyBoxPrice({ row, ownRows, buyBoxPrice }) {
+  if (buyBoxPrice === null) return null;
+  const sku = skuFor(row);
+  const title = titleFor(row);
+  const normalizedTitle = normalizeVariantTitle(title);
+  if (!sku || normalizedTitle.length < 24) return null;
+
+  return (ownRows || []).find((candidate) => {
+    const candidateSku = skuFor(candidate);
+    if (!candidateSku || candidateSku === sku) return false;
+    if (stockFor(candidate) <= 0 || isDisabledRow(candidate)) return false;
+    if (!samePrice(myPriceFor(candidate), buyBoxPrice)) return false;
+
+    const candidateTitle = titleFor(candidate);
+    const normalizedCandidateTitle = normalizeVariantTitle(candidateTitle);
+    if (!normalizedCandidateTitle) return false;
+    return normalizedCandidateTitle === normalizedTitle || sharedPrefixLength(title, candidateTitle) >= 35;
+  }) || null;
+}
+
+function evaluateAlert({ row, storeName, productDetails, ownRows = [] }) {
   const sku = skuFor(row);
   const myPrice = myPriceFor(row);
   const stock = stockFor(row);
@@ -452,6 +496,28 @@ function evaluateAlert({ row, storeName, productDetails }) {
   if (
     productDetails.buyBoxPrice !== null
     && sellerIsKnown(buyBoxSeller)
+    && sameSeller(buyBoxSeller, storeName)
+  ) {
+    return {
+      sku,
+      title,
+      myPrice,
+      buyBoxPrice: productDetails.buyBoxPrice,
+      lowestCompetitorPrice: null,
+      lowestCompetitorSeller: buyBoxSeller,
+      priceGap: null,
+      alertLevel: 'none',
+      alertType: 'own_buy_box',
+      alertMessage: '',
+      isActive: false,
+      isOutOfStock: false,
+      source: productDetails.source,
+    };
+  }
+
+  if (
+    productDetails.buyBoxPrice !== null
+    && sellerIsKnown(buyBoxSeller)
     && !sameSeller(buyBoxSeller, storeName)
   ) {
     const priceGap = Number((myPrice - productDetails.buyBoxPrice).toFixed(2));
@@ -476,7 +542,27 @@ function evaluateAlert({ row, storeName, productDetails }) {
     productDetails.buyBoxPrice !== null
     && productDetails.buyBoxPrice < myPrice
     && productDetails.source.includes('product_details_api')
+    && (!sellerIsKnown(buyBoxSeller) || !sameSeller(buyBoxSeller, storeName))
   ) {
+    const ownVariant = findOwnVariantAtBuyBoxPrice({ row, ownRows, buyBoxPrice: productDetails.buyBoxPrice });
+    if (ownVariant) {
+      return {
+        sku,
+        title,
+        myPrice,
+        buyBoxPrice: productDetails.buyBoxPrice,
+        lowestCompetitorPrice: productDetails.buyBoxPrice,
+        lowestCompetitorSeller: storeName,
+        priceGap: null,
+        alertLevel: 'none',
+        alertType: 'own_variant',
+        alertMessage: `Buy Box price matches own variant ${skuFor(ownVariant)}.`,
+        isActive: false,
+        isOutOfStock: false,
+        source: `${productDetails.source}+own_variant:${skuFor(ownVariant)}`,
+      };
+    }
+
     const priceGap = Number((myPrice - productDetails.buyBoxPrice).toFixed(2));
     const sellerName = buyBoxSeller || 'Buy Box seller';
     return {
@@ -649,6 +735,7 @@ async function fetchTakealotRows(storeName, limit, requestedSku = '') {
   const maxPages = numberFromEnv('TAKEALOT_REPRICING_MAX_PAGES', numberFromEnv('TAKEALOT_MAX_PAGES', 50));
   const headers = { Accept: 'application/json', Authorization: `Key ${apiKey}` };
   const allRows = [];
+  const contextRows = [];
   const seenKeys = new Set();
   const requestedSkuKey = String(requestedSku || '').trim().toUpperCase();
   let pagesFetched = 0;
@@ -674,9 +761,10 @@ async function fetchTakealotRows(storeName, limit, requestedSku = '') {
       seenKeys.add(key);
       newRowsOnPage += 1;
       if (isDisabledRow(row)) continue;
+      contextRows.push(row);
       if (requestedSkuKey && skuFor(row) !== requestedSkuKey) continue;
       allRows.push(row);
-      if (limit && allRows.length >= limit) return { rows: allRows, pagesFetched, totalResults };
+      if (!requestedSkuKey && limit && allRows.length >= limit) return { rows: allRows, contextRows, pagesFetched, totalResults };
     }
 
     if (rows.length < pageSize) break;
@@ -684,7 +772,7 @@ async function fetchTakealotRows(storeName, limit, requestedSku = '') {
     if (totalResults !== null && seenKeys.size >= totalResults) break;
   }
 
-  return { rows: allRows, pagesFetched, totalResults };
+  return { rows: allRows, contextRows, pagesFetched, totalResults };
 }
 
 export default async function handler(request, response) {
@@ -700,7 +788,7 @@ export default async function handler(request, response) {
   const checkedAt = new Date().toISOString();
 
   try {
-    const { rows, pagesFetched, totalResults } = await fetchTakealotRows(storeName, limit, requestedSku);
+    const { rows, contextRows, pagesFetched, totalResults } = await fetchTakealotRows(storeName, limit, requestedSku);
     const details = [];
     const alertDetails = [];
     let checked = 0;
@@ -711,7 +799,7 @@ export default async function handler(request, response) {
     for (const row of rows) {
       try {
         const productDetails = await fetchProductDetails(row, storeName);
-        const alert = evaluateAlert({ row, storeName, productDetails });
+        const alert = evaluateAlert({ row, storeName, productDetails, ownRows: contextRows });
         await syncRepricingResult({ storeName, storeId, row, alert, checkedAt });
         checked += 1;
         if (alert.isActive) confirmedAlerts += 1;
