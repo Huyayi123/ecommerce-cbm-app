@@ -472,6 +472,30 @@ function evaluateAlert({ row, storeName, productDetails }) {
     };
   }
 
+  if (
+    productDetails.buyBoxPrice !== null
+    && productDetails.buyBoxPrice < myPrice
+    && productDetails.source.includes('product_details_api')
+  ) {
+    const priceGap = Number((myPrice - productDetails.buyBoxPrice).toFixed(2));
+    const sellerName = buyBoxSeller || 'Buy Box seller';
+    return {
+      sku,
+      title,
+      myPrice,
+      buyBoxPrice: productDetails.buyBoxPrice,
+      lowestCompetitorPrice: productDetails.buyBoxPrice,
+      lowestCompetitorSeller: sellerName,
+      priceGap,
+      alertLevel: 'high',
+      alertType: 'lost_buy_box',
+      alertMessage: `${sku} exact product Buy Box is R ${priceGap.toFixed(2)} lower than my price. Please open Takealot to confirm seller.`,
+      isActive: true,
+      isOutOfStock: false,
+      source: productDetails.source,
+    };
+  }
+
   const competitorOffers = productDetails.offers
     .filter((offer) => sellerIsKnown(offer.seller))
     .filter((offer) => !sameSeller(offer.seller, storeName))
