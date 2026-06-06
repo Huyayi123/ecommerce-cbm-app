@@ -46,14 +46,16 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
   const enrichedAlerts = useMemo(() => enrichAlerts(alerts, skuItems), [alerts, skuItems]);
   const shops = useMemo(() => Array.from(new Set(enrichedAlerts.map((alert) => alert.shopName).filter(Boolean))).sort(), [enrichedAlerts]);
   const summary = useMemo(() => {
-    const active = enrichedAlerts.filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'));
+    const active = enrichedAlerts
+      .filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'))
+      .filter((alert) => shopFilter === 'all' || alert.shopName === shopFilter);
     return {
       total: active.length,
       lostBuyBox: active.filter((alert) => alert.alertType === 'lost_buy_box').length,
       followedPrice: active.filter((alert) => alert.alertType === 'followed_price').length,
       shops: new Set(active.map((alert) => alert.shopName).filter(Boolean)).size,
     };
-  }, [enrichedAlerts]);
+  }, [enrichedAlerts, shopFilter]);
 
   const filteredAlerts = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -71,6 +73,7 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
       const response = await fetch(`/api/repricing-monitor?store=${encodeURIComponent(store)}&limit=500`, { method: 'POST' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      setShopFilter(store);
       await onRefresh?.();
       setSyncMessage(`${store} 同步完成：检查 ${payload.checked ?? 0} 条，确定被跟价 ${payload.confirmedAlerts ?? 0} 条。`);
     } catch (error) {
