@@ -118,14 +118,32 @@ function parseRawOffers(rawOffers) {
   if (!Array.isArray(rawOffers)) return [];
   return rawOffers.flatMap((item) => {
     if (!item || typeof item !== 'object') return [];
-    const price = positiveNumber(item.price ?? item.selling_price ?? item.offer_price ?? item.pretty_price);
+    const price = positiveNumber(
+      item.price
+      ?? item.selling_price
+      ?? item.offer_price
+      ?? item.pretty_price
+      ?? item?.prices?.selling_price
+      ?? item?.pricing?.selling_price
+      ?? item?.pricing?.price,
+    );
     if (!price) return [];
     const stockValue = item.in_stock ?? item.stock ?? item.quantity_available ?? item.available;
     const inStock = typeof stockValue === 'boolean'
       ? stockValue
       : !['0', 'false', 'none', 'out_of_stock', 'disabled'].includes(String(stockValue ?? 'true').toLowerCase());
+    const sellerDetail = item.seller_detail || item.seller || item.seller_info || item.merchant || item.merchant_detail || {};
     return [{
-      seller: String(item.seller ?? item.seller_name ?? item.display_name ?? item.name ?? '').trim(),
+      seller: firstText(
+        item.seller_name,
+        item.display_name,
+        item.name,
+        item.merchant_name,
+        sellerDetail.display_name,
+        sellerDetail.name,
+        sellerDetail.seller_name,
+        sellerDetail.trading_name,
+      ),
       price,
       inStock,
       isBuyBox: Boolean(item.is_buy_box ?? item.buy_box),
@@ -140,15 +158,17 @@ function parseProductDetails(data) {
   const buyboxSellerDetail = buybox.seller_detail || buybox.seller || selected.seller_detail || selected.seller || {};
   const seller = firstText(
     buybox.seller_name,
-    buybox.seller,
     buybox.display_name,
     buyboxSellerDetail.display_name,
     buyboxSellerDetail.name,
+    buyboxSellerDetail.seller_name,
+    buyboxSellerDetail.trading_name,
     selected.seller_name,
-    selected.seller,
     selected.display_name,
     sellerDetail.display_name,
     sellerDetail.name,
+    sellerDetail.seller_name,
+    sellerDetail.trading_name,
   );
   let buyBoxPrice = positiveNumber(
     buybox.pretty_price
@@ -484,6 +504,7 @@ export default async function handler(request, response) {
           title: alert.title,
           myPrice: alert.myPrice,
           buyBoxPrice: alert.buyBoxPrice,
+          buyBoxSeller: productDetails.buyBoxSeller,
           competitorPrice: alert.lowestCompetitorPrice,
           competitorSeller: alert.lowestCompetitorSeller,
           alertLevel: alert.alertLevel,
