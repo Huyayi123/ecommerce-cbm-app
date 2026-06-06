@@ -809,7 +809,10 @@ export default async function handler(request, response) {
 
   const storeName = String(request.query.store || DEFAULT_STORE).trim();
   const requestedSku = String(request.query.sku || '').trim();
-  const limit = requestedSku ? 500 : Math.min(Math.max(Number(request.query.limit || 20), 1), 500);
+  const requestedLimit = Number(request.query.limit);
+  const limit = requestedSku
+    ? null
+    : (Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.floor(requestedLimit) : null);
   const storeId = storeName.toLowerCase();
   const checkedAt = new Date().toISOString();
 

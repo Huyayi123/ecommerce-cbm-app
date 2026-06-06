@@ -70,7 +70,7 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
     setSyncingStore(store);
     setSyncMessage('');
     try {
-      const response = await fetch(`/api/repricing-monitor?store=${encodeURIComponent(store)}&limit=500`, { method: 'POST' });
+      const response = await fetch(`/api/repricing-monitor?store=${encodeURIComponent(store)}`, { method: 'POST' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
       await onRefresh?.();
