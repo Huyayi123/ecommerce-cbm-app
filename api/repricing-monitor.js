@@ -199,21 +199,92 @@ function parseProductDetails(data) {
   };
 }
 
+function textFromHtml(html) {
+  return String(html || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parsePublicPageDetails(html) {
+  const text = textFromHtml(html);
+  if (!text || /cloudflare|attention required|enable cookies/i.test(text)) {
+    return { buyBoxPrice: null, buyBoxSeller: '', offers: [] };
+  }
+
+  const sellerMatch = text.match(/Sold by\s+(.+?)(?:\s+·|\s+\u2022|\s+VAT Registered|\s+Seller Score|\s+Other Offers|$)/i);
+  const buyBoxSeller = sellerMatch ? sellerMatch[1].trim() : '';
+  const priceMatch = text.match(/\bR\s*([0-9][0-9\s,]*(?:\.[0-9]{2})?)\b/);
+  const buyBoxPrice = priceMatch ? positiveNumber(priceMatch[1]) : null;
+  const offers = [];
+
+  if (buyBoxPrice && buyBoxSeller) {
+    offers.push({ seller: buyBoxSeller, price: buyBoxPrice, inStock: true, isBuyBox: true });
+  }
+
+  return { buyBoxPrice, buyBoxSeller, offers };
+}
+
+async function fetchPublicPageDetails(row) {
+  const url = offerUrlFor(row);
+  if (!url) return { source: 'no_public_url', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
+  try {
+    const upstream = await fetch(url, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-ZA,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      },
+    });
+    if (!upstream.ok) {
+      return { source: `public_page_http_${upstream.status}`, buyBoxPrice: null, buyBoxSeller: '', offers: [] };
+    }
+    const html = await upstream.text();
+    return { source: 'public_page_html', ...parsePublicPageDetails(html) };
+  } catch {
+    return { source: 'public_page_error', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
+  }
+}
+
 async function fetchProductDetails(row) {
   const plid = extractPlid(offerUrlFor(row));
-  if (!plid) return { source: 'no_plid', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
+  if (!plid) return fetchPublicPageDetails(row);
   const url = `https://api.takealot.com/rest/v-1-10-0/product-details/PLID${plid}`;
-  const upstream = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      'User-Agent': 'Mozilla/5.0 (compatible; ecommerce-cbm-repricing/1.0)',
-    },
-  });
-  if (!upstream.ok) {
-    return { source: `product_details_http_${upstream.status}`, buyBoxPrice: null, buyBoxSeller: '', offers: [] };
+  let productDetails = { source: 'no_product_details', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
+  try {
+    const upstream = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        'Accept-Language': 'en-ZA,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      },
+    });
+    if (upstream.ok) {
+      const data = await upstream.json().catch(() => ({}));
+      productDetails = { source: 'product_details_api', ...parseProductDetails(data) };
+    } else {
+      productDetails = { source: `product_details_http_${upstream.status}`, buyBoxPrice: null, buyBoxSeller: '', offers: [] };
+    }
+  } catch {
+    productDetails = { source: 'product_details_error', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   }
-  const data = await upstream.json().catch(() => ({}));
-  return { source: 'product_details_api', ...parseProductDetails(data) };
+
+  if (sellerIsKnown(productDetails.buyBoxSeller)) return productDetails;
+
+  const pageDetails = await fetchPublicPageDetails(row);
+  return {
+    source: `${productDetails.source}+${pageDetails.source}`,
+    buyBoxPrice: pageDetails.buyBoxPrice ?? productDetails.buyBoxPrice,
+    buyBoxSeller: pageDetails.buyBoxSeller || productDetails.buyBoxSeller,
+    offers: [
+      ...(pageDetails.offers || []),
+      ...(productDetails.offers || []),
+    ],
+  };
 }
 
 function evaluateAlert({ row, storeName, productDetails }) {
@@ -425,7 +496,7 @@ async function syncRepricingResult({ storeName, storeId, row, alert, checkedAt }
   });
 }
 
-async function fetchTakealotRows(storeName, limit) {
+async function fetchTakealotRows(storeName, limit, requestedSku = '') {
   const apiKey = apiKeyForStore(storeName);
   if (!apiKey) throw new Error(`Store ${storeName} has no Takealot API Key configured`);
 
@@ -436,6 +507,7 @@ async function fetchTakealotRows(storeName, limit) {
   const headers = { Accept: 'application/json', Authorization: `Key ${apiKey}` };
   const allRows = [];
   const seenKeys = new Set();
+  const requestedSkuKey = String(requestedSku || '').trim().toUpperCase();
   let pagesFetched = 0;
   let totalResults = null;
 
@@ -459,6 +531,7 @@ async function fetchTakealotRows(storeName, limit) {
       seenKeys.add(key);
       newRowsOnPage += 1;
       if (isDisabledRow(row)) continue;
+      if (requestedSkuKey && skuFor(row) !== requestedSkuKey) continue;
       allRows.push(row);
       if (limit && allRows.length >= limit) return { rows: allRows, pagesFetched, totalResults };
     }
@@ -478,12 +551,13 @@ export default async function handler(request, response) {
   }
 
   const storeName = String(request.query.store || DEFAULT_STORE).trim();
-  const limit = Math.min(Math.max(Number(request.query.limit || 20), 1), 500);
+  const requestedSku = String(request.query.sku || '').trim();
+  const limit = requestedSku ? 500 : Math.min(Math.max(Number(request.query.limit || 20), 1), 500);
   const storeId = storeName.toLowerCase();
   const checkedAt = new Date().toISOString();
 
   try {
-    const { rows, pagesFetched, totalResults } = await fetchTakealotRows(storeName, limit);
+    const { rows, pagesFetched, totalResults } = await fetchTakealotRows(storeName, limit, requestedSku);
     const details = [];
     const alertDetails = [];
     let checked = 0;
