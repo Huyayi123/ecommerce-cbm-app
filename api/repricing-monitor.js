@@ -420,6 +420,7 @@ export default async function handler(request, response) {
   try {
     const { rows, pagesFetched, totalResults } = await fetchTakealotRows(storeName, limit);
     const details = [];
+    const alertDetails = [];
     let checked = 0;
     let confirmedAlerts = 0;
     let inactive = 0;
@@ -433,7 +434,7 @@ export default async function handler(request, response) {
         checked += 1;
         if (alert.isActive) confirmedAlerts += 1;
         else inactive += 1;
-        details.push({
+        const detail = {
           sku: alert.sku,
           title: alert.title,
           myPrice: alert.myPrice,
@@ -444,7 +445,9 @@ export default async function handler(request, response) {
           alertType: alert.alertType,
           isActive: alert.isActive,
           source: alert.source,
-        });
+        };
+        details.push(detail);
+        if (alert.isActive) alertDetails.push(detail);
       } catch (error) {
         console.error(error);
         errors += 1;
@@ -462,6 +465,7 @@ export default async function handler(request, response) {
       pagesFetched,
       totalResults,
       details: details.slice(0, 50),
+      alertDetails,
     });
   } catch (error) {
     console.error(error);

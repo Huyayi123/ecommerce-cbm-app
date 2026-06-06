@@ -66,7 +66,7 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
     setIsSyncing(true);
     setSyncMessage('');
     try {
-      const response = await fetch('/api/repricing-monitor?store=MegaValue&limit=3', { method: 'POST' });
+      const response = await fetch('/api/repricing-monitor?store=MegaValue&limit=100', { method: 'POST' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
       await onRefresh?.();
@@ -87,7 +87,7 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
           <p>只显示已经确认有竞争卖家低于我方价格的商品，不会自动改价。</p>
         </div>
         <button type="button" onClick={() => void syncMegaValue()} disabled={isSyncing}>
-          {isSyncing ? '正在测试 MegaValue...' : '测试 MegaValue'}
+          {isSyncing ? '正在测试 MegaValue...' : '测试 MegaValue 100条'}
         </button>
       </div>
 
