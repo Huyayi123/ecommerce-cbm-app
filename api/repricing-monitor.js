@@ -319,26 +319,38 @@ function parseSellerOfferDetails(data) {
 
 async function fetchSellerOfferDetails(storeName, row) {
   const sku = skuFor(row);
-  if (!sku) return { source: 'seller_offer_no_sku', buyBoxPrice: null, buyBoxSeller: '', offers: [], signals: [] };
+  const identifiers = [
+    row?.offer_id,
+    sku,
+    row?.barcode,
+  ].map((item) => String(item ?? '').trim()).filter(Boolean);
+  if (identifiers.length === 0) return { source: 'seller_offer_no_identifier', buyBoxPrice: null, buyBoxSeller: '', offers: [], signals: [] };
   const baseUrl = process.env.TAKEALOT_API_BASE_URL || 'https://seller-api.takealot.com';
-  const url = new URL(`/v2/offers/offer/${encodeURIComponent(sku)}`, baseUrl);
-  try {
-    const upstream = await fetch(url, { headers: takealotHeaders(storeName) });
-    const data = await upstream.json().catch(() => ({}));
-    if (!upstream.ok) {
-      return { source: `seller_offer_http_${upstream.status}`, buyBoxPrice: null, buyBoxSeller: '', offers: [], signals: findSignals(data) };
+  const failedSources = [];
+  let failedSignals = [];
+  for (const identifier of identifiers) {
+    const url = new URL(`/v2/offers/offer/${encodeURIComponent(identifier)}`, baseUrl);
+    try {
+      const upstream = await fetch(url, { headers: takealotHeaders(storeName) });
+      const data = await upstream.json().catch(() => ({}));
+      if (!upstream.ok) {
+        failedSources.push(`${identifier}:http_${upstream.status}`);
+        failedSignals = failedSignals.concat(findSignals(data));
+        continue;
+      }
+      const parsed = parseSellerOfferDetails(data);
+      return {
+        source: `seller_offer_api:${identifier}`,
+        buyBoxPrice: parsed.buyBoxPrice,
+        buyBoxSeller: parsed.buyBoxSeller,
+        offers: parsed.buyBoxPrice && parsed.buyBoxSeller ? [{ seller: parsed.buyBoxSeller, price: parsed.buyBoxPrice, inStock: true, isBuyBox: true }] : [],
+        signals: parsed.signals,
+      };
+    } catch {
+      failedSources.push(`${identifier}:error`);
     }
-    const parsed = parseSellerOfferDetails(data);
-    return {
-      source: 'seller_offer_api',
-      buyBoxPrice: parsed.buyBoxPrice,
-      buyBoxSeller: parsed.buyBoxSeller,
-      offers: parsed.buyBoxPrice && parsed.buyBoxSeller ? [{ seller: parsed.buyBoxSeller, price: parsed.buyBoxPrice, inStock: true, isBuyBox: true }] : [],
-      signals: parsed.signals,
-    };
-  } catch {
-    return { source: 'seller_offer_error', buyBoxPrice: null, buyBoxSeller: '', offers: [], signals: [] };
   }
+  return { source: `seller_offer_failed(${failedSources.join(',')})`, buyBoxPrice: null, buyBoxSeller: '', offers: [], signals: failedSignals };
 }
 
 async function fetchProductDetails(row, storeName) {
