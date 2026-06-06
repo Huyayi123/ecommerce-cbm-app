@@ -7,6 +7,8 @@ type Props = {
   onRefresh?: () => Promise<void>;
 };
 
+const TAKEALOT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
+
 function money(value: number | null): string {
   if (value === null || value === undefined) return '-';
   return `R ${value.toFixed(2)}`;
@@ -39,7 +41,7 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
   const [shopFilter, setShopFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [syncMessage, setSyncMessage] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncingStore, setSyncingStore] = useState('');
 
   const enrichedAlerts = useMemo(() => enrichAlerts(alerts, skuItems), [alerts, skuItems]);
   const shops = useMemo(() => Array.from(new Set(enrichedAlerts.map((alert) => alert.shopName).filter(Boolean))).sort(), [enrichedAlerts]);
@@ -62,20 +64,20 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
       .sort((a, b) => (b.priceGap ?? 0) - (a.priceGap ?? 0));
   }, [enrichedAlerts, search, shopFilter]);
 
-  async function syncMegaValue() {
-    setIsSyncing(true);
+  async function syncStore(store: string) {
+    setSyncingStore(store);
     setSyncMessage('');
     try {
-      const response = await fetch('/api/repricing-monitor?store=MegaValue&limit=500', { method: 'POST' });
+      const response = await fetch(`/api/repricing-monitor?store=${encodeURIComponent(store)}&limit=500`, { method: 'POST' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
       await onRefresh?.();
-      setSyncMessage(`MegaValue 测试完成：检查 ${payload.checked ?? 0} 条，确定被跟价 ${payload.confirmedAlerts ?? 0} 条。`);
+      setSyncMessage(`${store} 同步完成：检查 ${payload.checked ?? 0} 条，确定被跟价 ${payload.confirmedAlerts ?? 0} 条。`);
     } catch (error) {
       console.error(error);
-      setSyncMessage(`MegaValue 测试失败：${error instanceof Error ? error.message : '未知错误'}`);
+      setSyncMessage(`${store} 同步失败：${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
-      setIsSyncing(false);
+      setSyncingStore('');
     }
   }
 
@@ -86,9 +88,18 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
           <h2>价格预警</h2>
           <p>只显示已经确认有竞争卖家低于我方价格的商品，不会自动改价。</p>
         </div>
-        <button type="button" onClick={() => void syncMegaValue()} disabled={isSyncing}>
-          {isSyncing ? '正在测试 MegaValue...' : '测试 MegaValue 所有数据'}
-        </button>
+        <div className="store-sync-actions">
+          {TAKEALOT_STORES.map((store) => (
+            <button
+              key={store}
+              type="button"
+              onClick={() => void syncStore(store)}
+              disabled={Boolean(syncingStore)}
+            >
+              {syncingStore === store ? `正在同步 ${store}...` : `同步 ${store}`}
+            </button>
+          ))}
+        </div>
       </div>
 
       {syncMessage && <div className="inline-notice">{syncMessage}</div>}
