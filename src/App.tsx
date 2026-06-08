@@ -18,6 +18,7 @@ import {
   fetchRepricingAlerts,
   fetchSalesSuggestions,
   fetchSkuItems,
+  fetchSkuItemsForImport,
   replaceContainerRows,
   replacePurchaseRecords,
   replaceSkuItems,
@@ -328,7 +329,13 @@ function App() {
       {statusMessage && <div className="inline-notice">{statusMessage}</div>}
 
       {activePage === 'sku' && (
-        <SkuManager items={skuItems} onChange={persistSkuItems} canEditData={editable} canDeleteData={deletable} />
+        <SkuManager
+          items={skuItems}
+          onChange={persistSkuItems}
+          loadImportMatches={fetchSkuItemsForImport}
+          canEditData={editable}
+          canDeleteData={deletable}
+        />
       )}
 
       {activePage === 'calculator' && (

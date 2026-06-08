@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
-import { getSkuMatchKey } from './calculations';
+import { findMatchingSkuItem, getSkuMatchKey } from './calculations';
 import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
 import { frontendSkuToSupabase, supabaseSkuToFrontend, type SupabaseSkuRow } from './skuFieldMapping';
 
@@ -139,8 +139,41 @@ function frontendSkuToLegacySupabase(item: SkuItem): LegacySkuRow {
   };
 }
 
+function skuRecordScore(item: SkuItem): number {
+  let score = 0;
+  if (item.imageUrl.trim()) score += 100;
+  if (item.shopName.trim()) score += 30;
+  if (item.englishName.trim()) score += 20;
+  if (item.manufacturerName.trim()) score += 10;
+  if (item.productName.trim()) score += 10;
+  if (item.id.startsWith('takealot-')) score += 8;
+  return score;
+}
+
+function pickPreferredSkuRecord(left: SkuItem, right: SkuItem): SkuItem {
+  const leftScore = skuRecordScore(left);
+  const rightScore = skuRecordScore(right);
+  if (leftScore !== rightScore) return leftScore > rightScore ? left : right;
+  const leftTime = Date.parse(left.updatedAt || '');
+  const rightTime = Date.parse(right.updatedAt || '');
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
+    return leftTime > rightTime ? left : right;
+  }
+  return left.id <= right.id ? left : right;
+}
+
+function buildSkuByKey(items: SkuItem[]): Map<string, SkuItem> {
+  const byKey = new Map<string, SkuItem>();
+  for (const item of items) {
+    const key = getSkuMatchKey(item) || item.id;
+    const existing = byKey.get(key);
+    byKey.set(key, existing ? pickPreferredSkuRecord(existing, item) : item);
+  }
+  return byKey;
+}
+
 function mergeSkuItemsForSave(items: SkuItem[], remote: SkuItem[]): SkuItem[] {
-  const remoteByKey = new Map(remote.map((item) => [getSkuMatchKey(item) || item.id, item]));
+  const remoteByKey = buildSkuByKey(remote);
   const merged = new Map<string, SkuItem>();
 
   for (const item of items) {
@@ -173,6 +206,36 @@ function mergeSkuItemsForSave(items: SkuItem[], remote: SkuItem[]): SkuItem[] {
   }
 
   return Array.from(merged.values());
+}
+
+export async function fetchSkuItemsForImport(importItems: SkuItem[]): Promise<SkuItem[]> {
+  const client = requireSupabase();
+  const matched = new Map<string, SkuItem>();
+  const skuValues = Array.from(new Set(importItems.map((item) => item.sku.trim()).filter(Boolean)));
+
+  for (let index = 0; index < skuValues.length; index += 100) {
+    const chunk = skuValues.slice(index, index + 100);
+    const { data, error } = await client
+      .from('sku_items')
+      .select('*')
+      .in('sku', chunk);
+    if (error) throwSupabaseError(error);
+    for (const row of (data ?? []) as SupabaseSkuRow[]) {
+      const item = supabaseSkuToFrontend(row);
+      matched.set(item.id, item);
+    }
+  }
+
+  const rowsWithoutSku = importItems.filter((item) => !item.sku.trim());
+  if (rowsWithoutSku.length > 0) {
+    const remote = await fetchSkuItems();
+    for (const row of rowsWithoutSku) {
+      const existing = findMatchingSkuItem(row, remote);
+      if (existing) matched.set(existing.id, existing);
+    }
+  }
+
+  return Array.from(matched.values());
 }
 
 function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {

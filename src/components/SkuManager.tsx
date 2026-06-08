@@ -31,6 +31,7 @@ type ColumnKey =
 type Props = {
   items: SkuItem[];
   onChange: (items: SkuItem[]) => void | Promise<void>;
+  loadImportMatches?: (importItems: SkuItem[]) => Promise<SkuItem[]>;
   canEditData?: boolean;
   canDeleteData?: boolean;
 };
@@ -153,11 +154,19 @@ function sourceLabel(source: SkuItem['cbmSource']): string {
   return source === 'imported' ? '导入单品CBM' : source === 'total' ? '总CBM/总数量' : source === 'carton' ? '长宽高计算' : '缺失';
 }
 
-export function SkuManager({ items, onChange, canEditData = true, canDeleteData = true }: Props) {
+function combineSkuItemsForMatching(localItems: SkuItem[], remoteMatches: SkuItem[]): SkuItem[] {
+  const byId = new Map<string, SkuItem>();
+  for (const item of localItems) byId.set(item.id, item);
+  for (const item of remoteMatches) byId.set(item.id, item);
+  return Array.from(byId.values());
+}
+
+export function SkuManager({ items, onChange, loadImportMatches, canEditData = true, canDeleteData = true }: Props) {
   const [draft, setDraft] = useState<DraftSku>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
   const [importPreview, setImportPreview] = useState<SkuImportPreview | null>(null);
+  const [importMatchItems, setImportMatchItems] = useState<SkuItem[]>([]);
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(defaultVisibleColumns);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState('');
@@ -249,13 +258,27 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
   async function previewImport(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !canEditData) return;
-    setImportPreview(await previewSkuFile(file, items));
+    try {
+      const localPreview = await previewSkuFile(file, items);
+      const importItems = localPreview.rows.flatMap((row) => (row.item ? [row.item] : []));
+      const remoteMatches = loadImportMatches ? await loadImportMatches(importItems) : [];
+      const matchItems = combineSkuItemsForMatching(items, remoteMatches);
+      setImportMatchItems(matchItems);
+      setImportPreview(await previewSkuFile(file, matchItems));
+      if (remoteMatches.length > 0) {
+        setImportMessage(`已从云端查到 ${remoteMatches.length} 条可匹配 SKU，已用于导入预览。`);
+      }
+    } catch (error) {
+      console.error(error);
+      setImportMessage(`导入预览失败：${formatErrorMessage(error)}`);
+    }
     event.target.value = '';
   }
 
   async function confirmImport() {
     if (!importPreview) return;
-    const mergedByKey = new Map(items.map((item) => [getSkuMatchKey(item) || item.id, item]));
+    const baseItems = importMatchItems.length > 0 ? importMatchItems : items;
+    const mergedByKey = new Map(baseItems.map((item) => [getSkuMatchKey(item) || item.id, item]));
     const recognizedFields = new Set(importPreview.recognizedFields.map((field) => field.field));
     let createdCount = 0;
     let updatedCount = 0;
@@ -283,6 +306,7 @@ export function SkuManager({ items, onChange, canEditData = true, canDeleteData 
       await onChange(Array.from(mergedByKey.values()));
       setImportMessage(`导入完成：新增 ${createdCount} 条，更新 ${updatedCount} 条，失败 ${failedCount} 条`);
       setImportPreview(null);
+      setImportMatchItems([]);
     } catch (error) {
       console.error(error);
       setImportMessage(`导入失败：${formatErrorMessage(error)}`);
