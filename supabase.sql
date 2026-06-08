@@ -521,3 +521,7 @@ begin
     alter publication supabase_realtime add table public.audit_logs;
   end if;
 end $$;
+
+-- 2026-06-08 cleanup: price alerts keep current data only, audit logs are no longer used.
+delete from public.repricing_snapshots;
+drop table if exists public.audit_logs cascade;

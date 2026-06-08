@@ -1,13 +1,12 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import type { AuditLog, MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
-import { exportAuditLogs, exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
+import type { MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
+import { exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
 import { round } from '../utils/number';
 import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseAmountForRecordSku, purchaseQuantityForRecordSku, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
 
 type Props = {
   records: PurchaseRecord[];
   skuItems: SkuItem[];
-  auditLogs?: AuditLog[];
   onChange: (records: PurchaseRecord[]) => void;
   canEditData?: boolean;
   canDeleteData?: boolean;
@@ -99,7 +98,7 @@ function skuKey(value: string): string {
   return value.trim().toUpperCase();
 }
 
-export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onChange, canEditData = true, canDeleteData = true }: Props) {
+export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData = true, canDeleteData = true }: Props) {
   const [draft, setDraft] = useState<DraftRecord>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -502,49 +501,6 @@ export function PurchaseInventoryPage({ records, skuItems, auditLogs = [], onCha
         )}
       </section>
 
-      <details className="panel audit-panel">
-        <summary>操作记录（默认隐藏）</summary>
-        <div className="section-heading">
-          <div>
-            <h2>操作记录</h2>
-            <p>记录谁新增了 SKU、谁修改了价格、谁标记到货以及操作时间。</p>
-          </div>
-          <div className="export-actions">
-            <button type="button" onClick={() => exportAuditLogs(auditLogs, 'xlsx')} disabled={auditLogs.length === 0}>导出操作记录 Excel</button>
-            <button type="button" onClick={() => exportAuditLogs(auditLogs, 'csv')} disabled={auditLogs.length === 0}>导出操作记录 CSV</button>
-          </div>
-        </div>
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>操作时间</th>
-                <th>操作人</th>
-                <th>角色</th>
-                <th>操作</th>
-                <th>模块</th>
-                <th>对象 ID</th>
-                <th>说明</th>
-              </tr>
-            </thead>
-            <tbody>
-              {auditLogs.map((log) => (
-                <tr key={log.id}>
-                  <td>{new Date(log.createdAt).toLocaleString()}</td>
-                  <td>{log.actorEmail}</td>
-                  <td>{log.actorRole}</td>
-                  <td>{log.action}</td>
-                  <td>{log.entityType}</td>
-                  <td>{log.entityId}</td>
-                  <td>{log.summary}</td>
-                </tr>
-              ))}
-              {auditLogs.length === 0 && <tr><td colSpan={7} className="empty">暂无操作记录。</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </details>
     </>
   );
 }

@@ -9,6 +9,11 @@ type Props = {
 
 const TAKEALOT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
 
+type DatabaseUsage = {
+  counts: Record<string, number>;
+  checkedAt: string;
+};
+
 function money(value: number | null): string {
   if (value === null || value === undefined) return '-';
   return `R ${value.toFixed(2)}`;
@@ -42,6 +47,9 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
   const [search, setSearch] = useState('');
   const [syncMessage, setSyncMessage] = useState('');
   const [syncingStore, setSyncingStore] = useState('');
+  const [usage, setUsage] = useState<DatabaseUsage | null>(null);
+  const [usageMessage, setUsageMessage] = useState('');
+  const [isCheckingUsage, setIsCheckingUsage] = useState(false);
 
   const enrichedAlerts = useMemo(() => enrichAlerts(alerts, skuItems), [alerts, skuItems]);
   const shops = useMemo(() => Array.from(new Set(enrichedAlerts.map((alert) => alert.shopName).filter(Boolean))).sort(), [enrichedAlerts]);
@@ -84,6 +92,24 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
     }
   }
 
+  async function checkDatabaseUsage(action?: 'clear-repricing-snapshots') {
+    setIsCheckingUsage(true);
+    setUsageMessage('');
+    try {
+      const url = action ? `/api/database-usage?action=${action}` : '/api/database-usage';
+      const response = await fetch(url, { method: action ? 'POST' : 'GET' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      setUsage(payload);
+      setUsageMessage(action ? '历史价格快照已清空。' : '数据库用量已更新。');
+    } catch (error) {
+      console.error(error);
+      setUsageMessage(`数据库用量操作失败：${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setIsCheckingUsage(false);
+    }
+  }
+
   return (
     <section className="panel repricing-page">
       <div className="section-heading">
@@ -106,6 +132,27 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
       </div>
 
       {syncMessage && <div className="inline-notice">{syncMessage}</div>}
+
+      <div className="database-usage-panel">
+        <div className="database-usage-actions">
+          <button type="button" onClick={() => void checkDatabaseUsage()} disabled={isCheckingUsage}>
+            检查数据库用量
+          </button>
+          <button type="button" onClick={() => void checkDatabaseUsage('clear-repricing-snapshots')} disabled={isCheckingUsage}>
+            清空历史快照
+          </button>
+        </div>
+        {usage && (
+          <div className="database-usage-counts">
+            <span>SKU：{usage.counts.sku_items ?? 0}</span>
+            <span>采购记录：{usage.counts.purchase_records ?? 0}</span>
+            <span>采购建议：{usage.counts.sales_suggestions ?? 0}</span>
+            <span>当前价格预警：{usage.counts.repricing_alerts ?? 0}</span>
+            <span>历史快照：{usage.counts.repricing_snapshots ?? 0}</span>
+          </div>
+        )}
+        {usageMessage && <div className="muted-text">{usageMessage}</div>}
+      </div>
 
       <div className="repricing-summary">
         <div className="metric"><span>确定被跟价</span><strong>{summary.total}</strong></div>
@@ -157,8 +204,8 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
                 <td>{alert.imageUrl ? <img className="product-thumb" src={alert.imageUrl} alt="" /> : '-'}</td>
                 <td>{alert.sku || '-'}</td>
                 <td>
-                  <div className="repricing-product-name">{alert.productName || alert.title || '-'}</div>
-                  {alert.productName && alert.title && alert.productName !== alert.title && <small>{alert.title}</small>}
+                  <div className="repricing-product-name">{alert.title || alert.productName || '-'}</div>
+                  {alert.productName && alert.title && alert.productName !== alert.title && <small>{alert.productName}</small>}
                 </td>
                 <td>{money(alert.myPrice)}</td>
                 <td>{money(alert.buyBoxPrice)}</td>

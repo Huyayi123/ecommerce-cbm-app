@@ -686,6 +686,13 @@ async function supabaseRequest(method, path, body, headers = {}) {
   return response;
 }
 
+async function clearStoreRepricingAlerts(storeName) {
+  const normalizedStoreName = encodeURIComponent(storeName);
+  await supabaseRequest('DELETE', `repricing_alerts?shop_name=eq.${normalizedStoreName}`, undefined, {
+    Prefer: 'return=minimal',
+  });
+}
+
 async function syncRepricingResult({ storeName, storeId, row, alert, checkedAt }) {
   const sku = alert.sku || skuFor(row);
   if (!sku) return;
@@ -706,27 +713,7 @@ async function syncRepricingResult({ storeName, storeId, row, alert, checkedAt }
     Prefer: 'resolution=merge-duplicates,return=minimal',
   });
 
-  const snapshotPayload = {
-    shop_name: storeName,
-    store_id: storeId,
-    sku,
-    title,
-    my_price: alert.myPrice,
-    buy_box_price: alert.buyBoxPrice,
-    lowest_competitor_price: alert.lowestCompetitorPrice,
-    lowest_competitor_seller: alert.lowestCompetitorSeller,
-    competitor_sellers: alert.lowestCompetitorSeller,
-    price_gap: alert.priceGap,
-    has_buy_box: !alert.isActive,
-    lost_buy_box: alert.alertType === 'lost_buy_box',
-    is_out_of_stock: alert.isOutOfStock,
-    alert_level: alert.alertLevel,
-    alert_type: alert.alertType,
-    alert_message: alert.alertMessage,
-    source: alert.source,
-    checked_at: checkedAt,
-  };
-  await supabaseRequest('POST', 'repricing_snapshots', snapshotPayload, { Prefer: 'return=minimal' });
+  if (!alert.isActive) return;
 
   const alertPayload = {
     id: alertId,
@@ -818,6 +805,7 @@ export default async function handler(request, response) {
 
   try {
     const { rows, contextRows, pagesFetched, totalResults } = await fetchTakealotRows(storeName, limit, requestedSku);
+    if (!requestedSku) await clearStoreRepricingAlerts(storeName);
     const details = [];
     const alertDetails = [];
     let checked = 0;

@@ -606,7 +606,6 @@ export function subscribeToSharedTables(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sku_items' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_records' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'container_rows' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_suggestions' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'repricing_alerts' }, onChange)
     .subscribe();

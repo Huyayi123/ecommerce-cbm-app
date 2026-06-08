@@ -402,6 +402,34 @@ button.danger,
   min-width: 112px;
 }
 
+.database-usage-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #e1e8ee;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.database-usage-actions,
+.database-usage-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.database-usage-counts span {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #40505c;
+  font-size: 13px;
+}
+
 .repricing-filter-grid {
   grid-template-columns: repeat(2, minmax(220px, 1fr));
 }
