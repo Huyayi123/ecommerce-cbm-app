@@ -751,6 +751,11 @@ th.sticky-col {
   text-overflow: ellipsis;
 }
 
+.sku-table tr.recent-import-row td,
+.sku-table tr.recent-import-row .sticky-col {
+  background: #ecfdf5;
+}
+
 .sku-table tbody tr:last-child td {
   border-bottom: 1px solid #e5ebf0;
 }

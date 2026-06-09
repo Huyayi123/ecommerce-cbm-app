@@ -167,6 +167,7 @@ export function SkuManager({ items, onChange, loadImportMatches, canEditData = t
   const [importMessage, setImportMessage] = useState('');
   const [importPreview, setImportPreview] = useState<SkuImportPreview | null>(null);
   const [importMatchItems, setImportMatchItems] = useState<SkuItem[]>([]);
+  const [recentImportIds, setRecentImportIds] = useState<Set<string>>(new Set());
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(defaultVisibleColumns);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState('');
@@ -188,10 +189,19 @@ export function SkuManager({ items, onChange, loadImportMatches, canEditData = t
         .some((value) => value.toLowerCase().includes(keyword)),
     );
   }, [items, searchText, shopFilter]);
-  const totalPages = Math.max(Math.ceil(filteredItems.length / pageSize), 1);
+  const displayItems = useMemo(() => {
+    if (recentImportIds.size === 0) return filteredItems;
+    return [...filteredItems].sort((left, right) => {
+      const leftRecent = recentImportIds.has(left.id);
+      const rightRecent = recentImportIds.has(right.id);
+      if (leftRecent === rightRecent) return 0;
+      return leftRecent ? -1 : 1;
+    });
+  }, [filteredItems, recentImportIds]);
+  const totalPages = Math.max(Math.ceil(displayItems.length / pageSize), 1);
   const pagedItems = useMemo(
-    () => filteredItems.slice((page - 1) * pageSize, page * pageSize),
-    [filteredItems, page, pageSize],
+    () => displayItems.slice((page - 1) * pageSize, page * pageSize),
+    [displayItems, page, pageSize],
   );
 
   useEffect(() => {
@@ -283,6 +293,7 @@ export function SkuManager({ items, onChange, loadImportMatches, canEditData = t
     let createdCount = 0;
     let updatedCount = 0;
     let failedCount = 0;
+    const affectedIds = new Set<string>();
 
     for (const row of importPreview.rows) {
       if (!row.item) {
@@ -296,9 +307,11 @@ export function SkuManager({ items, onChange, loadImportMatches, canEditData = t
         const existingKey = getSkuMatchKey(existing) || existing.id;
         mergedByKey.delete(existingKey);
         mergedByKey.set(key, mergeImportedSku(existing, { ...row.item, id: existing.id, shopName: canonicalShopName(row.item.shopName) }, recognizedFields));
+        affectedIds.add(existing.id);
       } else {
         createdCount += 1;
         mergedByKey.set(key, { ...row.item, shopName: canonicalShopName(row.item.shopName), updatedAt: new Date().toISOString() });
+        affectedIds.add(row.item.id);
       }
     }
 
@@ -307,6 +320,8 @@ export function SkuManager({ items, onChange, loadImportMatches, canEditData = t
       setImportMessage(`导入完成：新增 ${createdCount} 条，更新 ${updatedCount} 条，失败 ${failedCount} 条`);
       setImportPreview(null);
       setImportMatchItems([]);
+      setRecentImportIds(affectedIds);
+      setPage(1);
     } catch (error) {
       console.error(error);
       setImportMessage(`导入失败：${formatErrorMessage(error)}`);
@@ -486,7 +501,7 @@ export function SkuManager({ items, onChange, loadImportMatches, canEditData = t
           <tbody>
             {pagedItems.map((item) => (
               <Fragment key={item.id}>
-                <tr>
+                <tr className={recentImportIds.has(item.id) ? 'recent-import-row' : undefined}>
                   {visibleColumns.has('imageUrl') && <td className="sticky-col sticky-col-1">{item.imageUrl ? <img className="sku-thumb" src={item.imageUrl} alt={item.productName || item.sku || 'SKU'} loading="lazy" /> : '-'}</td>}
                   {visibleColumns.has('manufacturerName') && <td className="sticky-col sticky-col-2">{item.manufacturerName}</td>}
                   {visibleColumns.has('sku') && <td className="sticky-col sticky-col-3">{item.sku}</td>}
