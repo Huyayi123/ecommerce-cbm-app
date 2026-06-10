@@ -152,6 +152,18 @@ function firstText(...values) {
   return '';
 }
 
+function priceBeforeStoreInOtherOffers(text, storeName) {
+  if (!storeName) return null;
+  const otherOffersIndex = text.search(/Other Offers/i);
+  const searchableText = otherOffersIndex >= 0 ? text.slice(otherOffersIndex) : text;
+  const storeIndex = searchableText.toLowerCase().indexOf(storeName.toLowerCase());
+  if (storeIndex < 0) return null;
+  const beforeStore = searchableText.slice(Math.max(0, storeIndex - 260), storeIndex);
+  const matches = Array.from(beforeStore.matchAll(/\bR\s*([0-9][0-9\s,]*(?:\.[0-9]{2})?)\b/g));
+  const lastMatch = matches.at(-1);
+  return lastMatch ? positiveNumber(lastMatch[1]) : null;
+}
+
 function parseRawOffers(rawOffers) {
   if (!Array.isArray(rawOffers)) return [];
   return rawOffers.flatMap((item) => {
@@ -248,13 +260,13 @@ function textFromHtml(html) {
     .trim();
 }
 
-function parsePublicPageDetails(html) {
+function parsePublicPageDetails(html, storeName = '') {
   const text = textFromHtml(html);
   if (!text || /cloudflare|attention required|enable cookies/i.test(text)) {
     return { buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   }
 
-  const sellerMatch = text.match(/Sold by\s+(.+?)(?:\s+·|\s+\u2022|\s+VAT Registered|\s+Seller Score|\s+Other Offers|$)/i);
+  const sellerMatch = text.match(/Sold by\s+(.+?)(?=\s+(?:[·•]|VAT Registered|Seller Score|Other Offers)|$)/i);
   const buyBoxSeller = sellerMatch ? sellerMatch[1].trim() : '';
   const priceMatch = text.match(/\bR\s*([0-9][0-9\s,]*(?:\.[0-9]{2})?)\b/);
   const buyBoxPrice = priceMatch ? positiveNumber(priceMatch[1]) : null;
@@ -264,10 +276,17 @@ function parsePublicPageDetails(html) {
     offers.push({ seller: buyBoxSeller, price: buyBoxPrice, inStock: true, isBuyBox: true });
   }
 
+  if (storeName) {
+    const ownOfferPrice = priceBeforeStoreInOtherOffers(text, storeName);
+    if (ownOfferPrice) {
+      offers.push({ seller: storeName, price: ownOfferPrice, inStock: true, isBuyBox: false });
+    }
+  }
+
   return { buyBoxPrice, buyBoxSeller, offers };
 }
 
-async function fetchPublicPageDetails(row) {
+async function fetchPublicPageDetails(row, storeName = '') {
   const url = offerUrlFor(row);
   if (!url) return { source: 'no_public_url', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   try {
@@ -282,7 +301,7 @@ async function fetchPublicPageDetails(row) {
       return { source: `public_page_http_${upstream.status}`, buyBoxPrice: null, buyBoxSeller: '', offers: [] };
     }
     const html = await upstream.text();
-    return { source: 'public_page_html', ...parsePublicPageDetails(html) };
+    return { source: 'public_page_html', ...parsePublicPageDetails(html, storeName) };
   } catch {
     return { source: 'public_page_error', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   }
@@ -388,6 +407,7 @@ async function fetchSellerOfferDetails(storeName, row) {
 async function fetchProductDetails(row, storeName) {
   const plid = extractPlid(offerUrlFor(row));
   if (!plid) return fetchSellerOfferDetails(storeName, row);
+  const shouldVerifyPublicVariantPage = hasVariantSuffix(titleFor(row));
   const url = `https://api.takealot.com/rest/v-1-10-0/product-details/PLID${plid}`;
   let productDetails = { source: 'no_product_details', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   try {
@@ -408,10 +428,10 @@ async function fetchProductDetails(row, storeName) {
     productDetails = { source: 'product_details_error', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   }
 
-  if (sellerIsKnown(productDetails.buyBoxSeller)) return productDetails;
+  if (sellerIsKnown(productDetails.buyBoxSeller) && !shouldVerifyPublicVariantPage) return productDetails;
 
   const sellerOfferDetails = await fetchSellerOfferDetails(storeName, row);
-  if (sellerIsKnown(sellerOfferDetails.buyBoxSeller)) {
+  if (sellerIsKnown(sellerOfferDetails.buyBoxSeller) && !shouldVerifyPublicVariantPage) {
     return {
       source: `${productDetails.source}+${sellerOfferDetails.source}`,
       buyBoxPrice: sellerOfferDetails.buyBoxPrice ?? productDetails.buyBoxPrice,
@@ -424,7 +444,20 @@ async function fetchProductDetails(row, storeName) {
     };
   }
 
-  const pageDetails = await fetchPublicPageDetails(row);
+  const pageDetails = await fetchPublicPageDetails(row, storeName);
+  if (sellerIsKnown(pageDetails.buyBoxSeller)) {
+    return {
+      source: `${productDetails.source}+${sellerOfferDetails.source}+${pageDetails.source}`,
+      buyBoxPrice: pageDetails.buyBoxPrice ?? productDetails.buyBoxPrice,
+      buyBoxSeller: pageDetails.buyBoxSeller,
+      offers: [
+        ...(pageDetails.offers || []),
+        ...(sellerOfferDetails.offers || []),
+        ...(productDetails.offers || []),
+      ],
+      signals: sellerOfferDetails.signals,
+    };
+  }
   return {
     source: `${productDetails.source}+${sellerOfferDetails.source}+${pageDetails.source}`,
     buyBoxPrice: pageDetails.buyBoxPrice ?? productDetails.buyBoxPrice,
