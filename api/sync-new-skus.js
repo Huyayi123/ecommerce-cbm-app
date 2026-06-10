@@ -33,7 +33,7 @@ function numberFromEnv(name, fallback) {
 }
 
 function skuFor(row) {
-  return String(row?.sku ?? row?.seller_sku ?? row?.merchant_sku ?? row?.offer_sku ?? '').trim().toUpperCase();
+  return String(row?.sku ?? row?.seller_sku ?? row?.merchant_sku ?? row?.offer_sku ?? '').replace(/\s+/g, '').toUpperCase();
 }
 
 function titleFor(row) {
@@ -126,7 +126,8 @@ async function fetchExistingSkuSet() {
     const data = Array.isArray(rows) ? rows : [];
     for (const row of data) {
       const sku = String(row.sku ?? '').trim().toUpperCase();
-      if (sku) existing.add(sku);
+      const normalizedSku = sku.replace(/\s+/g, '');
+      if (normalizedSku) existing.add(normalizedSku);
     }
     if (data.length < pageSize) break;
   }
