@@ -226,7 +226,8 @@ async function insertSkuRows(rows) {
   }
 }
 
-async function syncNewSkus(stores = DEFAULT_STORES) {
+async function syncNewSkus(stores = DEFAULT_STORES, options = {}) {
+  const dryRun = Boolean(options.dryRun);
   const existingSkus = await fetchExistingSkuSet();
   const summary = [];
   const insertedRows = [];
@@ -265,7 +266,9 @@ async function syncNewSkus(stores = DEFAULT_STORES) {
         const insertRow = skuInsertRow(row, storeName);
         rowsToInsert.push(insertRow);
       }
-      await insertSkuRows(rowsToInsert);
+      if (!dryRun) {
+        await insertSkuRows(rowsToInsert);
+      }
       result.inserted = rowsToInsert.length;
       insertedRows.push(...rowsToInsert);
     } catch (error) {
@@ -275,6 +278,7 @@ async function syncNewSkus(stores = DEFAULT_STORES) {
   }
 
   return {
+    dryRun,
     stores,
     inserted: insertedRows.length,
     insertedSkus: insertedRows.map((row) => ({ sku: row.sku, shopName: row.shop_name, englishName: row.english_name })),
@@ -295,7 +299,8 @@ export default async function handler(request, response) {
   }
 
   try {
-    const result = await syncNewSkus(storesFromRequest(request));
+    const dryRun = ['1', 'true', 'yes'].includes(String(request.query?.dryRun || '').trim().toLowerCase());
+    const result = await syncNewSkus(storesFromRequest(request), { dryRun });
     response.status(200).json(result);
   } catch (error) {
     console.error(error);
