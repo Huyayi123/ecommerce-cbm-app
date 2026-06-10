@@ -525,3 +525,10 @@ end $$;
 -- 2026-06-08 cleanup: price alerts keep current data only, audit logs are no longer used.
 delete from public.repricing_snapshots;
 drop table if exists public.audit_logs cascade;
+
+-- 2026-06-10 SKU master data optional fields used by import/export and new product sync.
+alter table public.sku_items
+add column if not exists storage_location text;
+
+alter table public.sku_items
+add column if not exists purchase_url text;

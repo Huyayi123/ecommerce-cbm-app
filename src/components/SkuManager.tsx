@@ -32,6 +32,7 @@ type Props = {
   items: SkuItem[];
   onChange: (items: SkuItem[]) => void | Promise<void>;
   loadImportMatches?: (importItems: SkuItem[]) => Promise<SkuItem[]>;
+  onCloudRefresh?: () => void | Promise<void>;
   canEditData?: boolean;
   canDeleteData?: boolean;
 };
@@ -161,13 +162,14 @@ function combineSkuItemsForMatching(localItems: SkuItem[], remoteMatches: SkuIte
   return Array.from(byId.values());
 }
 
-export function SkuManager({ items, onChange, loadImportMatches, canEditData = true, canDeleteData = true }: Props) {
+export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh, canEditData = true, canDeleteData = true }: Props) {
   const [draft, setDraft] = useState<DraftSku>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
   const [importPreview, setImportPreview] = useState<SkuImportPreview | null>(null);
   const [importMatchItems, setImportMatchItems] = useState<SkuItem[]>([]);
   const [recentImportIds, setRecentImportIds] = useState<Set<string>>(new Set());
+  const [isSyncingNewSkus, setIsSyncingNewSkus] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(defaultVisibleColumns);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState('');
@@ -328,6 +330,36 @@ export function SkuManager({ items, onChange, loadImportMatches, canEditData = t
     }
   }
 
+  async function syncTakealotNewSkus() {
+    if (!canEditData || isSyncingNewSkus) return;
+    setIsSyncingNewSkus(true);
+    try {
+      setImportMessage('正在同步 7 个店铺 Takealot 最新上线产品...');
+      const response = await fetch('/api/sync-new-skus', { method: 'POST' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(payload.error ?? `同步失败：${response.status}`));
+      }
+      await onCloudRefresh?.();
+      const insertedSkus = Array.isArray(payload.insertedSkus) ? payload.insertedSkus : [];
+      const recentKeys = new Set(insertedSkus.map((item: { sku?: string }) => String(item.sku ?? '').trim()).filter(Boolean));
+      const recentIds = new Set(Array.from(recentKeys).map((sku) => `takealot-${sku}`));
+      setRecentImportIds(recentIds);
+      setPage(1);
+      const summaryText = Array.isArray(payload.summary)
+        ? payload.summary.map((item: { store: string; inserted: number; skippedExisting: number; failed?: string }) =>
+          `${item.store} 新增 ${item.inserted}，跳过已有 ${item.skippedExisting}${item.failed ? `，失败：${item.failed}` : ''}`,
+        ).join('；')
+        : '';
+      setImportMessage(`新品同步完成：新增 ${Number(payload.inserted ?? 0)} 条。${summaryText}`);
+    } catch (error) {
+      console.error(error);
+      setImportMessage(`新品同步失败：${formatErrorMessage(error)}`);
+    } finally {
+      setIsSyncingNewSkus(false);
+    }
+  }
+
   function toggleColumn(key: ColumnKey) {
     setVisibleColumns((current) => {
       const next = new Set(current);
@@ -358,6 +390,9 @@ export function SkuManager({ items, onChange, loadImportMatches, canEditData = t
             导入资料库
             <input type="file" accept=".xlsx,.xls,.csv" onChange={previewImport} />
           </label>}
+          {canEditData && <button type="button" onClick={() => void syncTakealotNewSkus()} disabled={isSyncingNewSkus}>
+            {isSyncingNewSkus ? '正在同步新品...' : '同步 Takealot 新品'}
+          </button>}
           <button type="button" onClick={exportSkuImportTemplate}>下载导入模板</button>
           <button type="button" onClick={() => exportSkuItems(items, 'xlsx')} disabled={items.length === 0}>导出资料库 Excel</button>
           <button type="button" onClick={() => exportSkuItems(items, 'csv')} disabled={items.length === 0}>导出资料库 CSV</button>

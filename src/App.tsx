@@ -333,6 +333,7 @@ function App() {
           items={skuItems}
           onChange={persistSkuItems}
           loadImportMatches={fetchSkuItemsForImport}
+          onCloudRefresh={loadCloudData}
           canEditData={editable}
           canDeleteData={deletable}
         />
