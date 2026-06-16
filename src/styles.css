@@ -710,10 +710,20 @@ button.danger,
   display: block;
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   white-space: nowrap;
+}
+
+.inventory-table td:hover .cell-ellipsis,
+.inventory-table td:focus-within .cell-ellipsis {
+  overflow-x: auto;
+}
+
+.inventory-table .cell-ellipsis::-webkit-scrollbar {
+  display: none;
 }
 
 .inventory-table .pin-product .cell-ellipsis {
