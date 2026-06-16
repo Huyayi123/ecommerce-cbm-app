@@ -703,21 +703,16 @@ button.danger,
 }
 
 .inventory-table {
-  table-layout: fixed;
-  min-width: 2320px;
-}
-
-.inventory-table th,
-.inventory-table td {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 1680px;
 }
 
 .inventory-table .cell-ellipsis {
   display: block;
+  width: 100%;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
   white-space: nowrap;
 }
 
@@ -726,7 +721,7 @@ button.danger,
 }
 
 .inventory-table .note-cell {
-  max-width: 220px;
+  width: 220px;
   color: #8a5a00;
   font-weight: 600;
 }
