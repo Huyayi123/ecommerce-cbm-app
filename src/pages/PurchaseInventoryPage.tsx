@@ -407,7 +407,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
         </div>}
 
         <div className="table-wrap">
-          <table>
+          <table className="inventory-table">
             <thead>
               <tr>
                 <th>选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>是否混装</th><th>混装组</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
@@ -419,12 +419,12 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
                 const childRows = mixedChildRows(normalized);
                 return (
                   <Fragment key={record.id}>
-                    <tr>
+                    <tr className={normalized.note.trim() ? 'has-note-row' : undefined}>
                   <td><input type="checkbox" checked={selectedIds.has(normalized.id)} onChange={() => toggleSelection(normalized.id)} /></td>
                   <td className="pin-col pin-image">{imageUrlFor(normalized) ? <img className="sku-thumb" src={imageUrlFor(normalized)} alt={normalized.productName || normalized.sku || 'SKU'} loading="lazy" /> : '-'}</td>
-                  <td className="pin-col pin-manufacturer">{normalized.manufacturerName}</td>
-                  <td className="pin-col pin-sku">{normalized.sku}</td>
-                  <td className="pin-col pin-product">{normalized.productName}</td>
+                  <td className="pin-col pin-manufacturer"><span className="cell-ellipsis" title={normalized.manufacturerName}>{normalized.manufacturerName}</span></td>
+                  <td className="pin-col pin-sku"><span className="cell-ellipsis" title={normalized.sku}>{normalized.sku}</span></td>
+                  <td className="pin-col pin-product"><span className="cell-ellipsis" title={normalized.productName}>{normalized.productName}</span></td>
                   <td>{normalized.cartonCount ?? ''}</td>
                   <td>{normalized.unitsPerCarton ?? ''}</td>
                   <td>{normalized.tailQuantity}</td>
@@ -444,7 +444,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
                   <td>{normalized.loadingType || '整柜'}</td>
                   <td>{normalized.containerDate || '-'}</td>
                   <td>{normalized.unitCbm.toFixed(8)}</td>
-                  <td>{normalized.note}</td>
+                  <td><span className="cell-ellipsis note-cell" title={normalized.note}>{normalized.note}</span></td>
                   <td className="row-actions">
                     {canEditData && <button type="button" onClick={() => editRecord(normalized)}>编辑</button>}
                     {canDeleteData && <button className="danger" type="button" onClick={() => deleteRecord(normalized.id)}>删除</button>}
@@ -456,9 +456,9 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
                         <tr className="mixed-child-row" key={`${normalized.id}:${group.id}:${line.id}`}>
                           <td />
                           <td className="pin-col pin-image">{childImageUrl ? <img className="sku-thumb" src={childImageUrl} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
-                          <td className="pin-col pin-manufacturer">{normalized.manufacturerName}</td>
-                          <td className="pin-col pin-sku">{line.sku}</td>
-                          <td className="pin-col pin-product">{line.productName}</td>
+                          <td className="pin-col pin-manufacturer"><span className="cell-ellipsis" title={normalized.manufacturerName}>{normalized.manufacturerName}</span></td>
+                          <td className="pin-col pin-sku"><span className="cell-ellipsis" title={line.sku}>{line.sku}</span></td>
+                          <td className="pin-col pin-product"><span className="cell-ellipsis" title={line.productName}>{line.productName}</span></td>
                           <td />
                           <td />
                           <td />

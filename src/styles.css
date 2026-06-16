@@ -660,6 +660,7 @@ button.danger,
   z-index: 3;
   background: #ffffff;
   box-shadow: 1px 0 0 #dce4ea;
+  overflow: hidden;
 }
 
 .table-wrap th.pin-col {
@@ -697,8 +698,46 @@ button.danger,
 
 .pin-product {
   left: 414px;
-  min-width: 220px;
+  min-width: 280px;
+  max-width: 280px;
+}
+
+.inventory-table {
+  table-layout: fixed;
+  min-width: 2320px;
+}
+
+.inventory-table th,
+.inventory-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inventory-table .cell-ellipsis {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-table .pin-product .cell-ellipsis {
+  max-width: 256px;
+}
+
+.inventory-table .note-cell {
   max-width: 220px;
+  color: #8a5a00;
+  font-weight: 600;
+}
+
+.inventory-table tr.has-note-row td,
+.inventory-table tr.has-note-row .pin-col {
+  background: #fff8df;
+}
+
+.inventory-table tr.has-note-row .pin-product {
+  box-shadow: 1px 0 0 #d8c987;
 }
 
 .sku-table-wrap {
