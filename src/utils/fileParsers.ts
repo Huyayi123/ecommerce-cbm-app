@@ -128,28 +128,6 @@ function fillMergedCells(worksheet: XLSX.WorkSheet): void {
   }
 }
 
-function fillDownRows(rows: Record<string, unknown>[], headers: string[]): Record<string, unknown>[] {
-  const fillFields: SkuFrontendField[] = ['manufacturerName', 'shopName', 'buyerName', 'storageLocation', 'notes'];
-  const fillHeaders = fillFields
-    .map((field) => findSkuHeader(headers, field))
-    .filter((header): header is string => Boolean(header));
-  const lastValues = new Map<string, unknown>();
-
-  return rows.map((row) => {
-    const nextRow = { ...row };
-    for (const header of fillHeaders) {
-      const value = nextRow[header];
-      const isEmpty = value === undefined || value === null || String(value).trim() === '';
-      if (isEmpty && lastValues.has(header)) {
-        nextRow[header] = lastValues.get(header);
-      } else if (!isEmpty) {
-        lastValues.set(header, value);
-      }
-    }
-    return nextRow;
-  });
-}
-
 function readRows(buffer: ArrayBuffer, fileName: string): { headers: string[]; rows: Record<string, unknown>[] } {
   const isCsv = /\.csv$/i.test(fileName);
   const workbook = isCsv ? XLSX.read(decodeCsv(buffer), { type: 'string' }) : XLSX.read(buffer, { type: 'array' });
@@ -167,7 +145,7 @@ function readRows(buffer: ArrayBuffer, fileName: string): { headers: string[]; r
     raw: false,
   });
 
-  return { headers, rows: fillDownRows(rows, headers) };
+  return { headers, rows };
 }
 
 export async function parsePurchaseFile(file: File): Promise<PurchaseRow[]> {
