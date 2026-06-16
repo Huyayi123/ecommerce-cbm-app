@@ -371,7 +371,6 @@ function App() {
             skuItems={skuItems}
             profile={profile}
             onChange={persistPurchaseRecords}
-            onSkuChange={persistSkuItems}
           />
         </>
       )}

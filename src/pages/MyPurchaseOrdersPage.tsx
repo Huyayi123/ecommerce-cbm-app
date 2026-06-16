@@ -1,6 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppProfile, MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
-import { getSkuMatchKey, hydrateSku } from '../utils/calculations';
 import { formatErrorMessage } from '../utils/errors';
 import { exportPurchaseRecords } from '../utils/exporters';
 import { parsePurchaseRecordsFile } from '../utils/fileParsers';
@@ -12,7 +11,6 @@ type Props = {
   skuItems: SkuItem[];
   profile: AppProfile;
   onChange: (records: PurchaseRecord[]) => void | Promise<void>;
-  onSkuChange: (items: SkuItem[]) => void | Promise<void>;
 };
 
 type NewOrderDraft = {
@@ -134,7 +132,7 @@ function createMixedGroup(index: number): MixedCartonGroup {
   };
 }
 
-export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onSkuChange }: Props) {
+export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: Props) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [mixedDrafts, setMixedDrafts] = useState<Record<string, string>>({});
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -228,49 +226,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
   function patchNewOrder<K extends keyof NewOrderDraft>(field: K, value: NewOrderDraft[K]) {
     setNewOrder((current) => ({ ...current, [field]: value }));
-  }
-
-  function buildSkuFromNewRecord(record: PurchaseRecord): SkuItem {
-    return hydrateSku({
-      id: crypto.randomUUID(),
-      manufacturerName: record.manufacturerName,
-      sku: isNewSkuValue(record.sku) ? '' : record.sku,
-      productName: record.productName,
-      englishName: record.englishName,
-      imageUrl: record.imageUrl,
-      purchasePrice: record.purchasePrice,
-      manualUnitCbm: record.unitCbm,
-      totalCbm: 0,
-      totalQuantity: 0,
-      shopName: record.shopName,
-      buyerName: record.assignedBuyerName,
-      isSeasonal: false,
-      cartonLengthCm: 0,
-      cartonWidthCm: 0,
-      cartonHeightCm: 0,
-      unitsPerCarton: record.unitsPerCarton ?? 0,
-      notes: record.note,
-      cbmSource: 'missing',
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  async function syncNewSkus(recordsToSync: PurchaseRecord[]): Promise<number> {
-    const nextItemsByKey = new Map(skuItems.map((item) => [getSkuMatchKey(item) || item.id, item]));
-    let changedCount = 0;
-
-    for (const record of recordsToSync) {
-      if (!isNewSkuValue(record.sku)) continue;
-      const skuItem = buildSkuFromNewRecord(record);
-      const matchKey = getSkuMatchKey(skuItem);
-      if (!matchKey) continue;
-      const existing = nextItemsByKey.get(matchKey);
-      nextItemsByKey.set(matchKey, existing ? { ...skuItem, id: existing.id, updatedAt: new Date().toISOString() } : skuItem);
-      changedCount += 1;
-    }
-
-    if (changedCount > 0) await onSkuChange(Array.from(nextItemsByKey.values()));
-    return changedCount;
   }
 
   async function saveRecord(nextRecord: PurchaseRecord) {
@@ -399,9 +354,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
     try {
       await onChange([record, ...records]);
-      const syncedCount = await syncNewSkus([record]);
       setNewOrder(createEmptyDraft());
-      setMessage(syncedCount > 0 ? '已新增采购订单，并同步新品到 SKU 资料库。' : '已新增采购订单。');
+      setMessage('已新增采购订单。');
     } catch (error) {
       console.error(error);
       setMessage(`新增失败：${formatErrorMessage(error)}`);
@@ -417,8 +371,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         return;
       }
       await onChange([...imported, ...records]);
-      const syncedCount = await syncNewSkus(imported);
-      setMessage(`已导入 ${imported.length} 条采购订单${syncedCount > 0 ? `，并同步 ${syncedCount} 条新品到 SKU 资料库` : ''}。`);
+      setMessage(`已导入 ${imported.length} 条采购订单。`);
     } catch (error) {
       console.error(error);
       setMessage(`导入失败：${formatErrorMessage(error)}`);
