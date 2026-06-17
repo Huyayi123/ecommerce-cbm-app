@@ -165,8 +165,9 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
   const newTailQuantity = parseNumber(newOrder.tailQuantity);
   const newQuantity = newCartonCount * newUnitsPerCarton + newTailQuantity;
   const newPrice = parseNumber(newOrder.purchasePrice);
+  const newFreightCost = parseNumber(newOrder.freightCost);
   const newUnitCbm = parseNumber(newOrder.unitCbm);
-  const newTotalAmount = round(newQuantity * newPrice, 2);
+  const newTotalAmount = round(newQuantity * newPrice + newFreightCost, 2);
   const newTotalCbm = round(newQuantity * newUnitCbm, 4);
 
   function imageUrlFor(record: PurchaseRecord): string {
@@ -333,7 +334,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
       purchaseQuantity: newQuantity,
       confirmedPurchaseQuantity: null,
       purchasePrice: newPrice,
-      freightCost: parseNumber(newOrder.freightCost),
+      freightCost: newFreightCost,
       totalAmount: newTotalAmount,
       purchaseDate: today(),
       estimatedArrivalDate: '',

@@ -108,7 +108,7 @@ export function mixedAmountForSku(record: PurchaseRecord, sku: string): number {
 }
 
 export function purchaseAmountForRecordSku(record: PurchaseRecord): number {
-  return round(effectivePurchaseQuantity(record) * record.purchasePrice + mixedAmountForSku(record, record.sku), 2);
+  return round(effectivePurchaseQuantity(record) * record.purchasePrice + record.freightCost + mixedAmountForSku(record, record.sku), 2);
 }
 
 export function packageCountFor(record: PurchaseRecord): number {
@@ -152,7 +152,7 @@ export function withPurchaseTotals(record: PurchaseRecord): PurchaseRecord {
   return {
     ...normalizedRecord,
     confirmedPurchaseQuantity: record.confirmedPurchaseQuantity ?? (record.cartonCount !== null && record.unitsPerCarton ? mainQuantity : null),
-    totalAmount: round(mainAmount + mixedAmountFor(normalizedRecord), 2),
+    totalAmount: round(mainAmount + record.freightCost + mixedAmountFor(normalizedRecord), 2),
     totalCbm: round(mainCbm + mixedCbmFor(normalizedRecord), 4),
   };
 }

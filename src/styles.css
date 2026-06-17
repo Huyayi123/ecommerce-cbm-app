@@ -706,6 +706,21 @@ button.danger,
   min-width: 1680px;
 }
 
+.inventory-table-wrap {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.inventory-table th {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
+.inventory-table th.pin-col {
+  z-index: 7;
+}
+
 .inventory-table .cell-ellipsis {
   display: block;
   width: 100%;

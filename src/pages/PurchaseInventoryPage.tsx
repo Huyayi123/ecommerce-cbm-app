@@ -60,6 +60,41 @@ const emptyDraft: DraftRecord = {
 };
 
 const PAGE_SIZE = 100;
+const RECENT_UPLOAD_WINDOW_MS = 20 * 60 * 1000;
+
+function timestampMs(value?: string): number {
+  const time = Date.parse(value ?? '');
+  return Number.isFinite(time) ? time : 0;
+}
+
+function sortDateValue(record: PurchaseRecord): string {
+  return record.containerDate || record.purchaseDate || '';
+}
+
+function isRecentlyUploaded(record: PurchaseRecord, nowMs: number): boolean {
+  const createdAt = timestampMs(record.createdAt);
+  return createdAt > 0 && nowMs >= createdAt && nowMs - createdAt <= RECENT_UPLOAD_WINDOW_MS;
+}
+
+function compareInventoryRecords(left: PurchaseRecord, right: PurchaseRecord, nowMs: number): number {
+  const leftRecent = isRecentlyUploaded(left, nowMs);
+  const rightRecent = isRecentlyUploaded(right, nowMs);
+  if (leftRecent !== rightRecent) return leftRecent ? -1 : 1;
+
+  const dateDiff = sortDateValue(right).localeCompare(sortDateValue(left));
+  if (dateDiff !== 0) return dateDiff;
+
+  const manufacturerDiff = left.manufacturerName.localeCompare(right.manufacturerName, 'zh-Hans-CN');
+  if (manufacturerDiff !== 0) return manufacturerDiff;
+
+  const shopDiff = left.shopName.localeCompare(right.shopName, 'zh-Hans-CN');
+  if (shopDiff !== 0) return shopDiff;
+
+  const skuDiff = left.sku.localeCompare(right.sku, 'zh-Hans-CN');
+  if (skuDiff !== 0) return skuDiff;
+
+  return timestampMs(right.createdAt) - timestampMs(left.createdAt);
+}
 
 function recentMonthOptions(count = 3): string[] {
   const today = new Date();
@@ -73,7 +108,7 @@ function withTotalAmount(record: DraftRecord): PurchaseRecord {
   return withPurchaseTotals({
     ...record,
     isConfirmed: true,
-    totalAmount: round(effectivePurchaseQuantity(record) * record.purchasePrice, 2),
+    totalAmount: round(effectivePurchaseQuantity(record) * record.purchasePrice + record.freightCost, 2),
     totalCbm: record.totalCbm || round(effectivePurchaseQuantity(record) * record.unitCbm, 4),
   });
 }
@@ -104,6 +139,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchDraft, setSearchDraft] = useState('');
   const [page, setPage] = useState(1);
+  const [sortNowMs, setSortNowMs] = useState(() => Date.now());
   const [filters, setFilters] = useState({
     manufacturerName: '',
     shopName: '',
@@ -151,8 +187,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
         if (filters.purchaseDateFrom && record.purchaseDate < filters.purchaseDateFrom) return false;
         if (filters.purchaseDateTo && record.purchaseDate > filters.purchaseDateTo) return false;
         return true;
-      }),
-    [filters, inventoryRecords, recentMonths],
+      }).sort((left, right) => compareInventoryRecords(left, right, sortNowMs)),
+    [filters, inventoryRecords, recentMonths, sortNowMs],
   );
   const totalPages = Math.max(Math.ceil(filteredRecords.length / PAGE_SIZE), 1);
   const pagedRecords = filteredRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -160,6 +196,11 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
   useEffect(() => {
     setPage(1);
   }, [filters]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setSortNowMs(Date.now()), 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
@@ -385,7 +426,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
           <label>采购数量<input type="number" min="0" value={draft.confirmedPurchaseQuantity ?? ''} onChange={(event) => patchDraft('confirmedPurchaseQuantity', event.target.value === '' ? null : Number(event.target.value))} /></label>
           <label>采购单价<input type="number" min="0" step="0.01" value={draft.purchasePrice} onChange={(event) => patchDraft('purchasePrice', Number(event.target.value))} /></label>
           <label>运费<input type="number" min="0" step="0.01" value={draft.freightCost} onChange={(event) => patchDraft('freightCost', Number(event.target.value))} /></label>
-          <label>总金额<input value={round(effectivePurchaseQuantity(draft) * draft.purchasePrice, 2)} readOnly /></label>
+          <label>总金额<input value={round(effectivePurchaseQuantity(draft) * draft.purchasePrice + draft.freightCost, 2)} readOnly /></label>
           <label>采购日期<input type="date" value={draft.purchaseDate} onChange={(event) => patchDraft('purchaseDate', event.target.value)} /></label>
           <label>单品CBM<input type="number" min="0" step="0.00000001" value={draft.unitCbm} onChange={(event) => patchDraft('unitCbm', Number(event.target.value))} /></label>
           <label>总CBM<input type="number" min="0" step="0.0001" value={draft.totalCbm} onChange={(event) => patchDraft('totalCbm', Number(event.target.value))} /></label>
@@ -406,7 +447,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
           </div>
         </div>}
 
-        <div className="table-wrap">
+        <div className="table-wrap inventory-table-wrap">
           <table className="inventory-table">
             <thead>
               <tr>

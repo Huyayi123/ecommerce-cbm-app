@@ -37,6 +37,8 @@ type PurchaseRecordRow = {
   mixed_groups?: unknown;
   logistics_total_cbm?: number | null;
   note: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 type ContainerRow = {
@@ -272,6 +274,8 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     mixedGroups: normalizeMixedGroups(row.mixed_groups),
     logisticsTotalCbm: row.logistics_total_cbm === null || row.logistics_total_cbm === undefined ? null : Number(row.logistics_total_cbm),
     note: row.note ?? '',
+    createdAt: row.created_at ?? '',
+    updatedAt: row.updated_at ?? '',
   });
 }
 

@@ -113,6 +113,8 @@ export type PurchaseRecord = {
   mixedGroups: MixedCartonGroup[];
   logisticsTotalCbm: number | null;
   note: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type CalculationRow = {
