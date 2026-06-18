@@ -44,13 +44,16 @@ export function normalizeMixedGroups(value: unknown): MixedCartonGroup[] {
 }
 
 export function effectivePurchaseQuantity(record: PurchaseQuantityLike): number {
+  if (record.confirmedPurchaseQuantity !== null && record.confirmedPurchaseQuantity !== undefined) {
+    return record.confirmedPurchaseQuantity;
+  }
   const cartonCount = record.cartonCount ?? null;
   const unitsPerCarton = record.unitsPerCarton ?? null;
   const tailQuantity = record.tailQuantity ?? 0;
   if (cartonCount !== null && unitsPerCarton !== null && unitsPerCarton > 0) {
     return cartonCount * unitsPerCarton + tailQuantity;
   }
-  return record.confirmedPurchaseQuantity ?? 0;
+  return record.purchaseQuantity ?? 0;
 }
 
 export function isInventoryRecord(record: PurchaseRecord): boolean {
