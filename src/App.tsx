@@ -175,9 +175,6 @@ function App() {
 
   async function persistPurchaseRecords(nextRecords: PurchaseRecord[]) {
     const normalized = normalizePurchaseRecords(assignBuyerEmails(nextRecords));
-    if (normalized.conflicts.length > 0) {
-      setStatusMessage(`发现 ${normalized.conflicts.length} 个重复 SKU 价格不同，请人工确认：${normalized.conflicts.join('、')}`);
-    }
     await replacePurchaseRecords(normalized.records);
     setPurchaseRecords(normalized.records);
   }
@@ -218,22 +215,8 @@ function App() {
     }));
   }
 
-  function normalizePurchaseRecords(records: PurchaseRecord[]): { records: PurchaseRecord[]; conflicts: string[] } {
-    const pricesBySku = new Map<string, Set<number>>();
-
-    for (const record of records) {
-      const skuKey = record.sku.trim().toUpperCase();
-      if (!skuKey) continue;
-
-      if (!pricesBySku.has(skuKey)) pricesBySku.set(skuKey, new Set());
-      pricesBySku.get(skuKey)!.add(record.purchasePrice);
-    }
-
-    const conflicts = Array.from(pricesBySku.entries())
-      .filter(([, prices]) => prices.size > 1)
-      .map(([sku]) => sku);
-
-    return { records: records.map((record) => withPurchaseTotals(record)), conflicts };
+  function normalizePurchaseRecords(records: PurchaseRecord[]): { records: PurchaseRecord[] } {
+    return { records: records.map((record) => withPurchaseTotals(record)) };
   }
 
   async function sendSuggestionsToCalculator(rows: PurchaseRow[], nextFileName: string) {
