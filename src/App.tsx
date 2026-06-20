@@ -268,6 +268,7 @@ function App() {
     record.status === 'pending'
     && record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()
   ));
+  const pendingTaskCount = purchaseRecords.filter((record) => record.status === 'pending').length;
   const activeRepricingAlerts = repricingAlerts.filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'));
 
   return (
@@ -287,6 +288,12 @@ function App() {
       {pendingAssignedTasks.length > 0 && (
         <button type="button" className="task-notice" onClick={() => setActivePage('my-orders')}>
           你有 {pendingAssignedTasks.length} 条新的待采购任务，点击查看
+        </button>
+      )}
+
+      {pendingTaskCount > 0 && (
+        <button type="button" className="task-notice" onClick={() => setActivePage('my-orders')}>
+          当前共有 {pendingTaskCount} 条待采购任务（所有采购人），点击查看
         </button>
       )}
 
