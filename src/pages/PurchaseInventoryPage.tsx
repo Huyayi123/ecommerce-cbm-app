@@ -167,7 +167,10 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
     purchaseDateTo: '',
   });
 
-  const inventoryRecords = useMemo(() => records.filter(isInventoryRecord), [records]);
+  const inventoryRecords = useMemo(
+    () => records.filter((record) => isInventoryRecord(record) && record.status !== 'cancelled'),
+    [records],
+  );
   const recentMonths = useMemo(() => recentMonthOptions(3), []);
   const purchaseMonthOptions = useMemo(() => {
     const months = Array.from(new Set(inventoryRecords.map((record) => record.purchaseDate.slice(0, 7)).filter(Boolean))).sort().reverse();
@@ -430,7 +433,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
           <label>采购人<select value={filters.buyerName} onChange={(event) => setFilters({ ...filters, buyerName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'buyerName').map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>批次<select value={filters.purchaseBatchKey} onChange={(event) => setFilters({ ...filters, purchaseBatchKey: event.target.value })}><option value="">全部批次</option>{batchOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <label>装货方式<select value={filters.loadingType} onChange={(event) => setFilters({ ...filters, loadingType: event.target.value as PurchaseRecord['loadingType'] | 'all' })}><option value="all">全部</option><option value="整柜">整柜</option><option value="冠通">冠通</option></select></label>
-          <label>状态<select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value as PurchaseStatus | 'all' })}><option value="pending">待采购</option><option value="in_transit">海运在途</option><option value="arrived">已到货</option><option value="cancelled">已取消</option><option value="all">全部历史</option></select></label>
+          <label>状态<select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value as PurchaseStatus | 'all' })}><option value="pending">待采购</option><option value="in_transit">海运在途</option><option value="arrived">已到货</option><option value="all">全部历史</option></select></label>
           <label>采购日期起<input type="date" value={filters.purchaseDateFrom} onChange={(event) => setFilters({ ...filters, purchaseDateFrom: event.target.value })} /></label>
           <label>采购日期止<input type="date" value={filters.purchaseDateTo} onChange={(event) => setFilters({ ...filters, purchaseDateTo: event.target.value })} /></label>
         </div>
@@ -476,7 +479,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
             <label>总重量kg<input type="number" min="0" step="0.01" value={draft.totalWeightKg ?? ''} onChange={(event) => patchDraft('totalWeightKg', event.target.value === '' ? null : Number(event.target.value))} /></label>
             <label>物流总CBM<input type="number" min="0" step="0.0001" value={draft.logisticsTotalCbm ?? ''} onChange={(event) => patchDraft('logisticsTotalCbm', event.target.value === '' ? null : Number(event.target.value))} /></label>
           </>}
-          <label>状态<select value={draft.status} onChange={(event) => patchDraft('status', event.target.value as PurchaseStatus)}><option value="pending">待采购</option><option value="in_transit">海运在途</option><option value="arrived">已到货</option><option value="cancelled">已取消</option></select></label>
+          <label>状态<select value={draft.status} onChange={(event) => patchDraft('status', event.target.value as PurchaseStatus)}><option value="pending">待采购</option><option value="in_transit">海运在途</option><option value="arrived">已到货</option></select></label>
           <label className="wide">备注<input value={draft.note} onChange={(event) => patchDraft('note', event.target.value)} /></label>
           <div className="form-actions">
             <button className="primary" type="button" onClick={saveRecord} disabled={!draft.sku.trim()}>{editingId ? '保存修改' : '新增采购记录'}</button>
