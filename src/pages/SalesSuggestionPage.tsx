@@ -104,29 +104,29 @@ function newProductMultiplierForRank(storeName: string, rank: number): number {
   return rule?.multiplier ?? 1;
 }
 
-function aicomDirectSuggestedQuantity(rank: number, rawMonthlySales: number): { suggestedQuantity: number; message: string } | null {
+function aicomDirectTargetQuantity(rank: number, rawMonthlySales: number): { targetQuantity: number; message: string } | null {
   if (rank <= 0 || rank > 15) return null;
   if (rawMonthlySales <= 3) {
     return {
-      suggestedQuantity: 0,
+      targetQuantity: 0,
       message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，未超过 3，暂不补订`,
     };
   }
   if (rawMonthlySales <= 5) {
     return {
-      suggestedQuantity: 40,
-      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，建议采购数量直接 40 个`,
+      targetQuantity: 40,
+      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，目标补货 40 个`,
     };
   }
   if (rawMonthlySales <= 8) {
     return {
-      suggestedQuantity: 50,
-      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，建议采购数量直接 50 个`,
+      targetQuantity: 50,
+      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，目标补货 50 个`,
     };
   }
   return {
-    suggestedQuantity: 60,
-    message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，建议采购数量直接 60 个`,
+    targetQuantity: 60,
+    message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，目标补货 60 个`,
   };
 }
 
@@ -312,15 +312,17 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       const forecast = forecastMonthlySales(selectedStore, newProductRank, rawMonthlySales);
       const monthlySales = forecast.monthlySales;
       const stockMonths = stockMonthsForMonthlySales(monthlySales);
-      const targetQuantity = round(monthlySales * stockMonths, 2);
+      const calculatedTargetQuantity = round(monthlySales * stockMonths, 2);
       const localStockQuantity = inventory?.localStockQuantity ?? 0;
       const takealotStockQuantity = inventory?.takealotStockQuantity ?? 0;
       const stockOnWayQuantity = inventory?.stockOnWayQuantity ?? 0;
       const inTransitQuantity = inTransitBySku.get(key) ?? 0;
-      const directSuggestion = selectedStore === 'Aicom' ? aicomDirectSuggestedQuantity(newProductRank, rawMonthlySales) : null;
-      const autoSuggestedQuantity = directSuggestion
-        ? directSuggestion.suggestedQuantity
-        : Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
+      const directTarget = selectedStore === 'Aicom' ? aicomDirectTargetQuantity(newProductRank, rawMonthlySales) : null;
+      const targetQuantity = directTarget?.targetQuantity ?? calculatedTargetQuantity;
+      const autoSuggestedQuantity = Math.max(round(
+        targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity,
+        2,
+      ), 0);
       const suggestedQuantity = suggestedQuantityOverrides[row.rowId] ?? autoSuggestedQuantity;
       const estimatedCartons =
         skuItem && skuItem.unitsPerCarton > 0 ? round(suggestedQuantity / skuItem.unitsPerCarton, 2) : null;
@@ -333,8 +335,8 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       if (!row.sku.trim()) messages.push('SKU 为空');
       if (!skuItem && row.sku.trim()) messages.push('未录入 SKU 资料');
       if (skuItem?.isSeasonal) messages.push('季节性产品，请结合旺季/淡季人工确认采购量');
-      if (directSuggestion?.message) {
-        messages.push(directSuggestion.message);
+      if (directTarget?.message) {
+        messages.push(`${directTarget.message}，扣减库存和海运在途后建议 ${autoSuggestedQuantity} 个`);
       } else if (forecast.message) {
         messages.push(forecast.message);
       }
