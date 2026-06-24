@@ -44,9 +44,11 @@ const statusFilterOptions: Array<{ value: PurchaseStatus | 'all'; label: string 
   { value: 'pending', label: '待采购' },
   { value: 'in_transit', label: '海运在途' },
   { value: 'arrived', label: '已到货' },
-  { value: 'cancelled', label: '已取消' },
   { value: 'all', label: '全部' },
 ];
+
+const statusEditOptions: Array<{ value: PurchaseStatus; label: string }> = statusFilterOptions
+  .filter((option): option is { value: PurchaseStatus; label: string } => option.value !== 'all');
 
 const editableFields = [
   'manufacturerName',
@@ -166,7 +168,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
   const isAdmin = profile.role === 'admin';
   const isViewer = profile.role === 'viewer';
   const assignedRecords = useMemo(
-    () => records.filter((record) => record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()),
+    () => records.filter((record) => (
+      record.status !== 'cancelled'
+      && record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()
+    )),
     [profile.email, records],
   );
   const recentBatch = useMemo(() => {
@@ -610,7 +615,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
           onChange={(event) => setDrafts((current) => ({ ...current, [draftKey(record.id, field)]: event.target.value }))}
           onBlur={() => void commit(record, field)}
         >
-          {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          {statusEditOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
       );
     }
@@ -756,7 +761,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
           <label>总金额<input value={newTotalAmount.toFixed(2)} readOnly /></label>
           <label>单品CBM<input type="number" min="0" step="0.00000001" value={newOrder.unitCbm} onChange={(event) => patchNewOrder('unitCbm', event.target.value)} /></label>
           <label>总CBM<input value={newTotalCbm.toFixed(4)} readOnly /></label>
-          <label>状态<select value={newOrder.status} onChange={(event) => patchNewOrder('status', event.target.value as PurchaseStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label>状态<select value={newOrder.status} onChange={(event) => patchNewOrder('status', event.target.value as PurchaseStatus)}>{statusEditOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <label className="wide">备注<input value={newOrder.note} onChange={(event) => patchNewOrder('note', event.target.value)} /></label>
           <div className="form-actions">
             <button className="primary" type="button" onClick={() => void addNewOrder()}>新增采购订单</button>
