@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
-import { exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
+import { exportBatchPurchaseOrder, exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
 import { round } from '../utils/number';
 import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseAmountForRecordSku, purchaseQuantityForRecordSku, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
 
@@ -43,6 +43,9 @@ const emptyDraft: DraftRecord = {
   purchasePrice: 0,
   freightCost: 0,
   purchaseDate: new Date().toISOString().slice(0, 10),
+  purchaseBatchId: '',
+  purchaseBatchName: '',
+  purchaseBatchDate: '',
   estimatedArrivalDate: '',
   status: 'pending',
   unitCbm: 0,
@@ -129,6 +132,17 @@ function needsLogisticsMetrics(record: Pick<PurchaseRecord, 'loadingType'>): boo
   return record.loadingType === '冠通';
 }
 
+function batchKey(record: Pick<PurchaseRecord, 'purchaseBatchId' | 'purchaseBatchDate' | 'purchaseBatchName'>): string {
+  return record.purchaseBatchId || `${record.purchaseBatchDate}|${record.purchaseBatchName}`;
+}
+
+function batchLabel(record: Pick<PurchaseRecord, 'purchaseBatchDate' | 'purchaseBatchName'>): string {
+  const date = record.purchaseBatchDate.trim();
+  const name = record.purchaseBatchName.trim();
+  if (date && name) return `${date} ${name}`;
+  return name || date || '未分配批次';
+}
+
 function skuKey(value: string): string {
   return value.trim().toUpperCase();
 }
@@ -146,6 +160,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
     buyerName: '',
     status: 'all' as PurchaseStatus | 'all',
     loadingType: 'all' as PurchaseRecord['loadingType'] | 'all',
+    purchaseBatchKey: '',
     search: '',
     purchaseMonth: 'recent',
     purchaseDateFrom: '',
@@ -158,12 +173,24 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
     const months = Array.from(new Set(inventoryRecords.map((record) => record.purchaseDate.slice(0, 7)).filter(Boolean))).sort().reverse();
     return months.filter((month) => !recentMonths.includes(month));
   }, [inventoryRecords, recentMonths]);
+  const batchOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const record of inventoryRecords) {
+      const key = batchKey(record);
+      if (!key.trim() && !record.purchaseBatchName && !record.purchaseBatchDate) continue;
+      options.set(key, batchLabel(record));
+    }
+    return Array.from(options.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((left, right) => right.label.localeCompare(left.label, 'zh-Hans-CN'));
+  }, [inventoryRecords]);
 
   const filteredRecords = useMemo(
     () =>
       inventoryRecords.filter((record) => {
         if (filters.status !== 'all' && record.status !== filters.status) return false;
         if (filters.loadingType !== 'all' && (record.loadingType || '整柜') !== filters.loadingType) return false;
+        if (filters.purchaseBatchKey && batchKey(record) !== filters.purchaseBatchKey) return false;
         if (filters.manufacturerName && record.manufacturerName !== filters.manufacturerName) return false;
         if (filters.shopName && record.shopName !== filters.shopName) return false;
         if (filters.buyerName && record.buyerName !== filters.buyerName) return false;
@@ -216,6 +243,9 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
   const inTransitCbm = inTransitRecords.reduce((sum, record) => sum + logisticsCbmFor(record), 0);
   const loadingBatchCount = new Set(inTransitRecords.map((record) => record.containerDate).filter(Boolean)).size;
   const selectedRecords = inventoryRecords.filter((record) => selectedIds.has(record.id));
+  const selectedBatchRecords = filters.purchaseBatchKey
+    ? inventoryRecords.filter((record) => batchKey(record) === filters.purchaseBatchKey)
+    : [];
   const imageUrlBySku = useMemo(
     () => new Map(skuItems.map((item) => [item.sku.trim().toUpperCase(), item.imageUrl])),
     [skuItems],
@@ -313,6 +343,9 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
       purchasePrice: record.purchasePrice,
       freightCost: record.freightCost,
       purchaseDate: record.purchaseDate,
+      purchaseBatchId: record.purchaseBatchId,
+      purchaseBatchName: record.purchaseBatchName,
+      purchaseBatchDate: record.purchaseBatchDate,
       estimatedArrivalDate: record.estimatedArrivalDate,
       status: record.status,
       unitCbm: record.unitCbm,
@@ -383,6 +416,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
           <div className="export-actions">
             <button type="button" onClick={() => exportPurchaseRecords(filteredRecords, 'xlsx')} disabled={filteredRecords.length === 0}>导出 Excel</button>
             <button type="button" onClick={() => exportPurchaseRecords(filteredRecords, 'csv')} disabled={filteredRecords.length === 0}>导出 CSV</button>
+            <button type="button" onClick={() => exportBatchPurchaseOrder(selectedBatchRecords, 'xlsx')} disabled={selectedBatchRecords.length === 0}>导出本批次订货表</button>
             <button type="button" onClick={exportSelectedInspectionChecklist} disabled={selectedRecords.length === 0}>导出验货单（已选 {selectedRecords.length}）</button>
             <button type="button" onClick={() => setSelectedIds(new Set())} disabled={selectedRecords.length === 0}>清空勾选</button>
             {canEditData && <button type="button" onClick={markSelectedArrived} disabled={selectedIds.size === 0}>批量标记已到货</button>}
@@ -394,6 +428,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
           <label>厂家名<select value={filters.manufacturerName} onChange={(event) => setFilters({ ...filters, manufacturerName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'manufacturerName').map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>店铺<select value={filters.shopName} onChange={(event) => setFilters({ ...filters, shopName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'shopName').map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>采购人<select value={filters.buyerName} onChange={(event) => setFilters({ ...filters, buyerName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'buyerName').map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label>批次<select value={filters.purchaseBatchKey} onChange={(event) => setFilters({ ...filters, purchaseBatchKey: event.target.value })}><option value="">全部批次</option>{batchOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <label>装货方式<select value={filters.loadingType} onChange={(event) => setFilters({ ...filters, loadingType: event.target.value as PurchaseRecord['loadingType'] | 'all' })}><option value="all">全部</option><option value="整柜">整柜</option><option value="冠通">冠通</option></select></label>
           <label>状态<select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value as PurchaseStatus | 'all' })}><option value="pending">待采购</option><option value="in_transit">海运在途</option><option value="arrived">已到货</option><option value="cancelled">已取消</option><option value="all">全部历史</option></select></label>
           <label>采购日期起<input type="date" value={filters.purchaseDateFrom} onChange={(event) => setFilters({ ...filters, purchaseDateFrom: event.target.value })} /></label>
@@ -428,6 +463,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
           <label>运费<input type="number" min="0" step="0.01" value={draft.freightCost} onChange={(event) => patchDraft('freightCost', Number(event.target.value))} /></label>
           <label>总金额<input value={round(effectivePurchaseQuantity(draft) * draft.purchasePrice + draft.freightCost, 2)} readOnly /></label>
           <label>采购日期<input type="date" value={draft.purchaseDate} onChange={(event) => patchDraft('purchaseDate', event.target.value)} /></label>
+          <label>批次日期<input type="date" value={draft.purchaseBatchDate} onChange={(event) => patchDraft('purchaseBatchDate', event.target.value)} /></label>
+          <label>批次<input value={draft.purchaseBatchName} onChange={(event) => patchDraft('purchaseBatchName', event.target.value)} /></label>
           <label>单品CBM<input type="number" min="0" step="0.00000001" value={draft.unitCbm} onChange={(event) => patchDraft('unitCbm', Number(event.target.value))} /></label>
           <label>总CBM<input type="number" min="0" step="0.0001" value={draft.totalCbm} onChange={(event) => patchDraft('totalCbm', Number(event.target.value))} /></label>
           <label>装货方式<select value={draft.loadingType || '整柜'} onChange={(event) => patchDraft('loadingType', event.target.value as PurchaseRecord['loadingType'])}><option value="整柜">整柜</option><option value="冠通">冠通</option></select></label>
@@ -451,7 +488,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
           <table className="inventory-table">
             <thead>
               <tr>
-                <th>选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>是否混装</th><th>混装组</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
+                <th>选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>批次</th><th>批次日期</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>是否混装</th><th>混装组</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -466,6 +503,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
                   <td className="pin-col pin-manufacturer"><span className="cell-ellipsis" title={normalized.manufacturerName}>{normalized.manufacturerName}</span></td>
                   <td className="pin-col pin-sku"><span className="cell-ellipsis" title={normalized.sku}>{normalized.sku}</span></td>
                   <td className="pin-col pin-product"><span className="cell-ellipsis" title={normalized.productName}>{normalized.productName}</span></td>
+                  <td>{batchLabel(normalized)}</td>
+                  <td>{normalized.purchaseBatchDate || '-'}</td>
                   <td>{normalized.cartonCount ?? ''}</td>
                   <td>{normalized.unitsPerCarton ?? ''}</td>
                   <td>{normalized.tailQuantity}</td>
@@ -500,6 +539,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
                           <td className="pin-col pin-manufacturer"><span className="cell-ellipsis" title={normalized.manufacturerName}>{normalized.manufacturerName}</span></td>
                           <td className="pin-col pin-sku"><span className="cell-ellipsis" title={line.sku}>{line.sku}</span></td>
                           <td className="pin-col pin-product"><span className="cell-ellipsis" title={line.productName}>{line.productName}</span></td>
+                          <td>{batchLabel(normalized)}</td>
+                          <td>{normalized.purchaseBatchDate || '-'}</td>
                           <td />
                           <td />
                           <td />
@@ -527,7 +568,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
                   </Fragment>
                 );
               })}
-              {filteredRecords.length === 0 && <tr><td colSpan={26} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
+              {filteredRecords.length === 0 && <tr><td colSpan={28} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
             </tbody>
           </table>
         </div>

@@ -297,6 +297,15 @@ alter table public.purchase_records
 add column if not exists logistics_total_cbm numeric;
 
 alter table public.purchase_records
+add column if not exists purchase_batch_id text;
+
+alter table public.purchase_records
+add column if not exists purchase_batch_name text;
+
+alter table public.purchase_records
+add column if not exists purchase_batch_date date;
+
+alter table public.purchase_records
 alter column status type text using status::text;
 
 alter table public.purchase_records
@@ -307,6 +316,9 @@ on public.purchase_records (assigned_buyer_email);
 
 create index if not exists purchase_records_status_idx
 on public.purchase_records (status);
+
+create index if not exists purchase_records_batch_idx
+on public.purchase_records (purchase_batch_date, purchase_batch_id);
 
 create index if not exists purchase_records_is_confirmed_idx
 on public.purchase_records (is_confirmed);

@@ -16,8 +16,20 @@ type Props = {
   canEditData?: boolean;
 };
 
+function createPurchaseBatch() {
+  const today = new Date();
+  const date = today.toISOString().slice(0, 10);
+  const time = today.toTimeString().slice(0, 8).replace(/:/g, '');
+  return {
+    id: `${date}-${time}-${crypto.randomUUID().slice(0, 8)}`,
+    name: `${date} 批次 ${time}`,
+    date,
+  };
+}
+
 function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
   const today = new Date();
+  const batch = createPurchaseBatch();
   return rows
     .filter((row) => row.status !== 'error' && (row.sku || row.productName || row.englishName) && row.purchaseQuantity && row.purchaseQuantity > 0)
     .map((row) => ({
@@ -38,6 +50,9 @@ function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
       freightCost: 0,
       totalAmount: round((row.purchaseQuantity ?? 0) * (row.purchasePrice ?? 0), 2),
       purchaseDate: today.toISOString().slice(0, 10),
+      purchaseBatchId: batch.id,
+      purchaseBatchName: batch.name,
+      purchaseBatchDate: batch.date,
       estimatedArrivalDate: '',
       status: 'pending',
       unitCbm: row.unitCbm ?? 0,

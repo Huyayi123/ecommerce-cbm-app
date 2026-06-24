@@ -44,14 +44,14 @@ export function normalizeMixedGroups(value: unknown): MixedCartonGroup[] {
 }
 
 export function effectivePurchaseQuantity(record: PurchaseQuantityLike): number {
-  if (record.confirmedPurchaseQuantity !== null && record.confirmedPurchaseQuantity !== undefined) {
-    return record.confirmedPurchaseQuantity;
-  }
   const cartonCount = record.cartonCount ?? null;
   const unitsPerCarton = record.unitsPerCarton ?? null;
   const tailQuantity = record.tailQuantity ?? 0;
   if (cartonCount !== null && unitsPerCarton !== null && unitsPerCarton > 0) {
     return cartonCount * unitsPerCarton + tailQuantity;
+  }
+  if (record.confirmedPurchaseQuantity !== null && record.confirmedPurchaseQuantity !== undefined) {
+    return record.confirmedPurchaseQuantity;
   }
   return record.purchaseQuantity ?? 0;
 }
@@ -154,7 +154,7 @@ export function withPurchaseTotals(record: PurchaseRecord): PurchaseRecord {
 
   return {
     ...normalizedRecord,
-    confirmedPurchaseQuantity: record.confirmedPurchaseQuantity ?? (record.cartonCount !== null && record.unitsPerCarton ? mainQuantity : null),
+    confirmedPurchaseQuantity: record.cartonCount !== null && record.unitsPerCarton ? mainQuantity : record.confirmedPurchaseQuantity ?? null,
     totalAmount: round(mainAmount + record.freightCost + mixedAmountFor(normalizedRecord), 2),
     totalCbm: round(mainCbm + mixedCbmFor(normalizedRecord), 4),
   };

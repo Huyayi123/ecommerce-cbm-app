@@ -26,6 +26,9 @@ type NewOrderDraft = {
   purchasePrice: string;
   freightCost: string;
   unitCbm: string;
+  purchaseBatchId: string;
+  purchaseBatchName: string;
+  purchaseBatchDate: string;
   status: PurchaseStatus;
   note: string;
 };
@@ -62,6 +65,8 @@ const editableFields = [
   'purchasePrice',
   'freightCost',
   'unitCbm',
+  'purchaseBatchName',
+  'purchaseBatchDate',
   'status',
   'note',
 ] as const;
@@ -92,8 +97,26 @@ function createEmptyDraft(): NewOrderDraft {
     purchasePrice: '',
     freightCost: '',
     unitCbm: '',
+    purchaseBatchId: '',
+    purchaseBatchName: '',
+    purchaseBatchDate: '',
     status: 'pending',
     note: '',
+  };
+}
+
+function batchDisplay(record: Pick<PurchaseRecord, 'purchaseBatchDate' | 'purchaseBatchName'>): string {
+  const name = record.purchaseBatchName.trim();
+  const date = record.purchaseBatchDate.trim();
+  if (date && name) return `${date} ${name}`;
+  return name || date || '未分配批次';
+}
+
+function withBatchDefaults(record: PurchaseRecord): PurchaseRecord {
+  return {
+    ...record,
+    purchaseBatchDate: record.purchaseBatchDate || record.purchaseDate,
+    purchaseBatchName: record.purchaseBatchName || (record.purchaseBatchDate || record.purchaseDate ? `${record.purchaseBatchDate || record.purchaseDate} 批次` : ''),
   };
 }
 
@@ -146,6 +169,15 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
     () => records.filter((record) => record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()),
     [profile.email, records],
   );
+  const recentBatch = useMemo(() => {
+    return records
+      .filter((record) => record.purchaseBatchId || record.purchaseBatchName || record.purchaseBatchDate)
+      .sort((left, right) => (
+        (right.purchaseBatchDate || '').localeCompare(left.purchaseBatchDate || '')
+        || (right.createdAt || '').localeCompare(left.createdAt || '')
+        || (right.purchaseBatchName || '').localeCompare(left.purchaseBatchName || '')
+      ))[0];
+  }, [records]);
   const visibleRecords = useMemo(
     () => statusFilter === 'all' ? assignedRecords : assignedRecords.filter((record) => record.status === statusFilter),
     [assignedRecords, statusFilter],
@@ -159,6 +191,17 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
     [skuItems],
   );
   const unconfirmedVisibleCount = visibleRecords.filter((record) => !record.isConfirmed && record.status === 'pending').length;
+
+  useEffect(() => {
+    if (newOrder.purchaseBatchId || newOrder.purchaseBatchName || newOrder.purchaseBatchDate) return;
+    const fallbackDate = today();
+    setNewOrder((current) => ({
+      ...current,
+      purchaseBatchId: recentBatch?.purchaseBatchId || '',
+      purchaseBatchName: recentBatch?.purchaseBatchName || `${fallbackDate} 批次`,
+      purchaseBatchDate: recentBatch?.purchaseBatchDate || fallbackDate,
+    }));
+  }, [newOrder.purchaseBatchDate, newOrder.purchaseBatchId, newOrder.purchaseBatchName, recentBatch]);
 
   const newCartonCount = parseNumber(newOrder.cartonCount);
   const newUnitsPerCarton = parseNumber(newOrder.unitsPerCarton);
@@ -176,9 +219,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
 
   function recordWithSkuDefaults(record: PurchaseRecord): PurchaseRecord {
     const skuItem = skuBySku.get(record.sku.trim().toUpperCase());
-    if (!skuItem) return record;
+    const withBatch = withBatchDefaults(record);
+    if (!skuItem) return withBatch;
     return {
-      ...record,
+      ...withBatch,
       purchasePrice: record.purchasePrice || skuItem.purchasePrice,
       unitCbm: record.unitCbm || skuItem.unitCbm,
       imageUrl: record.imageUrl || skuItem.imageUrl,
@@ -337,6 +381,9 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
       freightCost: newFreightCost,
       totalAmount: newTotalAmount,
       purchaseDate: today(),
+      purchaseBatchId: newOrder.purchaseBatchId.trim() || recentBatch?.purchaseBatchId || '',
+      purchaseBatchName: newOrder.purchaseBatchName.trim() || recentBatch?.purchaseBatchName || '',
+      purchaseBatchDate: newOrder.purchaseBatchDate.trim() || recentBatch?.purchaseBatchDate || '',
       estimatedArrivalDate: '',
       status: newOrder.status,
       unitCbm: newUnitCbm,
@@ -366,7 +413,12 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
   async function importOrders(file: File | undefined) {
     if (!file || isViewer) return;
     try {
-      const imported = (await parsePurchaseRecordsFile(file, profile)).map(withPurchaseTotals);
+      const imported = (await parsePurchaseRecordsFile(file, profile)).map((record) => withPurchaseTotals({
+        ...record,
+        purchaseBatchId: record.purchaseBatchId || recentBatch?.purchaseBatchId || '',
+        purchaseBatchName: record.purchaseBatchName || recentBatch?.purchaseBatchName || '',
+        purchaseBatchDate: record.purchaseBatchDate || recentBatch?.purchaseBatchDate || '',
+      }));
       if (imported.length === 0) {
         setMessage('没有识别到可导入的采购订单。');
         return;
@@ -543,6 +595,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
 
   function canEditField(field: EditableField): boolean {
     if (isViewer) return false;
+    if (field === 'purchaseQuantity') return false;
     if (isAdmin) return true;
     return field !== 'sku' && field !== 'assignedBuyerName' && field !== 'assignedBuyerEmail';
   }
@@ -601,7 +654,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
     const normalized = withPurchaseTotals(record);
     return (
       <tr className="packing-detail-row">
-        <td colSpan={22}>
+        <td colSpan={24}>
           <div className="packing-panel">
             <div className="packing-summary">
               <strong>主SKU数量：{purchaseQuantityForRecordSku(normalized)}</strong>
@@ -692,6 +745,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
           <label>图片链接<input value={newOrder.imageUrl} onChange={(event) => patchNewOrder('imageUrl', event.target.value)} /></label>
           <label>店铺<input value={newOrder.shopName} onChange={(event) => patchNewOrder('shopName', event.target.value)} /></label>
           <label>采购人<input value={profile.buyerName} readOnly /></label>
+          <label>批次日期<input type="date" value={newOrder.purchaseBatchDate} onChange={(event) => patchNewOrder('purchaseBatchDate', event.target.value)} /></label>
+          <label>批次<input value={newOrder.purchaseBatchName} placeholder={recentBatch ? batchDisplay(recentBatch) : '未分配批次'} onChange={(event) => patchNewOrder('purchaseBatchName', event.target.value)} /></label>
           <label>整箱件数<input type="number" min="0" value={newOrder.cartonCount} onChange={(event) => patchNewOrder('cartonCount', event.target.value)} /></label>
           <label>每箱数量<input type="number" min="0" value={newOrder.unitsPerCarton} placeholder={defaultUnitsPerCartonText(newOrder.sku)} title={defaultUnitsPerCartonText(newOrder.sku)} onChange={(event) => patchNewOrder('unitsPerCarton', event.target.value)} /></label>
           <label>尾箱数量<input type="number" min="0" value={newOrder.tailQuantity} onChange={(event) => patchNewOrder('tailQuantity', event.target.value)} /></label>
@@ -714,7 +769,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
         <table>
           <thead>
             <tr>
-              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th><th>操作</th>
+              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>批次日期</th><th>批次</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -731,6 +786,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
                     <td>{input(normalized, 'englishName')}</td>
                     <td>{input(normalized, 'shopName')}</td>
                     <td>{isAdmin ? input(normalized, 'assignedBuyerName') : normalized.assignedBuyerName}</td>
+                    <td>{input(normalized, 'purchaseBatchDate', 'date')}</td>
+                    <td>{input(normalized, 'purchaseBatchName')}</td>
                     <td>{input(normalized, 'purchaseQuantity', 'number')}</td>
                     <td>{input(normalized, 'cartonCount', 'number')}</td>
                     <td>{input(normalized, 'unitsPerCarton', 'number')}</td>
@@ -759,6 +816,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
                       <td />
                       <td>{normalized.shopName}</td>
                       <td>{normalized.assignedBuyerName}</td>
+                      <td>{normalized.purchaseBatchDate}</td>
+                      <td>{normalized.purchaseBatchName}</td>
                       <td />
                       <td />
                       <td />
@@ -780,7 +839,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
                 </Fragment>
               );
             })}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={22}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={24}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>

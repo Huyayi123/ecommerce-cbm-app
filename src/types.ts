@@ -99,6 +99,9 @@ export type PurchaseRecord = {
   freightCost: number;
   totalAmount: number;
   purchaseDate: string;
+  purchaseBatchId: string;
+  purchaseBatchName: string;
+  purchaseBatchDate: string;
   estimatedArrivalDate: string;
   status: PurchaseStatus;
   unitCbm: number;

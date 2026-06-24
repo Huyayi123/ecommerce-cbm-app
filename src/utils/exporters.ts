@@ -170,6 +170,8 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
     records.map((record) => {
       const normalized = withPurchaseTotals(record);
       const row = {
+        批次: normalized.purchaseBatchName,
+        批次日期: normalized.purchaseBatchDate,
         厂家名: normalized.manufacturerName,
         SKU: normalized.sku,
         产品名称: normalized.productName,
@@ -206,6 +208,47 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, moduleName);
   writeWorkbook(workbook, moduleName, format);
+}
+
+export function exportBatchPurchaseOrder(records: PurchaseRecord[], format: ExportFormat): void {
+  const exportRows = [...records]
+    .map(withPurchaseTotals)
+    .filter((record) => record.isConfirmed && record.status !== 'pending' && record.status !== 'cancelled')
+    .sort((left, right) => (
+      left.purchaseBatchDate.localeCompare(right.purchaseBatchDate)
+      || left.purchaseBatchName.localeCompare(right.purchaseBatchName, 'zh-Hans-CN')
+      || left.manufacturerName.localeCompare(right.manufacturerName, 'zh-Hans-CN')
+      || left.sku.localeCompare(right.sku, 'zh-Hans-CN')
+    ));
+
+  const worksheet = XLSX.utils.json_to_sheet(exportRows.map((record) => ({
+    批次: record.purchaseBatchName || '未分配批次',
+    装柜日期: record.purchaseBatchDate || record.containerDate,
+    厂家名: record.manufacturerName,
+    SKU: record.sku,
+    产品名称: record.productName,
+    英文名称: record.englishName,
+    店铺: record.shopName,
+    采购人: record.assignedBuyerName || record.buyerName,
+    实际采购数量: record.confirmedPurchaseQuantity ?? '',
+    采购单价: record.purchasePrice,
+    运费: record.freightCost,
+    总金额: record.totalAmount,
+    整箱件数: record.cartonCount ?? '',
+    每箱数量: record.unitsPerCarton ?? '',
+    尾箱数量: record.tailQuantity,
+    总件数: packageCountFor(record) || '',
+    单品CBM: record.unitCbm,
+    总CBM: record.totalCbm,
+    装货方式: record.loadingType || '整柜',
+    采购日期: record.purchaseDate,
+    状态: record.status,
+    备注: record.note,
+  })));
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, '批次订货表');
+  const batchName = exportRows[0]?.purchaseBatchName || '未分配批次';
+  writeWorkbook(workbook, `批次订货表_${batchName}`, format);
 }
 
 export function exportInspectionChecklist(records: PurchaseRecord[], format: ExportFormat, skuItems: SkuItem[] = []): void {

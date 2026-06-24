@@ -22,6 +22,9 @@ type PurchaseRecordRow = {
   purchase_price: number | null;
   total_amount: number | null;
   purchase_date: string | null;
+  purchase_batch_id?: string | null;
+  purchase_batch_name?: string | null;
+  purchase_batch_date?: string | null;
   estimated_arrival_date: string | null;
   status: string | null;
   english_name: string | null;
@@ -260,6 +263,9 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     freightCost: Number(row.freight_cost ?? 0),
     totalAmount: Number(row.total_amount ?? 0),
     purchaseDate: row.purchase_date ?? '',
+    purchaseBatchId: row.purchase_batch_id ?? '',
+    purchaseBatchName: row.purchase_batch_name ?? '',
+    purchaseBatchDate: row.purchase_batch_date ?? '',
     estimatedArrivalDate: row.estimated_arrival_date ?? '',
     status: status === 'in_transit' || status === 'arrived' || status === 'cancelled' ? status : 'pending',
     unitCbm: Number(row.unit_cbm ?? 0),
@@ -303,6 +309,9 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     freight_cost: normalized.freightCost,
     total_amount: normalized.totalAmount,
     purchase_date: dateOrNull(normalized.purchaseDate),
+    purchase_batch_id: normalized.purchaseBatchId || null,
+    purchase_batch_name: normalized.purchaseBatchName || null,
+    purchase_batch_date: dateOrNull(normalized.purchaseBatchDate),
     estimated_arrival_date: dateOrNull(normalized.estimatedArrivalDate),
     status: normalized.status,
     english_name: normalized.englishName,
