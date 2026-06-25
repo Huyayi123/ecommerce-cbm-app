@@ -275,7 +275,25 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
   }
 
   function patchNewOrder<K extends keyof NewOrderDraft>(field: K, value: NewOrderDraft[K]) {
-    setNewOrder((current) => ({ ...current, [field]: value }));
+    setNewOrder((current) => {
+      const next = { ...current, [field]: value };
+      if (field !== 'sku' || typeof value !== 'string') return next;
+
+      const skuItem = skuBySku.get(value.trim().toUpperCase());
+      if (!skuItem) return next;
+
+      return {
+        ...next,
+        sku: skuItem.sku || value,
+        manufacturerName: skuItem.manufacturerName,
+        productName: skuItem.productName,
+        englishName: skuItem.englishName,
+        imageUrl: skuItem.imageUrl,
+        shopName: skuItem.shopName,
+        purchasePrice: skuItem.purchasePrice > 0 ? String(skuItem.purchasePrice) : next.purchasePrice,
+        unitCbm: skuItem.unitCbm > 0 ? String(skuItem.unitCbm) : next.unitCbm,
+      };
+    });
   }
 
   async function saveRecord(nextRecord: PurchaseRecord) {
