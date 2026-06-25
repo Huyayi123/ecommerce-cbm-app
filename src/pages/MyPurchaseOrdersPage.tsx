@@ -32,6 +32,7 @@ type NewOrderDraft = {
   purchaseBatchName: string;
   purchaseBatchDate: string;
   status: PurchaseStatus;
+  loadingType: PurchaseRecord['loadingType'];
   note: string;
 };
 
@@ -72,6 +73,7 @@ const editableFields = [
   'purchaseBatchName',
   'purchaseBatchDate',
   'status',
+  'loadingType',
   'note',
 ] as const;
 
@@ -105,6 +107,7 @@ function createEmptyDraft(): NewOrderDraft {
     purchaseBatchName: '',
     purchaseBatchDate: '',
     status: 'pending',
+    loadingType: '整柜',
     note: '',
   };
 }
@@ -421,7 +424,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       status: newOrder.status,
       unitCbm: newUnitCbm,
       totalCbm: newTotalCbm,
-      loadingType: '整柜',
+      loadingType: newOrder.loadingType || '整柜',
       containerDate: '',
       totalWeightKg: null,
       cartonCount: newOrder.cartonCount.trim() ? newCartonCount : null,
@@ -472,6 +475,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       next[field] = parseNumber(value);
     } else if (field === 'status') {
       next.status = value as PurchaseStatus;
+    } else if (field === 'loadingType') {
+      next.loadingType = value as PurchaseRecord['loadingType'];
     } else {
       next[field] = value;
     }
@@ -654,6 +659,18 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         </select>
       );
     }
+    if (field === 'loadingType') {
+      return (
+        <select
+          value={valueFor(record, field) || '整柜'}
+          onChange={(event) => setDrafts((current) => ({ ...current, [draftKey(record.id, field)]: event.target.value }))}
+          onBlur={() => void commit(record, field)}
+        >
+          <option value="整柜">整柜</option>
+          <option value="冠通">冠通</option>
+        </select>
+      );
+    }
     return (
       <input
         type={type}
@@ -797,6 +814,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <label>单品CBM<input type="number" min="0" step="0.00000001" value={newOrder.unitCbm} onChange={(event) => patchNewOrder('unitCbm', event.target.value)} /></label>
           <label>总CBM<input value={newTotalCbm.toFixed(4)} readOnly /></label>
           <label>状态<select value={newOrder.status} onChange={(event) => patchNewOrder('status', event.target.value as PurchaseStatus)}>{statusEditOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label>装货方式<select value={newOrder.loadingType || '整柜'} onChange={(event) => patchNewOrder('loadingType', event.target.value as PurchaseRecord['loadingType'])}><option value="整柜">整柜</option><option value="冠通">冠通</option></select></label>
           <label className="wide">备注<input value={newOrder.note} onChange={(event) => patchNewOrder('note', event.target.value)} /></label>
           <div className="form-actions">
             <button className="primary" type="button" onClick={() => void addNewOrder()}>新增采购订单</button>
@@ -809,7 +827,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <table className="my-orders-table">
           <thead>
             <tr>
-              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>批次日期</th><th>批次</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th><th>操作</th>
+              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>批次日期</th><th>批次</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -841,6 +859,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td>{input(normalized, 'unitCbm', 'number')}</td>
                     <td>{normalized.totalCbm.toFixed(4)}</td>
                     <td>{input(normalized, 'status')}</td>
+                    <td>{input(normalized, 'loadingType')}</td>
                     <td>{input(normalized, 'note')}</td>
                     <td className="row-actions">
                       <button type="button" onClick={() => toggleExpanded(record.id)}>{expandedRows.has(record.id) ? '收起混装' : '混装'}</button>
@@ -871,6 +890,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                       <td>{line.unitCbm.toFixed(8)}</td>
                       <td>{line.totalCbm.toFixed(4)}</td>
                       <td>{statusLabels[normalized.status]}</td>
+                      <td>{normalized.loadingType || '整柜'}</td>
                       <td>{`${group.groupName} ${group.cartonCount}件，与 ${normalized.sku || normalized.productName || '主商品'} 混装`}</td>
                       <td />
                     </tr>
@@ -879,7 +899,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 </Fragment>
               );
             })}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={24}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={25}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>
