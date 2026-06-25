@@ -488,6 +488,18 @@ export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise
   }
 }
 
+export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<void> {
+  if (records.length === 0) return;
+  const { error } = await requireSupabase().from('purchase_records').upsert(records.map(toPurchaseRecordRow));
+  if (error) {
+    console.error(error);
+    if (isMissingColumnError(error)) {
+      throw new Error(`purchase_records 表缺少新字段，采购记录无法保存。请先在 Supabase SQL Editor 执行采购记录字段迁移 SQL。原始错误：${formatErrorMessage(error)}`);
+    }
+    throw new Error(formatErrorMessage(error));
+  }
+}
+
 export async function fetchContainerRows(): Promise<PurchaseRow[]> {
   const { data, error } = await requireSupabase().from('container_rows').select('*').order('row_number');
   if (error) throwSupabaseError(error);

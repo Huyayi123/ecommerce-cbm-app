@@ -11,6 +11,7 @@ type Props = {
   skuItems: SkuItem[];
   profile: AppProfile;
   onChange: (records: PurchaseRecord[]) => void | Promise<void>;
+  onSaveRecords?: (records: PurchaseRecord[]) => void | Promise<void>;
 };
 
 type NewOrderDraft = {
@@ -157,7 +158,7 @@ function createMixedGroup(index: number): MixedCartonGroup {
   };
 }
 
-export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: Props) {
+export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onSaveRecords }: Props) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [mixedDrafts, setMixedDrafts] = useState<Record<string, string>>({});
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -298,6 +299,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
 
   async function saveRecord(nextRecord: PurchaseRecord) {
     const normalized = withPurchaseTotals(nextRecord);
+    if (onSaveRecords) {
+      await onSaveRecords([normalized]);
+      return;
+    }
     await onChange(records.map((item) => (item.id === normalized.id ? normalized : item)));
   }
 
@@ -346,7 +351,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
   async function flushMixedDrafts(draftSnapshot: Record<string, string>) {
     if (isViewer || Object.keys(draftSnapshot).length === 0) return;
     try {
-      await onChange(records.map((record) => applyMixedDraftsToRecord(record, draftSnapshot)));
+      const changedRecords = records
+        .map((record) => applyMixedDraftsToRecord(record, draftSnapshot))
+        .filter((record, index) => record !== records[index]);
+      if (onSaveRecords) await onSaveRecords(changedRecords);
+      else await onChange(records.map((record) => applyMixedDraftsToRecord(record, draftSnapshot)));
       setMixedDrafts((current) => {
         const next = { ...current };
         for (const [key, value] of Object.entries(draftSnapshot)) {
@@ -424,7 +433,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
     });
 
     try {
-      await onChange([record, ...records]);
+      if (onSaveRecords) await onSaveRecords([record]);
+      else await onChange([record, ...records]);
       setNewOrder(createEmptyDraft());
       setMessage('已新增采购订单。');
     } catch (error) {
@@ -446,7 +456,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
         setMessage('没有识别到可导入的采购订单。');
         return;
       }
-      await onChange([...imported, ...records]);
+      if (onSaveRecords) await onSaveRecords(imported);
+      else await onChange([...imported, ...records]);
       setMessage(`已导入 ${imported.length} 条采购订单。`);
     } catch (error) {
       console.error(error);
@@ -514,7 +525,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange }: P
     const visibleIds = new Set(visibleRecords.filter((record) => !record.isConfirmed && record.status === 'pending').map((record) => record.id));
     if (visibleIds.size === 0) return;
     try {
-      await onChange(records.map((item) => (visibleIds.has(item.id) ? confirmedRecord(item) : item)));
+      const confirmedRecords = records
+        .filter((item) => visibleIds.has(item.id))
+        .map((item) => confirmedRecord(item));
+      if (onSaveRecords) await onSaveRecords(confirmedRecords);
+      else await onChange(records.map((item) => (visibleIds.has(item.id) ? confirmedRecord(item) : item)));
       setDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleIds.has(key.split(':')[0]))));
       setMixedDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleIds.has(key.split(':')[0]))));
       setMessage(`已确认 ${visibleIds.size} 条采购订单，采购 / 在途库存将按回传数据统计。`);
