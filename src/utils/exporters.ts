@@ -166,45 +166,79 @@ export function exportSkuImportTemplate(): void {
 export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportFormat, moduleName = '采购在途库存'): void {
   const includeBuyerEmail = moduleName !== '我的采购订单';
   const includePlanQuantity = moduleName === '我的采购订单';
-  const worksheet = XLSX.utils.json_to_sheet(
-    records.map((record) => {
-      const normalized = withPurchaseTotals(record);
-      const row = {
-        批次: normalized.purchaseBatchName,
-        批次日期: normalized.purchaseBatchDate,
-        厂家名: normalized.manufacturerName,
-        SKU: normalized.sku,
-        产品名称: normalized.productName,
-        英文名称: normalized.englishName,
-        图片链接: normalized.imageUrl,
-        店铺: normalized.shopName,
-        采购人: normalized.assignedBuyerName || normalized.buyerName,
-        ...(includeBuyerEmail ? { 采购人邮箱: normalized.assignedBuyerEmail } : {}),
-        ...(includePlanQuantity ? { 计划采购数量: normalized.purchaseQuantity } : {}),
-        实际采购数量: normalized.confirmedPurchaseQuantity ?? '',
-        整箱件数: normalized.cartonCount ?? '',
-        每箱数量: normalized.unitsPerCarton ?? '',
-        尾箱数量: normalized.tailQuantity,
-        含本SKU混装采购数量: purchaseQuantityForRecordSku(normalized),
-        采购单价: normalized.purchasePrice,
-        运费: normalized.freightCost,
-        含混装总金额: normalized.totalAmount,
-        单品CBM: normalized.unitCbm,
-        采购日期: normalized.purchaseDate,
-        状态: normalized.status,
-        '含混装总 CBM': normalized.totalCbm,
-        装货方式: normalized.loadingType,
-        装柜日期: normalized.containerDate,
-        件数: packageCountFor(normalized) || '',
-        是否混装: normalized.isMixed ? '是' : '否',
-        混装组: mixedGroupsSummary(normalized),
-        总重量kg: normalized.totalWeightKg ?? '',
-        物流总CBM: normalized.logisticsTotalCbm ?? '',
-        备注: normalized.note,
-      };
-      return row;
-    }),
-  );
+  const exportRows = records.flatMap((record) => {
+    const normalized = withPurchaseTotals(record);
+    const baseRow = {
+      批次: normalized.purchaseBatchName,
+      批次日期: normalized.purchaseBatchDate,
+      厂家名: normalized.manufacturerName,
+      SKU: normalized.sku,
+      产品名称: normalized.productName,
+      英文名称: normalized.englishName,
+      图片链接: normalized.imageUrl,
+      店铺: normalized.shopName,
+      采购人: normalized.assignedBuyerName || normalized.buyerName,
+      ...(includeBuyerEmail ? { 采购人邮箱: normalized.assignedBuyerEmail } : {}),
+      ...(includePlanQuantity ? { 计划采购数量: normalized.purchaseQuantity } : {}),
+      实际采购数量: normalized.confirmedPurchaseQuantity ?? '',
+      整箱件数: normalized.cartonCount ?? '',
+      每箱数量: normalized.unitsPerCarton ?? '',
+      尾箱数量: normalized.tailQuantity,
+      含本SKU混装采购数量: purchaseQuantityForRecordSku(normalized),
+      采购单价: normalized.purchasePrice,
+      运费: normalized.freightCost,
+      含混装总金额: normalized.totalAmount,
+      单品CBM: normalized.unitCbm,
+      采购日期: normalized.purchaseDate,
+      状态: normalized.status,
+      '含混装总 CBM': normalized.totalCbm,
+      装货方式: normalized.loadingType,
+      装柜日期: normalized.containerDate,
+      件数: packageCountFor(normalized) || '',
+      是否混装: normalized.isMixed ? '是' : '否',
+      混装组: mixedGroupsSummary(normalized),
+      总重量kg: normalized.totalWeightKg ?? '',
+      物流总CBM: normalized.logisticsTotalCbm ?? '',
+      备注: normalized.note,
+    };
+
+    const mixedRows = normalized.mixedGroups.flatMap((group) => group.lines.map((line) => ({
+      批次: normalized.purchaseBatchName,
+      批次日期: normalized.purchaseBatchDate,
+      厂家名: normalized.manufacturerName,
+      SKU: line.sku,
+      产品名称: line.productName,
+      英文名称: '',
+      图片链接: '',
+      店铺: normalized.shopName,
+      采购人: normalized.assignedBuyerName || normalized.buyerName,
+      ...(includeBuyerEmail ? { 采购人邮箱: normalized.assignedBuyerEmail } : {}),
+      ...(includePlanQuantity ? { 计划采购数量: '' } : {}),
+      实际采购数量: line.quantity,
+      整箱件数: '',
+      每箱数量: '',
+      尾箱数量: '',
+      含本SKU混装采购数量: line.quantity,
+      采购单价: line.purchasePrice,
+      运费: '',
+      含混装总金额: line.totalAmount,
+      单品CBM: line.unitCbm,
+      采购日期: normalized.purchaseDate,
+      状态: normalized.status,
+      '含混装总 CBM': line.totalCbm,
+      装货方式: normalized.loadingType,
+      装柜日期: normalized.containerDate,
+      件数: group.cartonCount || '',
+      是否混装: '混装子行',
+      混装组: `${group.groupName} ${group.cartonCount}件`,
+      总重量kg: '',
+      物流总CBM: '',
+      备注: `与 ${normalized.sku || normalized.productName} 混装`,
+    })));
+
+    return [baseRow, ...mixedRows];
+  });
+  const worksheet = XLSX.utils.json_to_sheet(exportRows);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, moduleName);
   writeWorkbook(workbook, moduleName, format);
