@@ -8,6 +8,7 @@ type Props = {
   records: PurchaseRecord[];
   skuItems: SkuItem[];
   onChange: (records: PurchaseRecord[]) => void;
+  onDeleteRecords?: (ids: string[]) => void | Promise<void>;
   canEditData?: boolean;
   canDeleteData?: boolean;
 };
@@ -147,7 +148,7 @@ function skuKey(value: string): string {
   return value.trim().toUpperCase();
 }
 
-export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData = true, canDeleteData = true }: Props) {
+export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRecords, canEditData = true, canDeleteData = true }: Props) {
   const [draft, setDraft] = useState<DraftRecord>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -367,14 +368,20 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
     setEditingId(record.id);
   }
 
-  function deleteRecord(id: string) {
+  async function deleteRecord(id: string) {
     if (!canDeleteData) return;
-    onChange(records.filter((record) => record.id !== id));
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      next.delete(id);
-      return next;
-    });
+    try {
+      if (onDeleteRecords) await onDeleteRecords([id]);
+      else onChange(records.filter((record) => record.id !== id));
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    } catch (error) {
+      console.error(error);
+      alert(`删除失败：${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   function markSelectedArrived() {
@@ -530,7 +537,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, canEditData
                   <td><span className="cell-ellipsis note-cell" title={normalized.note}>{normalized.note}</span></td>
                   <td className="row-actions">
                     {canEditData && <button type="button" onClick={() => editRecord(normalized)}>编辑</button>}
-                    {canDeleteData && <button className="danger" type="button" onClick={() => deleteRecord(normalized.id)}>删除</button>}
+                    {canDeleteData && <button className="danger" type="button" onClick={() => void deleteRecord(normalized.id)}>删除</button>}
                   </td>
                     </tr>
                     {childRows.map(({ group, line }) => {
