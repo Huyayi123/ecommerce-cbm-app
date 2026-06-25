@@ -500,6 +500,13 @@ export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<
   }
 }
 
+export async function deletePurchaseRecords(ids: string[]): Promise<void> {
+  const deleteIds = ids.map((id) => id.trim()).filter(Boolean);
+  if (deleteIds.length === 0) return;
+  const { error } = await requireSupabase().from('purchase_records').delete().in('id', deleteIds);
+  if (error) throwSupabaseError(error);
+}
+
 export async function fetchContainerRows(): Promise<PurchaseRow[]> {
   const { data, error } = await requireSupabase().from('container_rows').select('*').order('row_number');
   if (error) throwSupabaseError(error);

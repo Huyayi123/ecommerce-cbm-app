@@ -11,6 +11,7 @@ import { RepricingAlertsPage } from './pages/RepricingAlertsPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
 import type { AppProfile, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
 import {
+  deletePurchaseRecords,
   fetchContainerRows,
   fetchProfile,
   fetchProfiles,
@@ -191,6 +192,17 @@ function App() {
     });
     try {
       await upsertPurchaseRecords(normalized);
+    } catch (error) {
+      await loadCloudData();
+      throw error;
+    }
+  }
+
+  async function persistPurchaseRecordDeletes(ids: string[]) {
+    const deleteIds = new Set(ids);
+    setPurchaseRecords((current) => current.filter((record) => !deleteIds.has(record.id)));
+    try {
+      await deletePurchaseRecords(ids);
     } catch (error) {
       await loadCloudData();
       throw error;
@@ -380,6 +392,7 @@ function App() {
             profile={profile}
             onChange={persistPurchaseRecords}
             onSaveRecords={persistPurchaseRecordUpdates}
+            onDeleteRecords={persistPurchaseRecordDeletes}
           />
         </>
       )}

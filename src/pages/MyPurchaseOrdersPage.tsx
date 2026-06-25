@@ -12,6 +12,7 @@ type Props = {
   profile: AppProfile;
   onChange: (records: PurchaseRecord[]) => void | Promise<void>;
   onSaveRecords?: (records: PurchaseRecord[]) => void | Promise<void>;
+  onDeleteRecords?: (ids: string[]) => void | Promise<void>;
 };
 
 type NewOrderDraft = {
@@ -158,7 +159,7 @@ function createMixedGroup(index: number): MixedCartonGroup {
   };
 }
 
-export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onSaveRecords }: Props) {
+export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onSaveRecords, onDeleteRecords }: Props) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [mixedDrafts, setMixedDrafts] = useState<Record<string, string>>({});
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -542,7 +543,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   async function deleteRecord(recordId: string) {
     if (isViewer) return;
     try {
-      await onChange(records.filter((record) => record.id !== recordId));
+      if (onDeleteRecords) await onDeleteRecords([recordId]);
+      else await onChange(records.filter((record) => record.id !== recordId));
       setMessage('已删除采购订单。');
     } catch (error) {
       console.error(error);
@@ -803,8 +805,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         </div>
       )}
 
-      <div className="table-wrap">
-        <table>
+      <div className="table-wrap my-orders-table-wrap">
+        <table className="my-orders-table">
           <thead>
             <tr>
               <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>批次日期</th><th>批次</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>备注</th><th>操作</th>

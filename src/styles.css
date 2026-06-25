@@ -759,6 +759,21 @@ button.danger,
   box-shadow: 1px 0 0 #d8c987;
 }
 
+.my-orders-table-wrap {
+  max-height: 620px;
+}
+
+.my-orders-table th {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: #eaf2f6;
+}
+
+.my-orders-table td {
+  background-clip: padding-box;
+}
+
 .sku-table-wrap {
   max-height: 620px;
 }
