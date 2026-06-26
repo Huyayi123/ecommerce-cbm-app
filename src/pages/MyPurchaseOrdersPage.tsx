@@ -79,6 +79,12 @@ const editableFields = [
 
 type EditableField = (typeof editableFields)[number];
 type MixedLineField = 'sku' | 'productName' | 'quantity' | 'purchasePrice' | 'unitCbm';
+type ScrollSnapshot = {
+  windowX: number;
+  windowY: number;
+  tableLeft: number;
+  tableTop: number;
+};
 
 function parseNumber(value: string): number {
   const parsed = Number(value);
@@ -168,6 +174,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [newOrder, setNewOrder] = useState<NewOrderDraft>(() => createEmptyDraft());
   const [message, setMessage] = useState('');
+  const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const pendingScrollRef = useRef<ScrollSnapshot | null>(null);
   const mixedAutoSaveTimer = useRef<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<PurchaseStatus | 'all'>('pending');
   const isAdmin = profile.role === 'admin';
@@ -265,6 +273,41 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     const key = draftKey(record.id, field);
     if (key in drafts) return drafts[key];
     return String(record[field] ?? '');
+  }
+
+  function rememberScrollPosition() {
+    pendingScrollRef.current = {
+      windowX: window.scrollX,
+      windowY: window.scrollY,
+      tableLeft: tableWrapRef.current?.scrollLeft ?? 0,
+      tableTop: tableWrapRef.current?.scrollTop ?? 0,
+    };
+  }
+
+  function restoreRememberedScroll() {
+    const snapshot = pendingScrollRef.current;
+    if (!snapshot) return;
+    window.requestAnimationFrame(() => {
+      if (tableWrapRef.current) {
+        tableWrapRef.current.scrollLeft = snapshot.tableLeft;
+        tableWrapRef.current.scrollTop = snapshot.tableTop;
+      }
+      window.scrollTo(snapshot.windowX, snapshot.windowY);
+      window.requestAnimationFrame(() => {
+        if (tableWrapRef.current) {
+          tableWrapRef.current.scrollLeft = snapshot.tableLeft;
+          tableWrapRef.current.scrollTop = snapshot.tableTop;
+        }
+        window.scrollTo(snapshot.windowX, snapshot.windowY);
+        pendingScrollRef.current = null;
+      });
+    });
+  }
+
+  function patchDraftValue(recordId: string, field: EditableField, value: string) {
+    rememberScrollPosition();
+    setDrafts((current) => ({ ...current, [draftKey(recordId, field)]: value }));
+    restoreRememberedScroll();
   }
 
   function mixedValueFor(record: PurchaseRecord, group: MixedCartonGroup, line: MixedCartonLine, field: MixedLineField): string {
@@ -501,6 +544,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     const key = draftKey(record.id, field);
     if (!(key in drafts)) return;
     const nextRecord = patchRecord(record, field, drafts[key]);
+    rememberScrollPosition();
     setDrafts((current) => {
       const next = { ...current };
       delete next[key];
@@ -512,6 +556,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     } catch (error) {
       console.error(error);
       setMessage(`保存失败：${formatErrorMessage(error)}`);
+    } finally {
+      restoreRememberedScroll();
     }
   }
 
@@ -652,7 +698,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       return (
         <select
           value={valueFor(record, field)}
-          onChange={(event) => setDrafts((current) => ({ ...current, [draftKey(record.id, field)]: event.target.value }))}
+          onChange={(event) => patchDraftValue(record.id, field, event.target.value)}
           onBlur={() => void commit(record, field)}
         >
           {statusEditOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -663,7 +709,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       return (
         <select
           value={valueFor(record, field) || '整柜'}
-          onChange={(event) => setDrafts((current) => ({ ...current, [draftKey(record.id, field)]: event.target.value }))}
+          onChange={(event) => patchDraftValue(record.id, field, event.target.value)}
           onBlur={() => void commit(record, field)}
         >
           <option value="整柜">整柜</option>
@@ -677,7 +723,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         value={valueFor(record, field)}
         placeholder={placeholder}
         title={placeholder}
-        onChange={(event) => setDrafts((current) => ({ ...current, [draftKey(record.id, field)]: event.target.value }))}
+        onChange={(event) => patchDraftValue(record.id, field, event.target.value)}
         onBlur={() => void commit(record, field)}
       />
     );
@@ -823,7 +869,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         </div>
       )}
 
-      <div className="table-wrap my-orders-table-wrap">
+      <div className="table-wrap my-orders-table-wrap" ref={tableWrapRef}>
         <table className="my-orders-table">
           <thead>
             <tr>
