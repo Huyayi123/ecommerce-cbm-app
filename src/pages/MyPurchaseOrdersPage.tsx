@@ -848,7 +848,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <label>图片链接<input value={newOrder.imageUrl} onChange={(event) => patchNewOrder('imageUrl', event.target.value)} /></label>
           <label>店铺<input value={newOrder.shopName} onChange={(event) => patchNewOrder('shopName', event.target.value)} /></label>
           <label>采购人<input value={profile.buyerName} readOnly /></label>
-          <label>批次日期<input type="date" value={newOrder.purchaseBatchDate} onChange={(event) => patchNewOrder('purchaseBatchDate', event.target.value)} /></label>
+          <label>装柜日期<input type="date" value={newOrder.purchaseBatchDate} onChange={(event) => patchNewOrder('purchaseBatchDate', event.target.value)} /></label>
           <label>批次<input value={newOrder.purchaseBatchName} placeholder={recentBatch ? batchDisplay(recentBatch) : '未分配批次'} onChange={(event) => patchNewOrder('purchaseBatchName', event.target.value)} /></label>
           <label>整箱件数<input type="number" min="0" value={newOrder.cartonCount} onChange={(event) => patchNewOrder('cartonCount', event.target.value)} /></label>
           <label>每箱数量<input type="number" min="0" value={newOrder.unitsPerCarton} placeholder={defaultUnitsPerCartonText(newOrder.sku)} title={defaultUnitsPerCartonText(newOrder.sku)} onChange={(event) => patchNewOrder('unitsPerCarton', event.target.value)} /></label>
@@ -873,7 +873,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <table className="my-orders-table">
           <thead>
             <tr>
-              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>批次日期</th><th>批次</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
+              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>装柜日期</th><th>批次</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
