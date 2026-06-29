@@ -201,11 +201,15 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     [assignedRecords, statusFilter],
   );
   const imageUrlBySku = useMemo(
-    () => new Map(skuItems.map((item) => [item.sku.trim().toUpperCase(), item.imageUrl])),
+    () => new Map(skuItems
+      .filter((item) => item.sku.trim() && !isNewSkuValue(item.sku))
+      .map((item) => [item.sku.trim().toUpperCase(), item.imageUrl])),
     [skuItems],
   );
   const skuBySku = useMemo(
-    () => new Map(skuItems.map((item) => [item.sku.trim().toUpperCase(), item])),
+    () => new Map(skuItems
+      .filter((item) => item.sku.trim() && !isNewSkuValue(item.sku))
+      .map((item) => [item.sku.trim().toUpperCase(), item])),
     [skuItems],
   );
   const unconfirmedVisibleCount = visibleRecords.filter((record) => !record.isConfirmed && record.status === 'pending').length;
@@ -326,6 +330,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     setNewOrder((current) => {
       const next = { ...current, [field]: value };
       if (field !== 'sku' || typeof value !== 'string') return next;
+      if (!value.trim() || isNewSkuValue(value)) return next;
 
       const skuItem = skuBySku.get(value.trim().toUpperCase());
       if (!skuItem) return next;
