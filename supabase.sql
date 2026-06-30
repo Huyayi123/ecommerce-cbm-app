@@ -323,6 +323,11 @@ alter column status type text using status::text;
 alter table public.purchase_records
 alter column status set default 'pending';
 
+update public.purchase_records
+set pool_status = 'sent_to_inventory'
+where pool_status = 'pending_purchase'
+  and status in ('ordered', 'in_transit', 'arrived');
+
 create index if not exists purchase_records_assigned_buyer_email_idx
 on public.purchase_records (assigned_buyer_email);
 

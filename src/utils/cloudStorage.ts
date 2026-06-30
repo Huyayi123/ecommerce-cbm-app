@@ -262,9 +262,10 @@ export async function fetchSkuItemsForImport(importItems: SkuItem[]): Promise<Sk
 function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
   const status = row.status === 'ordered' ? 'in_transit' : row.status;
   const isLegacyInventory = Boolean(row.is_confirmed ?? (row.status !== 'pending')) && (status === 'in_transit' || status === 'arrived');
-  const poolStatus: PurchaseRecordPoolStatus = row.pool_status === 'submitted_to_pool' || row.pool_status === 'sent_to_inventory' || row.pool_status === 'pending_purchase'
+  const rawPoolStatus: PurchaseRecordPoolStatus | undefined = row.pool_status === 'submitted_to_pool' || row.pool_status === 'sent_to_inventory' || row.pool_status === 'pending_purchase'
     ? row.pool_status
-    : isLegacyInventory ? 'sent_to_inventory' : 'pending_purchase';
+    : undefined;
+  const poolStatus: PurchaseRecordPoolStatus = isLegacyInventory ? 'sent_to_inventory' : rawPoolStatus ?? 'pending_purchase';
   return withPurchaseTotals({
     id: row.id,
     manufacturerName: row.manufacturer_name ?? '',

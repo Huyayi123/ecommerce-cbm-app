@@ -57,7 +57,7 @@ function buildPoolOptions(records: PurchaseRecord[], pools: PurchasePool[]): Poo
     options.set(key, option);
   }
   return Array.from(options.values())
-    .filter((pool) => pool.recordCount > 0 || pool.status === 'open')
+    .filter((pool) => pool.submittedCount > 0)
     .sort((left, right) => (
       (right.containerDate || '').localeCompare(left.containerDate || '')
       || right.name.localeCompare(left.name, 'zh-Hans-CN')
@@ -73,7 +73,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const [message, setMessage] = useState('');
   const isAdmin = profile.role === 'admin';
   const options = useMemo(() => buildPoolOptions(records, pools), [pools, records]);
-  const activePoolId = selectedPoolId || options.find((pool) => pool.submittedCount > 0)?.id || options[0]?.id || '';
+  const activePoolId = selectedPoolId && options.some((pool) => pool.id === selectedPoolId) ? selectedPoolId : options[0]?.id || '';
   const activePool = options.find((pool) => pool.id === activePoolId);
   const poolRecords = records
     .filter((record) => activePoolId && recordMatchesPool(record, activePoolId) && record.status !== 'cancelled')
@@ -134,7 +134,8 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
       {message && <div className="inline-notice">{message}</div>}
 
       <div className="filter-grid">
-        <label>采购订单池<select value={activePoolId} onChange={(event) => setSelectedPoolId(event.target.value)}>
+        <label>采购订单池<select value={activePoolId} onChange={(event) => setSelectedPoolId(event.target.value)} disabled={options.length === 0}>
+          {options.length === 0 && <option value="">暂无待发送采购池</option>}
           {options.map((pool) => <option key={pool.id} value={pool.id}>{pool.containerDate || '未填装柜日期'} {pool.name}（池中 {pool.submittedCount}）</option>)}
         </select></label>
       </div>
