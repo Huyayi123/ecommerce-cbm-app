@@ -210,6 +210,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
           const searchable = [
             record.sku,
             record.productName,
+            record.buyerName,
+            record.assignedBuyerName,
             mixedSearchable,
             needsLogisticsMetrics(record) && record.totalWeightKg !== null ? String(record.totalWeightKg) : '',
           ].join(' ').toLowerCase();
@@ -448,7 +450,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
         <div className="inventory-search-bar">
           <input
             value={searchDraft}
-            placeholder="搜索 SKU、中文名称、总重量"
+            placeholder="搜索 SKU、中文名称、采购人、总重量"
             onChange={(event) => setSearchDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') setFilters((current) => ({ ...current, search: searchDraft }));
