@@ -87,8 +87,6 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
     ))
     .map(withPurchaseTotals);
   const submittedRecords = poolRecords.filter((record) => record.poolStatus === 'submitted_to_pool');
-  const sentRecords = poolRecords.filter((record) => record.poolStatus === 'sent_to_inventory');
-  const pendingRecords = poolRecords.filter((record) => record.poolStatus === 'pending_purchase');
   const totalQuantity = submittedRecords.reduce((sum, record) => sum + purchaseQuantityWithMixed(record), 0);
   const totalAmount = submittedRecords.reduce((sum, record) => sum + record.totalAmount, 0);
   const totalCbm = submittedRecords.reduce((sum, record) => sum + record.totalCbm, 0);
@@ -227,8 +225,6 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
 
       <div className="summary-grid inventory-summary">
         <div className="metric"><span>池中待发送</span><strong>{submittedRecords.length}</strong></div>
-        <div className="metric"><span>待采购</span><strong>{pendingRecords.length}</strong></div>
-        <div className="metric"><span>已发送</span><strong>{sentRecords.length}</strong></div>
         <div className="metric"><span>池中总件数</span><strong>{totalPackages}</strong></div>
         <div className="metric"><span>池中采购数量</span><strong>{totalQuantity}</strong></div>
         <div className="metric"><span>池中总金额</span><strong>{totalAmount.toFixed(2)}</strong></div>
@@ -243,7 +239,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
             </tr>
           </thead>
           <tbody>
-            {poolRecords.map((record) => {
+            {submittedRecords.map((record) => {
               const imageUrl = record.imageUrl || skuItems.find((item) => item.sku.trim() && item.sku.trim().toUpperCase() === record.sku.trim().toUpperCase())?.imageUrl || '';
               return (
                 <tr key={record.id} className={record.note.trim() ? 'has-note-row' : undefined}>
@@ -267,7 +263,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
                 </tr>
               );
             })}
-            {poolRecords.length === 0 && <tr><td className="empty" colSpan={17}>暂无采购订单池数据。</td></tr>}
+            {submittedRecords.length === 0 && <tr><td className="empty" colSpan={17}>暂无待发送采购订单。</td></tr>}
           </tbody>
         </table>
       </div>

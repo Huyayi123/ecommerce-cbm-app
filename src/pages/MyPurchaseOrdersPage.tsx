@@ -868,7 +868,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           {!isViewer && <button className="primary" type="button" onClick={() => void confirmVisiblePurchases()} disabled={unconfirmedVisibleCount === 0}>提交采购订单池</button>}
         </div>
       </div>
-      {message && <div className="inline-notice">{message}</div>}
+      {message && <div className="inline-notice order-save-notice" role="status">{message}</div>}
 
       <div className="order-filter-bar">
         <label>

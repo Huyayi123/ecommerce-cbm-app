@@ -1038,6 +1038,16 @@ th.sticky-col {
   font-size: 14px;
 }
 
+.order-save-notice {
+  padding: 16px 18px;
+  border-width: 2px;
+  background: #ecfdf5;
+  color: #075e54;
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: 0 8px 18px rgba(19, 111, 99, 0.12);
+}
+
 .quantity-input,
 .price-input {
   width: 110px;
