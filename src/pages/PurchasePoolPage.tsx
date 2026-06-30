@@ -76,7 +76,12 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const activePoolId = selectedPoolId && options.some((pool) => pool.id === selectedPoolId) ? selectedPoolId : options[0]?.id || '';
   const activePool = options.find((pool) => pool.id === activePoolId);
   const poolRecords = records
-    .filter((record) => activePoolId && recordMatchesPool(record, activePoolId) && record.status !== 'cancelled')
+    .filter((record) => (
+      activePoolId
+      && recordMatchesPool(record, activePoolId)
+      && record.status !== 'cancelled'
+      && record.poolStatus !== 'pending_purchase'
+    ))
     .map(withPurchaseTotals);
   const submittedRecords = poolRecords.filter((record) => record.poolStatus === 'submitted_to_pool');
   const sentRecords = poolRecords.filter((record) => record.poolStatus === 'sent_to_inventory');

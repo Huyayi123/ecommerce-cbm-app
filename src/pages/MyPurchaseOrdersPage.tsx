@@ -236,11 +236,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     const fallbackDate = today();
     setNewOrder((current) => ({
       ...current,
-      purchaseBatchId: recentBatch?.purchaseBatchId || '',
-      purchaseBatchName: recentBatch?.purchaseBatchName || `${fallbackDate} 批次`,
-      purchaseBatchDate: recentBatch?.purchaseBatchDate || fallbackDate,
+      purchaseBatchId: '',
+      purchaseBatchName: `${fallbackDate} 批次`,
+      purchaseBatchDate: fallbackDate,
     }));
-  }, [newOrder.purchaseBatchDate, newOrder.purchaseBatchId, newOrder.purchaseBatchName, recentBatch]);
+  }, [newOrder.purchaseBatchDate, newOrder.purchaseBatchId, newOrder.purchaseBatchName]);
 
   const newCartonCount = parseNumber(newOrder.cartonCount);
   const newUnitsPerCarton = parseNumber(newOrder.unitsPerCarton);
@@ -465,6 +465,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       return;
     }
 
+    const fallbackBatchDate = newOrder.purchaseBatchDate.trim() || today();
+    const fallbackBatchName = newOrder.purchaseBatchName.trim() || `${fallbackBatchDate} 批次`;
     const record: PurchaseRecord = withPurchaseTotals({
       id: crypto.randomUUID(),
       manufacturerName: newOrder.manufacturerName.trim(),
@@ -483,13 +485,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       freightCost: newFreightCost,
       totalAmount: newTotalAmount,
       purchaseDate: today(),
-      purchasePoolId: newOrder.purchaseBatchId.trim() || recentBatch?.purchasePoolId || recentBatch?.purchaseBatchId || '',
-      purchasePoolName: newOrder.purchaseBatchName.trim() || recentBatch?.purchasePoolName || recentBatch?.purchaseBatchName || '',
-      purchasePoolDate: newOrder.purchaseBatchDate.trim() || recentBatch?.purchasePoolDate || recentBatch?.purchaseBatchDate || '',
+      purchasePoolId: newOrder.purchaseBatchId.trim(),
+      purchasePoolName: fallbackBatchName,
+      purchasePoolDate: fallbackBatchDate,
       poolStatus: 'pending_purchase',
-      purchaseBatchId: newOrder.purchaseBatchId.trim() || recentBatch?.purchaseBatchId || '',
-      purchaseBatchName: newOrder.purchaseBatchName.trim() || recentBatch?.purchaseBatchName || '',
-      purchaseBatchDate: newOrder.purchaseBatchDate.trim() || recentBatch?.purchaseBatchDate || '',
+      purchaseBatchId: newOrder.purchaseBatchId.trim(),
+      purchaseBatchName: fallbackBatchName,
+      purchaseBatchDate: fallbackBatchDate,
       estimatedArrivalDate: '',
       status: newOrder.status,
       unitCbm: newUnitCbm,
