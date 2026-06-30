@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { AppProfile, PurchasePool, PurchaseRecord, SkuItem } from '../types';
 import { exportBatchPurchaseOrder, exportPurchaseRecords } from '../utils/exporters';
 import { formatErrorMessage } from '../utils/errors';
-import { packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
+import { calculatedPurchaseTotalAmount, packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
 
 type Props = {
   records: PurchaseRecord[];
@@ -17,6 +17,8 @@ type PoolOption = PurchasePool & {
   recordCount: number;
   submittedCount: number;
 };
+
+type EditablePoolField = 'productName' | 'englishName' | 'shopName' | 'assignedBuyerName' | 'purchaseQuantity' | 'purchasePrice' | 'freightCost' | 'totalAmount' | 'unitCbm' | 'totalCbm' | 'note';
 
 function poolKey(record: PurchaseRecord): string {
   return record.purchasePoolId || record.purchaseBatchId || `${record.purchasePoolDate || record.purchaseBatchDate}|${record.purchasePoolName || record.purchaseBatchName}`;
@@ -71,6 +73,7 @@ function recordMatchesPool(record: PurchaseRecord, selectedPoolId: string): bool
 export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveRecords, onSavePools }: Props) {
   const [selectedPoolId, setSelectedPoolId] = useState('');
   const [message, setMessage] = useState('');
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const isAdmin = profile.role === 'admin';
   const options = useMemo(() => buildPoolOptions(records, pools), [pools, records]);
   const activePoolId = selectedPoolId && options.some((pool) => pool.id === selectedPoolId) ? selectedPoolId : options[0]?.id || '';
@@ -123,6 +126,83 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
     }
   }
 
+  function draftKey(recordId: string, field: EditablePoolField): string {
+    return `${recordId}:${field}`;
+  }
+
+  function parseNumber(value: string): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function valueFor(record: PurchaseRecord, field: EditablePoolField): string {
+    const key = draftKey(record.id, field);
+    if (key in drafts) return drafts[key];
+    const value = record[field];
+    return value === null || value === undefined ? '' : String(value);
+  }
+
+  function patchRecord(record: PurchaseRecord, field: EditablePoolField, value: string): PurchaseRecord {
+    const next: PurchaseRecord = { ...record };
+    if (field === 'purchaseQuantity' || field === 'purchasePrice' || field === 'freightCost' || field === 'totalAmount' || field === 'unitCbm' || field === 'totalCbm') {
+      next[field] = parseNumber(value);
+    } else {
+      next[field] = value;
+    }
+    if (field === 'purchaseQuantity' || field === 'purchasePrice' || field === 'freightCost') {
+      return withPurchaseTotals({ ...next, totalAmount: calculatedPurchaseTotalAmount(next) }, { recalculateAmount: true });
+    }
+    return withPurchaseTotals(next);
+  }
+
+  async function savePoolRecord(record: PurchaseRecord, field: EditablePoolField) {
+    const key = draftKey(record.id, field);
+    if (!(key in drafts) || !isAdmin || record.poolStatus !== 'submitted_to_pool') return;
+    const nextRecord = patchRecord(record, field, drafts[key]);
+    setDrafts((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    try {
+      await onSaveRecords([nextRecord]);
+      setMessage('已保存采购池订单修改。');
+    } catch (error) {
+      console.error(error);
+      setMessage(`保存失败：${formatErrorMessage(error)}`);
+    }
+  }
+
+  async function returnToBuyer(record: PurchaseRecord) {
+    if (!isAdmin || record.poolStatus !== 'submitted_to_pool') return;
+    const nextRecord = withPurchaseTotals({
+      ...record,
+      isConfirmed: false,
+      confirmedPurchaseQuantity: null,
+      status: 'pending',
+      poolStatus: 'pending_purchase',
+    });
+    try {
+      await onSaveRecords([nextRecord]);
+      setMessage(`已退回 ${record.sku || record.productName} 给采购人。`);
+    } catch (error) {
+      console.error(error);
+      setMessage(`退回失败：${formatErrorMessage(error)}`);
+    }
+  }
+
+  function editableCell(record: PurchaseRecord, field: EditablePoolField, type = 'text') {
+    if (!isAdmin || record.poolStatus !== 'submitted_to_pool') return <span>{valueFor(record, field)}</span>;
+    return (
+      <input
+        type={type}
+        value={valueFor(record, field)}
+        onChange={(event) => setDrafts((current) => ({ ...current, [draftKey(record.id, field)]: event.target.value }))}
+        onBlur={() => void savePoolRecord(record, field)}
+      />
+    );
+  }
+
   return (
     <section className="panel">
       <div className="section-heading">
@@ -159,7 +239,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
         <table className="inventory-table">
           <thead>
             <tr>
-              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>运费</th><th>总金额</th><th>总CBM</th><th>总件数</th><th>池状态</th><th>备注</th>
+              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>总件数</th><th>池状态</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -170,22 +250,24 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
                   <td>{imageUrl ? <img className="sku-thumb" src={imageUrl} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                   <td><span className="cell-ellipsis" title={record.manufacturerName}>{record.manufacturerName}</span></td>
                   <td>{record.sku}</td>
-                  <td><span className="cell-ellipsis" title={record.productName}>{record.productName}</span></td>
-                  <td><span className="cell-ellipsis" title={record.englishName}>{record.englishName}</span></td>
-                  <td>{record.shopName}</td>
-                  <td>{record.assignedBuyerName || record.buyerName}</td>
-                  <td>{purchaseQuantityWithMixed(record)}</td>
-                  <td>{record.purchasePrice}</td>
-                  <td>{record.freightCost}</td>
-                  <td>{record.totalAmount.toFixed(2)}</td>
-                  <td>{record.totalCbm.toFixed(4)}</td>
+                  <td>{editableCell(record, 'productName')}</td>
+                  <td>{editableCell(record, 'englishName')}</td>
+                  <td>{editableCell(record, 'shopName')}</td>
+                  <td>{editableCell(record, 'assignedBuyerName')}</td>
+                  <td>{editableCell(record, 'purchaseQuantity', 'number')}</td>
+                  <td>{editableCell(record, 'purchasePrice', 'number')}</td>
+                  <td>{editableCell(record, 'freightCost', 'number')}</td>
+                  <td>{editableCell(record, 'totalAmount', 'number')}</td>
+                  <td>{editableCell(record, 'unitCbm', 'number')}</td>
+                  <td>{editableCell(record, 'totalCbm', 'number')}</td>
                   <td>{packageCountFor(record)}</td>
                   <td>{record.poolStatus === 'submitted_to_pool' ? '池中待发送' : record.poolStatus === 'sent_to_inventory' ? '已发送在途' : '待采购'}</td>
-                  <td><span className="cell-ellipsis note-cell" title={record.note}>{record.note}</span></td>
+                  <td>{editableCell(record, 'note')}</td>
+                  <td className="row-actions">{isAdmin && record.poolStatus === 'submitted_to_pool' && <button type="button" onClick={() => void returnToBuyer(record)}>退回采购人</button>}</td>
                 </tr>
               );
             })}
-            {poolRecords.length === 0 && <tr><td className="empty" colSpan={15}>暂无采购订单池数据。</td></tr>}
+            {poolRecords.length === 0 && <tr><td className="empty" colSpan={17}>暂无采购订单池数据。</td></tr>}
           </tbody>
         </table>
       </div>
