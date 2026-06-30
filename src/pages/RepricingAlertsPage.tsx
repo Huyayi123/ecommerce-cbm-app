@@ -26,6 +26,21 @@ function formatDate(value: string): string {
   return date.toLocaleString('zh-CN', { hour12: false });
 }
 
+function formatInactiveSummary(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const labels: Record<string, string> = {
+    none: '无预警',
+    own_buy_box: '自家 Buy Box',
+    own_variant: '自家变体',
+    out_of_stock: '缺货',
+    variant_uncertain: '变体不确定',
+  };
+  return Object.entries(value as Record<string, unknown>)
+    .filter(([, count]) => Number(count) > 0)
+    .map(([key, count]) => `${labels[key] ?? key} ${Number(count)}`)
+    .join('，');
+}
+
 function skuKey(value: string): string {
   return value.trim().toUpperCase();
 }
@@ -83,7 +98,8 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
       await onRefresh?.();
       setShopFilter(store);
-      setSyncMessage(`${store} 同步完成：检查 ${payload.checked ?? 0} 条，确定被跟价 ${payload.confirmedAlerts ?? 0} 条。`);
+      const skippedSummary = formatInactiveSummary(payload.inactiveByType);
+      setSyncMessage(`${store} 同步完成：检查 ${payload.checked ?? 0} 条，确定被跟价 ${payload.confirmedAlerts ?? 0} 条。${skippedSummary ? `跳过原因：${skippedSummary}` : ''}`);
     } catch (error) {
       console.error(error);
       setSyncMessage(`${store} 同步失败：${error instanceof Error ? error.message : '未知错误'}`);

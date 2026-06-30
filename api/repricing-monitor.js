@@ -260,14 +260,36 @@ function textFromHtml(html) {
     .trim();
 }
 
+function cleanPublicSellerName(value) {
+  return String(value || '')
+    .replace(/\s+(VAT Registered|Seller Score|Other Offers|eBucks|Discovery|Add to Cart|FREE SAME DAY|FREE DELIVERY|Estimated Delivery|Get it|T&Cs Apply).*$/i, '')
+    .replace(/[·•|]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function soldBySellerFromText(text) {
+  const candidates = [
+    /Sold\s+by\s+(.{1,120}?)(?=\s+(?:VAT Registered|Seller Score|Other Offers|eBucks|Discovery|Add to Cart|FREE SAME DAY|FREE DELIVERY|Estimated Delivery|Get it|T&Cs Apply)\b|$)/i,
+    /Sold\s+by\s+([A-Za-z0-9][A-Za-z0-9&'().,\-\s]{1,90})/i,
+  ];
+
+  for (const pattern of candidates) {
+    const match = text.match(pattern);
+    const seller = cleanPublicSellerName(match?.[1] || '');
+    if (seller) return seller;
+  }
+
+  return '';
+}
+
 function parsePublicPageDetails(html, storeName = '') {
   const text = textFromHtml(html);
   if (!text || /cloudflare|attention required|enable cookies/i.test(text)) {
     return { buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   }
 
-  const sellerMatch = text.match(/Sold by\s+(.+?)(?=\s+(?:[·•]|VAT Registered|Seller Score|Other Offers)|$)/i);
-  const buyBoxSeller = sellerMatch ? sellerMatch[1].trim() : '';
+  const buyBoxSeller = soldBySellerFromText(text);
   const priceMatch = text.match(/\bR\s*([0-9][0-9\s,]*(?:\.[0-9]{2})?)\b/);
   const buyBoxPrice = priceMatch ? positiveNumber(priceMatch[1]) : null;
   const offers = [];
@@ -719,6 +741,11 @@ async function supabaseRequest(method, path, body, headers = {}) {
   return response;
 }
 
+function incrementCount(map, key) {
+  const normalizedKey = String(key || 'unknown').trim() || 'unknown';
+  map[normalizedKey] = (map[normalizedKey] || 0) + 1;
+}
+
 async function clearStoreRepricingAlerts(storeName) {
   const normalizedStoreName = encodeURIComponent(storeName);
   await supabaseRequest('DELETE', `repricing_alerts?shop_name=eq.${normalizedStoreName}`, undefined, {
@@ -845,6 +872,8 @@ export default async function handler(request, response) {
     let confirmedAlerts = 0;
     let inactive = 0;
     let errors = 0;
+    const inactiveByType = {};
+    const sourceCounts = {};
 
     for (const row of rows) {
       try {
@@ -853,7 +882,11 @@ export default async function handler(request, response) {
         await syncRepricingResult({ storeName, storeId, row, alert, checkedAt });
         checked += 1;
         if (alert.isActive) confirmedAlerts += 1;
-        else inactive += 1;
+        else {
+          inactive += 1;
+          incrementCount(inactiveByType, alert.alertType);
+        }
+        incrementCount(sourceCounts, alert.source || productDetails.source);
         const detail = {
           sku: alert.sku,
           title: alert.title,
@@ -866,6 +899,7 @@ export default async function handler(request, response) {
           alertType: alert.alertType,
           isActive: alert.isActive,
           source: alert.source,
+          message: alert.alertMessage,
           signals: request.query.debug ? productDetails.signals : undefined,
         };
         details.push(detail);
@@ -886,6 +920,8 @@ export default async function handler(request, response) {
       errors,
       pagesFetched,
       totalResults,
+      inactiveByType,
+      sourceCounts,
       details: details.slice(0, 50),
       alertDetails,
     });
