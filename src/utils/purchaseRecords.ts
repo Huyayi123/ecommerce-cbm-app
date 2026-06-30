@@ -140,10 +140,22 @@ export function mixedGroupsSummary(record: PurchaseRecord): string {
   }).join('；');
 }
 
-export function withPurchaseTotals(record: PurchaseRecord): PurchaseRecord {
+export function calculatedPurchaseTotalAmount(record: PurchaseRecord): number {
+  const mixedGroups = normalizeMixedGroups(record.mixedGroups);
+  const normalizedRecord = { ...record, mixedGroups };
+  return round(effectivePurchaseQuantity(record) * record.purchasePrice + record.freightCost + mixedAmountFor(normalizedRecord), 2);
+}
+
+export function calculatedPurchaseTotalCbm(record: PurchaseRecord): number {
+  const mixedGroups = normalizeMixedGroups(record.mixedGroups);
+  const normalizedRecord = { ...record, mixedGroups };
+  return round(effectivePurchaseQuantity(record) * record.unitCbm + mixedCbmFor(normalizedRecord), 4);
+}
+
+export function withPurchaseTotals(record: PurchaseRecord, options: { recalculateAmount?: boolean } | number = {}): PurchaseRecord {
+  const recalculateAmount = typeof options === 'object' && Boolean(options.recalculateAmount);
   const mixedGroups = normalizeMixedGroups(record.mixedGroups);
   const mainQuantity = effectivePurchaseQuantity(record);
-  const mainAmount = round(mainQuantity * record.purchasePrice, 2);
   const mainCbm = round(mainQuantity * record.unitCbm, 4);
   const normalizedRecord = {
     ...record,
@@ -155,7 +167,7 @@ export function withPurchaseTotals(record: PurchaseRecord): PurchaseRecord {
   return {
     ...normalizedRecord,
     confirmedPurchaseQuantity: record.cartonCount !== null && record.unitsPerCarton ? mainQuantity : record.confirmedPurchaseQuantity ?? null,
-    totalAmount: round(mainAmount + record.freightCost + mixedAmountFor(normalizedRecord), 2),
+    totalAmount: recalculateAmount ? calculatedPurchaseTotalAmount(normalizedRecord) : round(Number.isFinite(record.totalAmount) ? record.totalAmount : calculatedPurchaseTotalAmount(normalizedRecord), 2),
     totalCbm: round(mainCbm + mixedCbmFor(normalizedRecord), 4),
   };
 }
@@ -163,5 +175,5 @@ export function withPurchaseTotals(record: PurchaseRecord): PurchaseRecord {
 export const withPackingTotals = withPurchaseTotals;
 
 export function withRecalculatedPurchase(record: PurchaseRecord): PurchaseRecord {
-  return withPurchaseTotals(record);
+  return withPurchaseTotals(record, { recalculateAmount: true });
 }

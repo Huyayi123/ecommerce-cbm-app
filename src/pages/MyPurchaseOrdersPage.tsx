@@ -4,7 +4,7 @@ import { formatErrorMessage } from '../utils/errors';
 import { exportPurchaseRecords } from '../utils/exporters';
 import { parsePurchaseRecordsFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
-import { effectivePurchaseQuantity, mixedQuantityForOtherSkus, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
+import { calculatedPurchaseTotalAmount, effectivePurchaseQuantity, mixedQuantityForOtherSkus, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
 
 type Props = {
   records: PurchaseRecord[];
@@ -27,6 +27,7 @@ type NewOrderDraft = {
   tailQuantity: string;
   purchasePrice: string;
   freightCost: string;
+  totalAmount: string;
   unitCbm: string;
   purchaseBatchId: string;
   purchaseBatchName: string;
@@ -72,6 +73,7 @@ const editableFields = [
   'tailQuantity',
   'purchasePrice',
   'freightCost',
+  'totalAmount',
   'unitCbm',
   'purchaseBatchName',
   'purchaseBatchDate',
@@ -111,6 +113,7 @@ function createEmptyDraft(): NewOrderDraft {
     tailQuantity: '0',
     purchasePrice: '',
     freightCost: '',
+    totalAmount: '',
     unitCbm: '',
     purchaseBatchId: '',
     purchaseBatchName: '',
@@ -246,7 +249,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const newPrice = parseNumber(newOrder.purchasePrice);
   const newFreightCost = parseNumber(newOrder.freightCost);
   const newUnitCbm = parseNumber(newOrder.unitCbm);
-  const newTotalAmount = round(newQuantity * newPrice + newFreightCost, 2);
+  const calculatedNewTotalAmount = round(newQuantity * newPrice + newFreightCost, 2);
+  const newTotalAmount = newOrder.totalAmount.trim() ? parseNumber(newOrder.totalAmount) : calculatedNewTotalAmount;
   const newTotalCbm = round(newQuantity * newUnitCbm, 4);
 
   function imageUrlFor(record: PurchaseRecord): string {
@@ -541,7 +545,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
   function patchRecord(record: PurchaseRecord, field: EditableField, value: string): PurchaseRecord {
     const next: PurchaseRecord = { ...record };
-    if (field === 'purchaseQuantity' || field === 'confirmedPurchaseQuantity' || field === 'purchasePrice' || field === 'freightCost' || field === 'unitCbm' || field === 'cartonCount' || field === 'unitsPerCarton' || field === 'tailQuantity') {
+    if (field === 'purchaseQuantity' || field === 'confirmedPurchaseQuantity' || field === 'purchasePrice' || field === 'freightCost' || field === 'unitCbm' || field === 'cartonCount' || field === 'unitsPerCarton' || field === 'tailQuantity' || field === 'totalAmount') {
       next[field] = parseNumber(value);
     } else if (field === 'status') {
       next.status = value as PurchaseStatus;
@@ -549,6 +553,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       next.loadingType = value as PurchaseRecord['loadingType'];
     } else {
       next[field] = value;
+    }
+    if (field === 'totalAmount') return withPurchaseTotals(next);
+    if (field === 'purchaseQuantity' || field === 'confirmedPurchaseQuantity' || field === 'purchasePrice' || field === 'freightCost' || field === 'cartonCount' || field === 'unitsPerCarton' || field === 'tailQuantity') {
+      return withPurchaseTotals({ ...next, totalAmount: calculatedPurchaseTotalAmount(next) }, { recalculateAmount: true });
     }
     return withPurchaseTotals(next);
   }
@@ -887,7 +895,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <label>采购单价<input type="number" min="0" step="0.01" value={newOrder.purchasePrice} onChange={(event) => patchNewOrder('purchasePrice', event.target.value)} /></label>
           <label>运费<input type="number" min="0" step="0.01" value={newOrder.freightCost} onChange={(event) => patchNewOrder('freightCost', event.target.value)} /></label>
           <label>实际数量<input value={newQuantity} readOnly /></label>
-          <label>总金额<input value={newTotalAmount.toFixed(2)} readOnly /></label>
+          <label>总金额<input type="number" min="0" step="0.01" value={newOrder.totalAmount} placeholder={newTotalAmount.toFixed(2)} onChange={(event) => patchNewOrder('totalAmount', event.target.value)} /></label>
           <label>单品CBM<input type="number" min="0" step="0.00000001" value={newOrder.unitCbm} onChange={(event) => patchNewOrder('unitCbm', event.target.value)} /></label>
           <label>总CBM<input value={newTotalCbm.toFixed(4)} readOnly /></label>
           <label>状态<select value={newOrder.status} onChange={(event) => patchNewOrder('status', event.target.value as PurchaseStatus)}>{statusEditOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
@@ -932,7 +940,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td>{normalized.isMixed ? '是' : '否'}</td>
                     <td>{input(normalized, 'purchasePrice', 'number')}</td>
                     <td>{input(normalized, 'freightCost', 'number')}</td>
-                    <td>{normalized.totalAmount.toFixed(2)}</td>
+                    <td>{input(normalized, 'totalAmount', 'number')}</td>
                     <td>{input(normalized, 'unitCbm', 'number')}</td>
                     <td>{normalized.totalCbm.toFixed(4)}</td>
                     <td>{input(normalized, 'status')}</td>
