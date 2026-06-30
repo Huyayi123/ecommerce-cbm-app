@@ -480,7 +480,13 @@ create policy "editor insert purchase" on public.purchase_records for insert to 
 drop policy if exists "editor update purchase" on public.purchase_records;
 create policy "editor update purchase" on public.purchase_records for update to authenticated using (public.is_editor()) with check (public.is_editor());
 drop policy if exists "admin delete purchase" on public.purchase_records;
-create policy "admin delete purchase" on public.purchase_records for delete to authenticated using (public.is_admin());
+drop policy if exists "purchase delete own or admin" on public.purchase_records;
+create policy "purchase delete own or admin" on public.purchase_records
+for delete to authenticated
+using (
+  public.is_admin()
+  or lower(coalesce(assigned_buyer_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+);
 
 drop policy if exists "shared select container" on public.container_rows;
 create policy "shared select container" on public.container_rows for select to authenticated using (true);
