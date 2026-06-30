@@ -40,6 +40,8 @@ export type PurchaseRow = {
 };
 
 export type PurchaseStatus = 'pending' | 'in_transit' | 'arrived' | 'cancelled';
+export type PurchasePoolStatus = 'open' | 'sent' | 'closed';
+export type PurchaseRecordPoolStatus = 'pending_purchase' | 'submitted_to_pool' | 'sent_to_inventory';
 export type UserRole = 'admin' | 'buyer' | 'viewer';
 export type AuditAction =
   | 'sku_created'
@@ -99,6 +101,10 @@ export type PurchaseRecord = {
   freightCost: number;
   totalAmount: number;
   purchaseDate: string;
+  purchasePoolId: string;
+  purchasePoolName: string;
+  purchasePoolDate: string;
+  poolStatus: PurchaseRecordPoolStatus;
   purchaseBatchId: string;
   purchaseBatchName: string;
   purchaseBatchDate: string;
@@ -118,6 +124,18 @@ export type PurchaseRecord = {
   note: string;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type PurchasePool = {
+  id: string;
+  name: string;
+  containerDate: string;
+  status: PurchasePoolStatus;
+  createdBy: string;
+  createdAt: string;
+  sentBy: string;
+  sentAt: string;
+  note: string;
 };
 
 export type CalculationRow = {

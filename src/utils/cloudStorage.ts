@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { AppProfile, AuditAction, AuditLog, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
+import type { AppProfile, AuditAction, AuditLog, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { findMatchingSkuItem, getSkuMatchKey } from './calculations';
 import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
@@ -22,6 +22,10 @@ type PurchaseRecordRow = {
   purchase_price: number | null;
   total_amount: number | null;
   purchase_date: string | null;
+  purchase_pool_id?: string | null;
+  purchase_pool_name?: string | null;
+  purchase_pool_date?: string | null;
+  pool_status?: string | null;
   purchase_batch_id?: string | null;
   purchase_batch_name?: string | null;
   purchase_batch_date?: string | null;
@@ -42,6 +46,18 @@ type PurchaseRecordRow = {
   note: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+type PurchasePoolRow = {
+  id: string;
+  name: string | null;
+  container_date: string | null;
+  status: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  sent_by: string | null;
+  sent_at: string | null;
+  note: string | null;
 };
 
 type ContainerRow = {
@@ -245,6 +261,10 @@ export async function fetchSkuItemsForImport(importItems: SkuItem[]): Promise<Sk
 
 function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
   const status = row.status === 'ordered' ? 'in_transit' : row.status;
+  const isLegacyInventory = Boolean(row.is_confirmed ?? (row.status !== 'pending')) && (status === 'in_transit' || status === 'arrived');
+  const poolStatus: PurchaseRecordPoolStatus = row.pool_status === 'submitted_to_pool' || row.pool_status === 'sent_to_inventory' || row.pool_status === 'pending_purchase'
+    ? row.pool_status
+    : isLegacyInventory ? 'sent_to_inventory' : 'pending_purchase';
   return withPurchaseTotals({
     id: row.id,
     manufacturerName: row.manufacturer_name ?? '',
@@ -263,6 +283,10 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     freightCost: Number(row.freight_cost ?? 0),
     totalAmount: Number(row.total_amount ?? 0),
     purchaseDate: row.purchase_date ?? '',
+    purchasePoolId: row.purchase_pool_id ?? row.purchase_batch_id ?? '',
+    purchasePoolName: row.purchase_pool_name ?? row.purchase_batch_name ?? '',
+    purchasePoolDate: row.purchase_pool_date ?? row.purchase_batch_date ?? '',
+    poolStatus,
     purchaseBatchId: row.purchase_batch_id ?? '',
     purchaseBatchName: row.purchase_batch_name ?? '',
     purchaseBatchDate: row.purchase_batch_date ?? '',
@@ -290,6 +314,35 @@ function dateOrNull(value: string): string | null {
   return trimmed ? trimmed : null;
 }
 
+function mapPurchasePool(row: PurchasePoolRow): PurchasePool {
+  const status: PurchasePoolStatus = row.status === 'sent' || row.status === 'closed' ? row.status : 'open';
+  return {
+    id: row.id,
+    name: row.name ?? '',
+    containerDate: row.container_date ?? '',
+    status,
+    createdBy: row.created_by ?? '',
+    createdAt: row.created_at ?? '',
+    sentBy: row.sent_by ?? '',
+    sentAt: row.sent_at ?? '',
+    note: row.note ?? '',
+  };
+}
+
+function toPurchasePoolRow(pool: PurchasePool): PurchasePoolRow {
+  return {
+    id: pool.id,
+    name: pool.name,
+    container_date: dateOrNull(pool.containerDate),
+    status: pool.status,
+    created_by: pool.createdBy || null,
+    created_at: pool.createdAt || null,
+    sent_by: pool.sentBy || null,
+    sent_at: pool.sentAt || null,
+    note: pool.note,
+  };
+}
+
 function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
   const normalized = withPurchaseTotals(record);
   return {
@@ -309,6 +362,10 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     freight_cost: normalized.freightCost,
     total_amount: normalized.totalAmount,
     purchase_date: dateOrNull(normalized.purchaseDate),
+    purchase_pool_id: normalized.purchasePoolId || normalized.purchaseBatchId || null,
+    purchase_pool_name: normalized.purchasePoolName || normalized.purchaseBatchName || null,
+    purchase_pool_date: dateOrNull(normalized.purchasePoolDate || normalized.purchaseBatchDate),
+    pool_status: normalized.poolStatus,
     purchase_batch_id: normalized.purchaseBatchId || null,
     purchase_batch_name: normalized.purchaseBatchName || null,
     purchase_batch_date: dateOrNull(normalized.purchaseBatchDate),
@@ -464,6 +521,28 @@ export async function fetchPurchaseRecords(): Promise<PurchaseRecord[]> {
   const { data, error } = await requireSupabase().from('purchase_records').select('*').order('purchase_date', { ascending: false });
   if (error) throwSupabaseError(error);
   return (data ?? []).map((row) => mapPurchaseRecord(row as PurchaseRecordRow));
+}
+
+export async function fetchPurchasePools(): Promise<PurchasePool[]> {
+  const { data, error } = await requireSupabase()
+    .from('purchase_pools')
+    .select('*')
+    .order('container_date', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false });
+  if (error) throwSupabaseError(error);
+  return (data ?? []).map((row) => mapPurchasePool(row as PurchasePoolRow));
+}
+
+export async function upsertPurchasePools(pools: PurchasePool[]): Promise<void> {
+  if (pools.length === 0) return;
+  const { error } = await requireSupabase().from('purchase_pools').upsert(pools.map(toPurchasePoolRow));
+  if (error) {
+    console.error(error);
+    if (isMissingColumnError(error)) {
+      throw new Error(`purchase_pools 表不存在或字段缺失。请先在 Supabase SQL Editor 执行采购订单池迁移 SQL。原始错误：${formatErrorMessage(error)}`);
+    }
+    throw new Error(formatErrorMessage(error));
+  }
 }
 
 export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise<void> {
@@ -704,6 +783,7 @@ export function subscribeToSharedTables(onChange: () => void): () => void {
     .channel('shared-data')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sku_items' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_records' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_pools' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'container_rows' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_suggestions' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'repricing_alerts' }, onChange)

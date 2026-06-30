@@ -306,6 +306,18 @@ alter table public.purchase_records
 add column if not exists purchase_batch_date date;
 
 alter table public.purchase_records
+add column if not exists purchase_pool_id text;
+
+alter table public.purchase_records
+add column if not exists purchase_pool_name text;
+
+alter table public.purchase_records
+add column if not exists purchase_pool_date date;
+
+alter table public.purchase_records
+add column if not exists pool_status text not null default 'pending_purchase';
+
+alter table public.purchase_records
 alter column status type text using status::text;
 
 alter table public.purchase_records
@@ -320,8 +332,26 @@ on public.purchase_records (status);
 create index if not exists purchase_records_batch_idx
 on public.purchase_records (purchase_batch_date, purchase_batch_id);
 
+create index if not exists purchase_records_pool_idx
+on public.purchase_records (purchase_pool_date, purchase_pool_id, pool_status);
+
 create index if not exists purchase_records_is_confirmed_idx
 on public.purchase_records (is_confirmed);
+
+create table if not exists public.purchase_pools (
+  id text primary key,
+  name text not null,
+  container_date date,
+  status text not null default 'open',
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  sent_by uuid references auth.users(id) on delete set null,
+  sent_at timestamptz,
+  note text
+);
+
+create index if not exists purchase_pools_status_date_idx
+on public.purchase_pools (status, container_date desc, created_at desc);
 
 create table if not exists public.container_rows (
   id text primary key,
@@ -437,6 +467,7 @@ $$;
 alter table public.profiles enable row level security;
 alter table public.sku_items enable row level security;
 alter table public.purchase_records enable row level security;
+alter table public.purchase_pools enable row level security;
 alter table public.container_rows enable row level security;
 alter table public.sales_suggestions enable row level security;
 alter table public.audit_logs enable row level security;
@@ -488,6 +519,14 @@ using (
   or lower(coalesce(assigned_buyer_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
 );
 
+drop policy if exists "shared select purchase pools" on public.purchase_pools;
+create policy "shared select purchase pools" on public.purchase_pools for select to authenticated using (true);
+drop policy if exists "admin insert purchase pools" on public.purchase_pools;
+drop policy if exists "editor insert purchase pools" on public.purchase_pools;
+create policy "editor insert purchase pools" on public.purchase_pools for insert to authenticated with check (public.is_editor());
+drop policy if exists "admin update purchase pools" on public.purchase_pools;
+create policy "admin update purchase pools" on public.purchase_pools for update to authenticated using (public.is_admin()) with check (public.is_admin());
+
 drop policy if exists "shared select container" on public.container_rows;
 create policy "shared select container" on public.container_rows for select to authenticated using (true);
 drop policy if exists "editor insert container" on public.container_rows;
@@ -523,6 +562,13 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'purchase_records'
   ) then
     alter publication supabase_realtime add table public.purchase_records;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'purchase_pools'
+  ) then
+    alter publication supabase_realtime add table public.purchase_pools;
   end if;
 
   if not exists (

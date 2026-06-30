@@ -89,6 +89,11 @@ function purchaseStatus(value: unknown): PurchaseStatus {
   return 'pending';
 }
 
+function poolStatus(value: unknown, status: PurchaseStatus, isConfirmed: boolean): PurchaseRecord['poolStatus'] {
+  if (value === 'pending_purchase' || value === 'submitted_to_pool' || value === 'sent_to_inventory') return value;
+  return isConfirmed && (status === 'in_transit' || status === 'arrived') ? 'sent_to_inventory' : 'pending_purchase';
+}
+
 export function loadPurchaseRecords(): PurchaseRecord[] {
   try {
     const raw = localStorage.getItem(PURCHASE_RECORD_STORAGE_KEY);
@@ -101,6 +106,8 @@ export function loadPurchaseRecords(): PurchaseRecord[] {
       const confirmedQuantity = nullableNumber(record.confirmedPurchaseQuantity);
       const price = nullableNumber(record.purchasePrice) ?? 0;
       const effectiveQuantity = confirmedQuantity ?? quantity;
+      const status = purchaseStatus(record.status);
+      const isConfirmed = Boolean(record.isConfirmed ?? status !== 'pending');
       return withPurchaseTotals({
         id: String(record.id ?? crypto.randomUUID()),
         manufacturerName: String(record.manufacturerName ?? ''),
@@ -112,18 +119,22 @@ export function loadPurchaseRecords(): PurchaseRecord[] {
         buyerName: String(record.buyerName ?? ''),
         assignedBuyerName: String(record.assignedBuyerName ?? record.buyerName ?? ''),
         assignedBuyerEmail: String(record.assignedBuyerEmail ?? ''),
-        isConfirmed: Boolean(record.isConfirmed ?? record.status !== 'pending'),
+        isConfirmed,
         purchaseQuantity: quantity,
         confirmedPurchaseQuantity: confirmedQuantity,
         purchasePrice: price,
         freightCost: nullableNumber(record.freightCost ?? record.freight_cost) ?? 0,
         totalAmount: nullableNumber(record.totalAmount) ?? effectiveQuantity * price,
         purchaseDate: String(record.purchaseDate ?? new Date().toISOString().slice(0, 10)),
+        purchasePoolId: String(record.purchasePoolId ?? record.purchase_pool_id ?? record.purchaseBatchId ?? record.purchase_batch_id ?? ''),
+        purchasePoolName: String(record.purchasePoolName ?? record.purchase_pool_name ?? record.purchaseBatchName ?? record.purchase_batch_name ?? ''),
+        purchasePoolDate: String(record.purchasePoolDate ?? record.purchase_pool_date ?? record.purchaseBatchDate ?? record.purchase_batch_date ?? ''),
+        poolStatus: poolStatus(record.poolStatus ?? record.pool_status, status, isConfirmed),
         purchaseBatchId: String(record.purchaseBatchId ?? record.purchase_batch_id ?? ''),
         purchaseBatchName: String(record.purchaseBatchName ?? record.purchase_batch_name ?? ''),
         purchaseBatchDate: String(record.purchaseBatchDate ?? record.purchase_batch_date ?? ''),
         estimatedArrivalDate: String(record.estimatedArrivalDate ?? ''),
-        status: purchaseStatus(record.status),
+        status,
         unitCbm: nullableNumber(record.unitCbm) ?? 0,
         totalCbm: nullableNumber(record.totalCbm) ?? 0,
         loadingType: record.loadingType === '整柜' || record.loadingType === '冠通' ? record.loadingType : '',

@@ -44,6 +44,10 @@ const emptyDraft: DraftRecord = {
   purchasePrice: 0,
   freightCost: 0,
   purchaseDate: new Date().toISOString().slice(0, 10),
+  purchasePoolId: '',
+  purchasePoolName: '',
+  purchasePoolDate: '',
+  poolStatus: 'sent_to_inventory',
   purchaseBatchId: '',
   purchaseBatchName: '',
   purchaseBatchDate: '',
@@ -112,6 +116,10 @@ function withTotalAmount(record: DraftRecord): PurchaseRecord {
   return withPurchaseTotals({
     ...record,
     isConfirmed: true,
+    purchasePoolId: record.purchasePoolId || record.purchaseBatchId,
+    purchasePoolName: record.purchasePoolName || record.purchaseBatchName,
+    purchasePoolDate: record.purchasePoolDate || record.purchaseBatchDate,
+    poolStatus: 'sent_to_inventory',
     totalAmount: round(effectivePurchaseQuantity(record) * record.purchasePrice + record.freightCost, 2),
     totalCbm: record.totalCbm || round(effectivePurchaseQuantity(record) * record.unitCbm, 4),
   });
@@ -169,7 +177,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
   });
 
   const inventoryRecords = useMemo(
-    () => records.filter((record) => isInventoryRecord(record) && record.status !== 'cancelled'),
+    () => records.filter((record) => record.poolStatus === 'sent_to_inventory' && isInventoryRecord(record) && record.status !== 'cancelled'),
     [records],
   );
   const recentMonths = useMemo(() => recentMonthOptions(3), []);
@@ -349,6 +357,10 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
       purchasePrice: record.purchasePrice,
       freightCost: record.freightCost,
       purchaseDate: record.purchaseDate,
+      purchasePoolId: record.purchasePoolId,
+      purchasePoolName: record.purchasePoolName,
+      purchasePoolDate: record.purchasePoolDate,
+      poolStatus: record.poolStatus,
       purchaseBatchId: record.purchaseBatchId,
       purchaseBatchName: record.purchaseBatchName,
       purchaseBatchDate: record.purchaseBatchDate,

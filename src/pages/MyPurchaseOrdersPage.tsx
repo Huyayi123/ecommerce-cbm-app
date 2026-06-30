@@ -43,15 +43,18 @@ const statusLabels: Record<PurchaseStatus, string> = {
   cancelled: '已取消',
 };
 
-const statusFilterOptions: Array<{ value: PurchaseStatus | 'all'; label: string }> = [
+type OrderFilterStatus = PurchaseStatus | 'submitted_to_pool' | 'all';
+
+const statusFilterOptions: Array<{ value: OrderFilterStatus; label: string }> = [
   { value: 'pending', label: '待采购' },
+  { value: 'submitted_to_pool', label: '采购池中' },
   { value: 'in_transit', label: '海运在途' },
   { value: 'arrived', label: '已到货' },
   { value: 'all', label: '全部' },
 ];
 
 const statusEditOptions: Array<{ value: PurchaseStatus; label: string }> = statusFilterOptions
-  .filter((option): option is { value: PurchaseStatus; label: string } => option.value !== 'all');
+  .filter((option): option is { value: PurchaseStatus; label: string } => option.value !== 'all' && option.value !== 'submitted_to_pool');
 
 const editableFields = [
   'manufacturerName',
@@ -126,10 +129,16 @@ function batchDisplay(record: Pick<PurchaseRecord, 'purchaseBatchDate' | 'purcha
 }
 
 function withBatchDefaults(record: PurchaseRecord): PurchaseRecord {
+  const batchDate = record.purchaseBatchDate || record.purchaseDate;
+  const batchName = record.purchaseBatchName || (batchDate ? `${batchDate} 批次` : '');
   return {
     ...record,
-    purchaseBatchDate: record.purchaseBatchDate || record.purchaseDate,
-    purchaseBatchName: record.purchaseBatchName || (record.purchaseBatchDate || record.purchaseDate ? `${record.purchaseBatchDate || record.purchaseDate} 批次` : ''),
+    purchaseBatchDate: batchDate,
+    purchaseBatchName: batchName,
+    purchasePoolId: record.purchasePoolId || record.purchaseBatchId,
+    purchasePoolDate: record.purchasePoolDate || batchDate,
+    purchasePoolName: record.purchasePoolName || batchName,
+    poolStatus: record.poolStatus || 'pending_purchase',
   };
 }
 
@@ -177,7 +186,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollRef = useRef<ScrollSnapshot | null>(null);
   const mixedAutoSaveTimer = useRef<number | null>(null);
-  const [statusFilter, setStatusFilter] = useState<PurchaseStatus | 'all'>('pending');
+  const [statusFilter, setStatusFilter] = useState<OrderFilterStatus>('pending');
   const isAdmin = profile.role === 'admin';
   const isViewer = profile.role === 'viewer';
   const assignedRecords = useMemo(
@@ -197,7 +206,12 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       ))[0];
   }, [records]);
   const visibleRecords = useMemo(
-    () => statusFilter === 'all' ? assignedRecords : assignedRecords.filter((record) => record.status === statusFilter),
+    () => {
+      if (statusFilter === 'all') return assignedRecords;
+      if (statusFilter === 'submitted_to_pool') return assignedRecords.filter((record) => record.poolStatus === 'submitted_to_pool');
+      if (statusFilter === 'pending') return assignedRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase');
+      return assignedRecords.filter((record) => record.status === statusFilter);
+    },
     [assignedRecords, statusFilter],
   );
   const imageUrlBySku = useMemo(
@@ -465,6 +479,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       freightCost: newFreightCost,
       totalAmount: newTotalAmount,
       purchaseDate: today(),
+      purchasePoolId: newOrder.purchaseBatchId.trim() || recentBatch?.purchasePoolId || recentBatch?.purchaseBatchId || '',
+      purchasePoolName: newOrder.purchaseBatchName.trim() || recentBatch?.purchasePoolName || recentBatch?.purchaseBatchName || '',
+      purchasePoolDate: newOrder.purchaseBatchDate.trim() || recentBatch?.purchasePoolDate || recentBatch?.purchaseBatchDate || '',
+      poolStatus: 'pending_purchase',
       purchaseBatchId: newOrder.purchaseBatchId.trim() || recentBatch?.purchaseBatchId || '',
       purchaseBatchName: newOrder.purchaseBatchName.trim() || recentBatch?.purchaseBatchName || '',
       purchaseBatchDate: newOrder.purchaseBatchDate.trim() || recentBatch?.purchaseBatchDate || '',
@@ -500,6 +518,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     try {
       const imported = (await parsePurchaseRecordsFile(file, profile)).map((record) => withPurchaseTotals({
         ...record,
+        purchasePoolId: record.purchasePoolId || record.purchaseBatchId || recentBatch?.purchasePoolId || recentBatch?.purchaseBatchId || '',
+        purchasePoolName: record.purchasePoolName || record.purchaseBatchName || recentBatch?.purchasePoolName || recentBatch?.purchaseBatchName || '',
+        purchasePoolDate: record.purchasePoolDate || record.purchaseBatchDate || recentBatch?.purchasePoolDate || recentBatch?.purchaseBatchDate || '',
+        poolStatus: record.poolStatus || 'pending_purchase',
         purchaseBatchId: record.purchaseBatchId || recentBatch?.purchaseBatchId || '',
         purchaseBatchName: record.purchaseBatchName || recentBatch?.purchaseBatchName || '',
         purchaseBatchDate: record.purchaseBatchDate || recentBatch?.purchaseBatchDate || '',
@@ -573,7 +595,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       ...normalized,
       isConfirmed: true,
       confirmedPurchaseQuantity: effectivePurchaseQuantity(normalized),
-      status: normalized.status === 'pending' ? 'in_transit' : normalized.status,
+      status: normalized.status === 'cancelled' ? 'cancelled' : 'pending',
+      purchasePoolId: normalized.purchasePoolId || normalized.purchaseBatchId,
+      purchasePoolName: normalized.purchasePoolName || normalized.purchaseBatchName,
+      purchasePoolDate: normalized.purchasePoolDate || normalized.purchaseBatchDate,
+      poolStatus: 'submitted_to_pool',
     };
   }
 
@@ -589,7 +615,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       else await onChange(records.map((item) => (visibleIds.has(item.id) ? confirmedRecord(item) : item)));
       setDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleIds.has(key.split(':')[0]))));
       setMixedDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleIds.has(key.split(':')[0]))));
-      setMessage(`已确认 ${visibleIds.size} 条采购订单，采购 / 在途库存将按回传数据统计。`);
+      setMessage(`已提交 ${visibleIds.size} 条采购订单到采购订单池，等待 admin 统一发送到采购 / 在途库存。`);
     } catch (error) {
       console.error(error);
       setMessage(`确认失败：${formatErrorMessage(error)}`);
@@ -829,7 +855,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           )}
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'xlsx', '我的采购订单')} disabled={visibleRecords.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'csv', '我的采购订单')} disabled={visibleRecords.length === 0}>导出 CSV</button>
-          {!isViewer && <button className="primary" type="button" onClick={() => void confirmVisiblePurchases()} disabled={unconfirmedVisibleCount === 0}>确认采购</button>}
+          {!isViewer && <button className="primary" type="button" onClick={() => void confirmVisiblePurchases()} disabled={unconfirmedVisibleCount === 0}>提交采购订单池</button>}
         </div>
       </div>
       {message && <div className="inline-notice">{message}</div>}
@@ -837,7 +863,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       <div className="order-filter-bar">
         <label>
           状态筛选
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as PurchaseStatus | 'all')}>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as OrderFilterStatus)}>
             {statusFilterOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </label>

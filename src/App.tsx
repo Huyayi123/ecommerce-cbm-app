@@ -6,15 +6,17 @@ import { SkuManager } from './components/SkuManager';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { ContainerCalculatorPage } from './pages/ContainerCalculatorPage';
 import { MyPurchaseOrdersPage } from './pages/MyPurchaseOrdersPage';
+import { PurchasePoolPage } from './pages/PurchasePoolPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
 import { RepricingAlertsPage } from './pages/RepricingAlertsPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
-import type { AppProfile, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
+import type { AppProfile, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
 import {
   deletePurchaseRecords,
   fetchContainerRows,
   fetchProfile,
   fetchProfiles,
+  fetchPurchasePools,
   fetchPurchaseRecords,
   fetchRepricingAlerts,
   fetchSalesSuggestions,
@@ -25,18 +27,20 @@ import {
   replaceSkuItems,
   subscribeToSharedTables,
   updateProfileBinding,
+  upsertPurchasePools,
   upsertPurchaseRecords,
 } from './utils/cloudStorage';
 import { formatErrorMessage } from './utils/errors';
 import { canDelete, canEdit } from './utils/permissions';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'my-orders' | 'suggestions' | 'repricing';
+type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'suggestions', label: '月销量采购建议' },
   { key: 'calculator', label: '装柜计算' },
   { key: 'my-orders', label: '我的采购订单' },
+  { key: 'purchase-pool', label: '采购订单池' },
   { key: 'inventory', label: '采购 / 在途库存' },
   { key: 'sku', label: 'SKU 资料库' },
 ];
@@ -55,6 +59,7 @@ function App() {
   const [skuItems, setSkuItems] = useState<SkuItem[]>([]);
   const [purchaseRows, setPurchaseRows] = useState<PurchaseRow[]>([]);
   const [purchaseRecords, setPurchaseRecords] = useState<PurchaseRecord[]>([]);
+  const [purchasePools, setPurchasePools] = useState<PurchasePool[]>([]);
   const [savedSalesSuggestions, setSavedSalesSuggestions] = useState<SalesSuggestionRow[]>([]);
   const [repricingAlerts, setRepricingAlerts] = useState<RepricingAlert[]>([]);
   const [profiles, setProfiles] = useState<AppProfile[]>([]);
@@ -75,6 +80,7 @@ function App() {
       fetchProfiles(),
       fetchSalesSuggestions(),
       fetchRepricingAlerts(),
+      fetchPurchasePools(),
     ]);
     const errors = results.flatMap((result, index) => {
       if (result.status !== 'rejected') return [];
@@ -93,6 +99,7 @@ function App() {
     }
     if (results[4].status === 'fulfilled') setSavedSalesSuggestions(results[4].value);
     if (results[5].status === 'fulfilled') setRepricingAlerts(results[5].value);
+    if (results[6].status === 'fulfilled') setPurchasePools(results[6].value);
 
     if (errors.length > 0) {
       setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
@@ -147,6 +154,7 @@ function App() {
         setSkuItems([]);
         setPurchaseRows([]);
         setPurchaseRecords([]);
+        setPurchasePools([]);
         setProfiles([]);
         setRepricingAlerts([]);
         return;
@@ -198,6 +206,23 @@ function App() {
     }
   }
 
+  async function persistPurchasePools(changedPools: PurchasePool[]) {
+    const normalized = changedPools.map((pool) => ({ ...pool, createdAt: pool.createdAt || new Date().toISOString() }));
+    setPurchasePools((current) => {
+      const existingIds = new Set(current.map((pool) => pool.id));
+      const changedById = new Map(normalized.map((pool) => [pool.id, pool]));
+      const updated = current.map((pool) => changedById.get(pool.id) ?? pool);
+      const created = normalized.filter((pool) => !existingIds.has(pool.id));
+      return [...created, ...updated];
+    });
+    try {
+      await upsertPurchasePools(normalized);
+    } catch (error) {
+      await loadCloudData();
+      throw error;
+    }
+  }
+
   async function persistPurchaseRecordDeletes(ids: string[]) {
     const deleteIds = new Set(ids);
     setPurchaseRecords((current) => current.filter((record) => !deleteIds.has(record.id)));
@@ -211,8 +236,28 @@ function App() {
 
   async function appendPurchaseRecords(records: PurchaseRecord[]) {
     try {
-      const assignedRecords = assignBuyerEmails(records);
+      const assignedRecords = assignBuyerEmails(records).map((record) => ({
+        ...record,
+        purchasePoolId: record.purchasePoolId || record.purchaseBatchId,
+        purchasePoolName: record.purchasePoolName || record.purchaseBatchName,
+        purchasePoolDate: record.purchasePoolDate || record.purchaseBatchDate,
+        poolStatus: 'pending_purchase' as const,
+      }));
+      const poolsToCreate = Array.from(new Map(assignedRecords
+        .filter((record) => record.purchasePoolId || record.purchasePoolName || record.purchasePoolDate)
+        .map((record) => [record.purchasePoolId || `${record.purchasePoolDate}|${record.purchasePoolName}`, {
+          id: record.purchasePoolId || `${record.purchasePoolDate}|${record.purchasePoolName}`,
+          name: record.purchasePoolName || record.purchaseBatchName || `${record.purchasePoolDate || record.purchaseBatchDate} 批次`,
+          containerDate: record.purchasePoolDate || record.purchaseBatchDate,
+          status: 'open' as const,
+          createdBy: profile?.id || '',
+          createdAt: new Date().toISOString(),
+          sentBy: '',
+          sentAt: '',
+          note: '',
+        }])).values());
       const nextRecords = [...assignedRecords, ...purchaseRecords];
+      if (poolsToCreate.length > 0) await persistPurchasePools(poolsToCreate);
       await persistPurchaseRecords(nextRecords);
       await loadCloudData();
       setStatusMessage(`已生成 ${assignedRecords.length} 条采购任务，请采购人在“我的采购订单”确认后进入在途库存口径。`);
@@ -296,9 +341,11 @@ function App() {
   const deletable = canDelete(profile.role);
   const pendingAssignedTasks = purchaseRecords.filter((record) => (
     record.status === 'pending'
+    && record.poolStatus === 'pending_purchase'
     && record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()
   ));
-  const pendingTaskCount = purchaseRecords.filter((record) => record.status === 'pending').length;
+  const pendingTaskCount = purchaseRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase').length;
+  const poolSubmittedCount = purchaseRecords.filter((record) => record.poolStatus === 'submitted_to_pool').length;
   const activeRepricingAlerts = repricingAlerts.filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'));
 
   return (
@@ -324,6 +371,12 @@ function App() {
       {pendingTaskCount > 0 && (
         <button type="button" className="task-notice" onClick={() => setActivePage('my-orders')}>
           当前共有 {pendingTaskCount} 条待采购任务（所有采购人），点击查看
+        </button>
+      )}
+
+      {poolSubmittedCount > 0 && (
+        <button type="button" className="task-notice" onClick={() => setActivePage('purchase-pool')}>
+          采购订单池有 {poolSubmittedCount} 条待发送记录，点击查看
         </button>
       )}
 
@@ -381,6 +434,17 @@ function App() {
           onDeleteRecords={persistPurchaseRecordDeletes}
           canEditData={editable}
           canDeleteData={deletable}
+        />
+      )}
+
+      {activePage === 'purchase-pool' && (
+        <PurchasePoolPage
+          records={purchaseRecords}
+          pools={purchasePools}
+          profile={profile}
+          skuItems={skuItems}
+          onSaveRecords={persistPurchaseRecordUpdates}
+          onSavePools={persistPurchasePools}
         />
       )}
 

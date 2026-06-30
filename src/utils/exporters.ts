@@ -247,7 +247,7 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
 export function exportBatchPurchaseOrder(records: PurchaseRecord[], format: ExportFormat): void {
   const exportRows = [...records]
     .map(withPurchaseTotals)
-    .filter((record) => record.isConfirmed && record.status !== 'pending' && record.status !== 'cancelled')
+    .filter((record) => record.isConfirmed && record.status !== 'cancelled' && (record.status !== 'pending' || record.poolStatus === 'submitted_to_pool'))
     .sort((left, right) => (
       left.purchaseBatchDate.localeCompare(right.purchaseBatchDate)
       || left.purchaseBatchName.localeCompare(right.purchaseBatchName, 'zh-Hans-CN')
