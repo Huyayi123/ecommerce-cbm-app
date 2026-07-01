@@ -136,6 +136,7 @@ export type PurchasePool = {
   sentBy: string;
   sentAt: string;
   note: string;
+  records: PurchaseRecord[];
 };
 
 export type CalculationRow = {

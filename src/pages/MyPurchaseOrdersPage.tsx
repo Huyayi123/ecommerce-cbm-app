@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import type { AppProfile, MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
+import type { AppProfile, MixedCartonGroup, MixedCartonLine, PurchasePool, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
 import { formatErrorMessage } from '../utils/errors';
 import { exportPurchaseRecords } from '../utils/exporters';
 import { parsePurchaseRecordsFile } from '../utils/fileParsers';
@@ -13,6 +13,7 @@ type Props = {
   onChange: (records: PurchaseRecord[]) => void | Promise<void>;
   onSaveRecords?: (records: PurchaseRecord[]) => void | Promise<void>;
   onDeleteRecords?: (ids: string[]) => void | Promise<void>;
+  onSubmitToPool?: (pool: PurchasePool, records: PurchaseRecord[]) => void | Promise<void>;
 };
 
 type NewOrderDraft = {
@@ -131,6 +132,22 @@ function batchDisplay(record: Pick<PurchaseRecord, 'purchaseBatchDate' | 'purcha
   return name || date || '未分配批次';
 }
 
+function poolFromRecord(record: PurchaseRecord, profile: AppProfile): PurchasePool {
+  const id = record.purchasePoolId || record.purchaseBatchId || `${record.purchaseBatchDate}|${record.purchaseBatchName}`;
+  return {
+    id,
+    name: record.purchasePoolName || record.purchaseBatchName || `${record.purchaseBatchDate} 批次`,
+    containerDate: record.purchasePoolDate || record.purchaseBatchDate,
+    status: 'open',
+    createdBy: profile.id,
+    createdAt: new Date().toISOString(),
+    sentBy: '',
+    sentAt: '',
+    note: '',
+    records: [],
+  };
+}
+
 function withBatchDefaults(record: PurchaseRecord): PurchaseRecord {
   const batchDate = record.purchaseBatchDate || record.purchaseDate;
   const batchName = record.purchaseBatchName || (batchDate ? `${batchDate} 批次` : '');
@@ -180,7 +197,7 @@ function createMixedGroup(index: number): MixedCartonGroup {
   };
 }
 
-export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onSaveRecords, onDeleteRecords }: Props) {
+export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onSaveRecords, onDeleteRecords, onSubmitToPool }: Props) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [mixedDrafts, setMixedDrafts] = useState<Record<string, string>>({});
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -621,7 +638,18 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       const confirmedRecords = records
         .filter((item) => visibleIds.has(item.id))
         .map((item) => confirmedRecord(item));
-      if (onSaveRecords) await onSaveRecords(confirmedRecords);
+      if (onSubmitToPool) {
+        const recordsByPool = new Map<string, { pool: PurchasePool; records: PurchaseRecord[] }>();
+        for (const record of confirmedRecords) {
+          const pool = poolFromRecord(record, profile);
+          const existing = recordsByPool.get(pool.id);
+          if (existing) existing.records.push(record);
+          else recordsByPool.set(pool.id, { pool, records: [record] });
+        }
+        for (const group of recordsByPool.values()) {
+          await onSubmitToPool(group.pool, group.records);
+        }
+      } else if (onSaveRecords) await onSaveRecords(confirmedRecords);
       else await onChange(records.map((item) => (visibleIds.has(item.id) ? confirmedRecord(item) : item)));
       setDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleIds.has(key.split(':')[0]))));
       setMixedDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleIds.has(key.split(':')[0]))));

@@ -58,6 +58,7 @@ type PurchasePoolRow = {
   sent_by: string | null;
   sent_at: string | null;
   note: string | null;
+  records?: unknown;
 };
 
 type ContainerRow = {
@@ -327,6 +328,7 @@ function mapPurchasePool(row: PurchasePoolRow): PurchasePool {
     sentBy: row.sent_by ?? '',
     sentAt: row.sent_at ?? '',
     note: row.note ?? '',
+    records: normalizePoolRecords(row.records),
   };
 }
 
@@ -341,7 +343,65 @@ function toPurchasePoolRow(pool: PurchasePool): PurchasePoolRow {
     sent_by: pool.sentBy || null,
     sent_at: pool.sentAt || null,
     note: pool.note,
+    records: pool.records.map((record) => withPurchaseTotals(record)),
   };
+}
+
+function nullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizePoolRecord(value: unknown): PurchaseRecord {
+  const payload = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return mapPurchaseRecord({
+    id: String(payload.id ?? crypto.randomUUID()),
+    manufacturer_name: String(payload.manufacturerName ?? payload.manufacturer_name ?? ''),
+    sku: String(payload.sku ?? ''),
+    product_name: String(payload.productName ?? payload.product_name ?? ''),
+    image_url: String(payload.imageUrl ?? payload.image_url ?? ''),
+    shop_name: String(payload.shopName ?? payload.shop_name ?? ''),
+    buyer_name: String(payload.buyerName ?? payload.buyer_name ?? ''),
+    assigned_buyer_name: String(payload.assignedBuyerName ?? payload.assigned_buyer_name ?? ''),
+    assigned_buyer_email: String(payload.assignedBuyerEmail ?? payload.assigned_buyer_email ?? ''),
+    is_confirmed: Boolean(payload.isConfirmed ?? payload.is_confirmed ?? false),
+    purchase_quantity: Number(payload.purchaseQuantity ?? payload.purchase_quantity ?? 0),
+    confirmed_purchase_quantity: nullableNumber(payload.confirmedPurchaseQuantity ?? payload.confirmed_purchase_quantity),
+    purchase_price: Number(payload.purchasePrice ?? payload.purchase_price ?? 0),
+    freight_cost: Number(payload.freightCost ?? payload.freight_cost ?? 0),
+    total_amount: Number(payload.totalAmount ?? payload.total_amount ?? 0),
+    purchase_date: String(payload.purchaseDate ?? payload.purchase_date ?? ''),
+    purchase_pool_id: String(payload.purchasePoolId ?? payload.purchase_pool_id ?? ''),
+    purchase_pool_name: String(payload.purchasePoolName ?? payload.purchase_pool_name ?? ''),
+    purchase_pool_date: String(payload.purchasePoolDate ?? payload.purchase_pool_date ?? ''),
+    pool_status: String(payload.poolStatus ?? payload.pool_status ?? 'submitted_to_pool'),
+    purchase_batch_id: String(payload.purchaseBatchId ?? payload.purchase_batch_id ?? ''),
+    purchase_batch_name: String(payload.purchaseBatchName ?? payload.purchase_batch_name ?? ''),
+    purchase_batch_date: String(payload.purchaseBatchDate ?? payload.purchase_batch_date ?? ''),
+    estimated_arrival_date: String(payload.estimatedArrivalDate ?? payload.estimated_arrival_date ?? ''),
+    status: String(payload.status ?? 'pending'),
+    english_name: String(payload.englishName ?? payload.english_name ?? ''),
+    unit_cbm: Number(payload.unitCbm ?? payload.unit_cbm ?? 0),
+    total_cbm: Number(payload.totalCbm ?? payload.total_cbm ?? 0),
+    loading_type: String(payload.loadingType ?? payload.loading_type ?? '') as PurchaseRecord['loadingType'],
+    container_date: String(payload.containerDate ?? payload.container_date ?? ''),
+    total_weight_kg: nullableNumber(payload.totalWeightKg ?? payload.total_weight_kg),
+    carton_count: nullableNumber(payload.cartonCount ?? payload.carton_count),
+    units_per_carton: nullableNumber(payload.unitsPerCarton ?? payload.units_per_carton),
+    tail_quantity: Number(payload.tailQuantity ?? payload.tail_quantity ?? 0),
+    is_mixed: Boolean(payload.isMixed ?? payload.is_mixed ?? false),
+    mixed_groups: payload.mixedGroups ?? payload.mixed_groups,
+    logistics_total_cbm: nullableNumber(payload.logisticsTotalCbm ?? payload.logistics_total_cbm),
+    note: String(payload.note ?? ''),
+    created_at: String(payload.createdAt ?? payload.created_at ?? ''),
+    updated_at: String(payload.updatedAt ?? payload.updated_at ?? ''),
+  });
+}
+
+function normalizePoolRecords(value: unknown): PurchaseRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((record) => normalizePoolRecord(record));
 }
 
 function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
@@ -544,6 +604,64 @@ export async function upsertPurchasePools(pools: PurchasePool[]): Promise<void> 
     }
     throw new Error(formatErrorMessage(error));
   }
+}
+
+export async function appendPurchaseRecordsToPool(pool: PurchasePool, records: PurchaseRecord[]): Promise<PurchasePool> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('purchase_pools')
+    .select('*')
+    .eq('id', pool.id)
+    .maybeSingle();
+  if (error) {
+    console.error(error);
+    if (isMissingColumnError(error)) {
+      throw new Error(`purchase_pools 表缺少 records 字段。请先执行 SQL：alter table public.purchase_pools add column if not exists records jsonb not null default '[]'::jsonb; 原始错误：${formatErrorMessage(error)}`);
+    }
+    throw new Error(formatErrorMessage(error));
+  }
+
+  const remotePool = data ? mapPurchasePool(data as PurchasePoolRow) : null;
+  const mergedById = new Map<string, PurchaseRecord>();
+  for (const record of remotePool?.records ?? []) {
+    mergedById.set(record.id, record);
+  }
+  for (const record of records) {
+    mergedById.set(record.id, withPurchaseTotals({
+      ...record,
+      isConfirmed: true,
+      poolStatus: 'submitted_to_pool',
+      status: 'pending',
+      purchasePoolId: record.purchasePoolId || pool.id,
+      purchasePoolName: record.purchasePoolName || pool.name,
+      purchasePoolDate: record.purchasePoolDate || pool.containerDate,
+    }));
+  }
+
+  const nextPool: PurchasePool = {
+    ...(remotePool ?? pool),
+    id: pool.id,
+    name: remotePool?.name || pool.name,
+    containerDate: remotePool?.containerDate || pool.containerDate,
+    status: 'open',
+    createdBy: remotePool?.createdBy || pool.createdBy,
+    createdAt: remotePool?.createdAt || pool.createdAt || new Date().toISOString(),
+    sentBy: remotePool?.sentBy || '',
+    sentAt: remotePool?.sentAt || '',
+    note: remotePool?.note || pool.note,
+    records: Array.from(mergedById.values()),
+  };
+
+  const { error: upsertError } = await client.from('purchase_pools').upsert(toPurchasePoolRow(nextPool));
+  if (upsertError) {
+    console.error(upsertError);
+    if (isMissingColumnError(upsertError)) {
+      throw new Error(`purchase_pools 表缺少 records 字段。请先执行 SQL：alter table public.purchase_pools add column if not exists records jsonb not null default '[]'::jsonb; 原始错误：${formatErrorMessage(upsertError)}`);
+    }
+    throw new Error(formatErrorMessage(upsertError));
+  }
+
+  return nextPool;
 }
 
 export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise<void> {

@@ -12,6 +12,7 @@ import { RepricingAlertsPage } from './pages/RepricingAlertsPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
 import type { AppProfile, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
 import {
+  appendPurchaseRecordsToPool,
   deletePurchaseRecords,
   fetchContainerRows,
   fetchProfile,
@@ -223,6 +224,38 @@ function App() {
     }
   }
 
+  async function submitPurchaseRecordsToPool(pool: PurchasePool, records: PurchaseRecord[]) {
+    const submittedRecords = normalizePurchaseRecords(assignBuyerEmails(records)).records.map((record) => withPurchaseTotals({
+      ...record,
+      isConfirmed: true,
+      status: 'pending',
+      poolStatus: 'submitted_to_pool' as const,
+      purchasePoolId: record.purchasePoolId || pool.id,
+      purchasePoolName: record.purchasePoolName || pool.name,
+      purchasePoolDate: record.purchasePoolDate || pool.containerDate,
+      purchaseBatchId: record.purchaseBatchId || pool.id,
+      purchaseBatchName: record.purchaseBatchName || pool.name,
+      purchaseBatchDate: record.purchaseBatchDate || pool.containerDate,
+    }));
+    try {
+      const savedPool = await appendPurchaseRecordsToPool({ ...pool, records: [] }, submittedRecords);
+      await upsertPurchaseRecords(submittedRecords);
+      setPurchasePools((current) => {
+        const existingIds = new Set(current.map((item) => item.id));
+        if (!existingIds.has(savedPool.id)) return [savedPool, ...current];
+        return current.map((item) => (item.id === savedPool.id ? savedPool : item));
+      });
+      setPurchaseRecords((current) => {
+        const changedById = new Map(submittedRecords.map((record) => [record.id, record]));
+        return current.map((record) => changedById.get(record.id) ?? record);
+      });
+      await loadCloudData();
+    } catch (error) {
+      await loadCloudData();
+      throw error;
+    }
+  }
+
   async function persistPurchaseRecordDeletes(ids: string[]) {
     const deleteIds = new Set(ids);
     setPurchaseRecords((current) => current.filter((record) => !deleteIds.has(record.id)));
@@ -255,6 +288,7 @@ function App() {
           sentBy: '',
           sentAt: '',
           note: '',
+          records: [],
         }])).values());
       const nextRecords = [...assignedRecords, ...purchaseRecords];
       if (poolsToCreate.length > 0) await persistPurchasePools(poolsToCreate);
@@ -345,7 +379,7 @@ function App() {
     && record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()
   ));
   const pendingTaskCount = purchaseRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase').length;
-  const poolSubmittedCount = purchaseRecords.filter((record) => record.poolStatus === 'submitted_to_pool').length;
+  const poolSubmittedCount = purchasePools.reduce((sum, pool) => sum + pool.records.length, 0);
   const activeRepricingAlerts = repricingAlerts.filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'));
 
   return (
@@ -458,6 +492,7 @@ function App() {
             onChange={persistPurchaseRecords}
             onSaveRecords={persistPurchaseRecordUpdates}
             onDeleteRecords={persistPurchaseRecordDeletes}
+            onSubmitToPool={submitPurchaseRecordsToPool}
           />
         </>
       )}

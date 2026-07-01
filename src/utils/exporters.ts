@@ -166,6 +166,7 @@ export function exportSkuImportTemplate(): void {
 export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportFormat, moduleName = '采购在途库存'): void {
   const includeBuyerEmail = moduleName !== '我的采购订单';
   const includePlanQuantity = moduleName === '我的采购订单';
+  const hideMixedChildAmount = includePlanQuantity && !includeBuyerEmail;
   const exportRows = records.flatMap((record) => {
     const normalized = withPurchaseTotals(record);
     const baseRow = {
@@ -221,7 +222,7 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
       含本SKU混装采购数量: line.quantity,
       采购单价: line.purchasePrice,
       运费: '',
-      含混装总金额: line.totalAmount,
+      含混装总金额: hideMixedChildAmount ? '' : line.totalAmount,
       单品CBM: line.unitCbm,
       采购日期: normalized.purchaseDate,
       状态: normalized.status,
