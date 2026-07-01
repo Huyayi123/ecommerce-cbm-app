@@ -530,7 +530,8 @@ drop policy if exists "admin insert purchase pools" on public.purchase_pools;
 drop policy if exists "editor insert purchase pools" on public.purchase_pools;
 create policy "editor insert purchase pools" on public.purchase_pools for insert to authenticated with check (public.is_editor());
 drop policy if exists "admin update purchase pools" on public.purchase_pools;
-create policy "admin update purchase pools" on public.purchase_pools for update to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "editor update purchase pools" on public.purchase_pools;
+create policy "editor update purchase pools" on public.purchase_pools for update to authenticated using (public.is_editor()) with check (public.is_editor());
 
 drop policy if exists "shared select container" on public.container_rows;
 create policy "shared select container" on public.container_rows for select to authenticated using (true);

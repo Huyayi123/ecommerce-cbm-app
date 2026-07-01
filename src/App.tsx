@@ -192,15 +192,15 @@ function App() {
 
   async function persistPurchaseRecordUpdates(changedRecords: PurchaseRecord[]) {
     const normalized = normalizePurchaseRecords(assignBuyerEmails(changedRecords)).records;
-    setPurchaseRecords((current) => {
-      const existingIds = new Set(current.map((record) => record.id));
-      const changedById = new Map(normalized.map((record) => [record.id, record]));
-      const updated = current.map((record) => changedById.get(record.id) ?? record);
-      const created = normalized.filter((record) => !existingIds.has(record.id));
-      return [...created, ...updated];
-    });
     try {
       await upsertPurchaseRecords(normalized);
+      setPurchaseRecords((current) => {
+        const existingIds = new Set(current.map((record) => record.id));
+        const changedById = new Map(normalized.map((record) => [record.id, record]));
+        const updated = current.map((record) => changedById.get(record.id) ?? record);
+        const created = normalized.filter((record) => !existingIds.has(record.id));
+        return [...created, ...updated];
+      });
     } catch (error) {
       await loadCloudData();
       throw error;

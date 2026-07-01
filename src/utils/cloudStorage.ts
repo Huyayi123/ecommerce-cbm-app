@@ -688,13 +688,22 @@ export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise
 
 export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<void> {
   if (records.length === 0) return;
-  const { error } = await requireSupabase().from('purchase_records').upsert(records.map(toPurchaseRecordRow));
+  const expectedIds = new Set(records.map((record) => record.id));
+  const { data, error } = await requireSupabase()
+    .from('purchase_records')
+    .upsert(records.map(toPurchaseRecordRow))
+    .select('id');
   if (error) {
     console.error(error);
     if (isMissingColumnError(error)) {
       throw new Error(`purchase_records 表缺少新字段，采购记录无法保存。请先在 Supabase SQL Editor 执行采购记录字段迁移 SQL。原始错误：${formatErrorMessage(error)}`);
     }
     throw new Error(formatErrorMessage(error));
+  }
+  const savedIds = new Set((data ?? []).map((row) => String(row.id)));
+  const missingIds = Array.from(expectedIds).filter((id) => !savedIds.has(id));
+  if (missingIds.length > 0) {
+    throw new Error(`采购订单保存未被云端确认：${missingIds.length} 条记录没有返回保存结果。请检查网络/VPN 或 Supabase RLS 写入权限后重试。`);
   }
 }
 
