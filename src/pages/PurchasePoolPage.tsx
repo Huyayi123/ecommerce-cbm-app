@@ -178,13 +178,31 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
       purchaseBatchDate: nextDate,
       containerDate: nextDate,
     }));
-    const nextPool: PurchasePool = {
-      ...activePool,
-      containerDate: nextDate,
-      records: nextRecords,
-    };
+    const nextRecordsById = new Map(nextRecords.map((record) => [record.id, record]));
+    const nextPools: PurchasePool[] = activePool.isAggregate
+      ? poolOptions.flatMap((pool): PurchasePool[] => {
+        const hasUpdatedRecord = pool.records.some((record) => nextRecordsById.has(record.id));
+        if (!hasUpdatedRecord) return [];
+        return [{
+          id: pool.id,
+          name: pool.name,
+          containerDate: nextDate,
+          status: pool.status,
+          createdBy: pool.createdBy,
+          createdAt: pool.createdAt,
+          sentBy: pool.sentBy,
+          sentAt: pool.sentAt,
+          note: pool.note,
+          records: pool.records.map((record) => nextRecordsById.get(record.id) ?? record),
+        }];
+      })
+      : [{
+        ...activePool,
+        containerDate: nextDate,
+        records: nextRecords,
+      }];
     try {
-      if (!activePool.isAggregate) await onSavePools([nextPool]);
+      if (nextPools.length > 0) await onSavePools(nextPools);
       await onSaveRecords(nextRecords);
       setMessage(`已把本池 ${nextRecords.length} 条订单的装柜日期统一修改为 ${nextDate}。`);
     } catch (error) {
