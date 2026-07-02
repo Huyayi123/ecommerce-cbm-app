@@ -16,6 +16,7 @@ type Props = {
 type PoolOption = PurchasePool & {
   recordCount: number;
   submittedCount: number;
+  isAggregate?: boolean;
 };
 
 type EditablePoolField =
@@ -52,10 +53,20 @@ function poolDateFromRecord(record: PurchaseRecord): string {
   return record.purchasePoolDate || record.purchaseBatchDate || record.containerDate || record.purchaseDate;
 }
 
+function isPoolPendingRecord(record: PurchaseRecord): boolean {
+  return record.status !== 'cancelled' && record.poolStatus !== 'sent_to_inventory';
+}
+
 function buildPoolOptions(records: PurchaseRecord[], pools: PurchasePool[]): PoolOption[] {
   const options = new Map<string, PoolOption>();
   for (const pool of pools) {
-    options.set(pool.id, { ...pool, recordCount: pool.records.length, submittedCount: pool.records.length });
+    const pendingRecords = pool.records.filter(isPoolPendingRecord);
+    options.set(pool.id, {
+      ...pool,
+      records: pendingRecords,
+      recordCount: pendingRecords.length,
+      submittedCount: pendingRecords.length,
+    });
   }
   for (const record of records) {
     const key = poolKey(record);
@@ -77,16 +88,44 @@ function buildPoolOptions(records: PurchaseRecord[], pools: PurchasePool[]): Poo
       recordCount: 0,
       submittedCount: 0,
     };
-    option.recordCount += 1;
-    if (record.poolStatus === 'submitted_to_pool') option.submittedCount += 1;
+    option.records.push(record);
+    option.recordCount = option.records.length;
+    option.submittedCount = option.records.filter(isPoolPendingRecord).length;
     options.set(key, option);
   }
   return Array.from(options.values())
     .filter((pool) => pool.submittedCount > 0)
     .sort((left, right) => (
-      (right.containerDate || '').localeCompare(left.containerDate || '')
+      (right.createdAt || '').localeCompare(left.createdAt || '')
+      || (right.containerDate || '').localeCompare(left.containerDate || '')
       || right.name.localeCompare(left.name, 'zh-Hans-CN')
     ));
+}
+
+function buildAggregatePool(options: PoolOption[]): PoolOption | null {
+  const recordsById = new Map<string, PurchaseRecord>();
+  for (const pool of options) {
+    for (const record of pool.records) {
+      if (isPoolPendingRecord(record)) recordsById.set(record.id, record);
+    }
+  }
+  const records = Array.from(recordsById.values());
+  if (records.length === 0) return null;
+  return {
+    id: '__all_pending_purchase_pools__',
+    name: '全部待发送采购池',
+    containerDate: '',
+    status: 'open',
+    createdBy: '',
+    createdAt: '',
+    sentBy: '',
+    sentAt: '',
+    note: '',
+    records,
+    recordCount: records.length,
+    submittedCount: records.length,
+    isAggregate: true,
+  };
 }
 
 export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveRecords, onSavePools }: Props) {
@@ -94,11 +133,16 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const [message, setMessage] = useState('');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const isAdmin = profile.role === 'admin';
-  const options = useMemo(() => buildPoolOptions(records, pools), [pools, records]);
+  const poolOptions = useMemo(() => buildPoolOptions(records, pools), [pools, records]);
+  const options = useMemo(() => {
+    const aggregatePool = buildAggregatePool(poolOptions);
+    return aggregatePool ? [aggregatePool, ...poolOptions] : poolOptions;
+  }, [poolOptions]);
   const activePoolId = selectedPoolId && options.some((pool) => pool.id === selectedPoolId) ? selectedPoolId : options[0]?.id || '';
   const activePool = options.find((pool) => pool.id === activePoolId);
   const poolRecords = activePool?.records.map(withPurchaseTotals) ?? [];
   const submittedRecords = poolRecords.filter((record) => record.status !== 'cancelled');
+  const canEditActivePool = isAdmin && !activePool?.isAggregate;
   const imageUrlBySku = useMemo(
     () => new Map(skuItems
       .filter((item) => item.sku.trim())
@@ -111,7 +155,10 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const totalPackages = submittedRecords.reduce((sum, record) => sum + packageCountFor(record), 0);
 
   async function sendPoolToInventory() {
-    if (!isAdmin || !activePool || submittedRecords.length === 0) return;
+    if (!canEditActivePool || !activePool || submittedRecords.length === 0) {
+      if (activePool?.isAggregate) setMessage('请先选择一个具体采购池，再发送到采购 / 在途库存。');
+      return;
+    }
     const now = new Date().toISOString();
     const nextRecords = submittedRecords.map((record) => withPurchaseTotals({
       ...record,
@@ -191,7 +238,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
 
   async function savePoolRecord(record: PurchaseRecord, field: EditablePoolField) {
     const key = draftKey(record.id, field);
-    if (!(key in drafts) || !isAdmin || !activePool) return;
+    if (!(key in drafts) || !canEditActivePool || !activePool) return;
     const nextRecord = patchRecord(record, field, drafts[key]);
     const nextPool: PurchasePool = {
       ...activePool,
@@ -212,7 +259,10 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   }
 
   async function returnToBuyer(record: PurchaseRecord) {
-    if (!isAdmin || !activePool) return;
+    if (!canEditActivePool || !activePool) {
+      if (activePool?.isAggregate) setMessage('请先选择一个具体采购池，再退回采购人。');
+      return;
+    }
     const nextRecord = withPurchaseTotals({
       ...record,
       isConfirmed: false,
@@ -246,7 +296,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   }
 
   function editableCell(record: PurchaseRecord, field: EditablePoolField, type = 'text') {
-    if (!isAdmin) return <span>{valueFor(record, field)}</span>;
+    if (!canEditActivePool) return <span>{valueFor(record, field)}</span>;
     if (field === 'status') {
       return (
         <select
