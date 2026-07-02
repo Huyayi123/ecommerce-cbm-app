@@ -142,6 +142,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const poolRecords = activePool?.records.map(withPurchaseTotals) ?? [];
   const submittedRecords = poolRecords.filter((record) => record.status !== 'cancelled');
   const canEditActivePool = isAdmin && !activePool?.isAggregate;
+  const canApplyPoolDate = isAdmin && Boolean(activePool);
   const activeContainerDate = poolDateDraft.trim() || activePool?.containerDate || '';
   const imageUrlBySku = useMemo(
     () => new Map(skuItems
@@ -159,8 +160,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   }, [activePool?.containerDate, activePool?.id]);
 
   async function applyPoolContainerDate() {
-    if (!canEditActivePool || !activePool) {
-      if (activePool?.isAggregate) setMessage('请先选择一个具体采购订单池，再统一修改装柜日期。');
+    if (!canApplyPoolDate || !activePool) {
       return;
     }
     const nextDate = poolDateDraft.trim();
@@ -170,11 +170,11 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
     }
     const nextRecords = submittedRecords.map((record) => withPurchaseTotals({
       ...record,
-      purchasePoolId: activePool.id,
-      purchasePoolName: activePool.name,
+      purchasePoolId: activePool.isAggregate ? record.purchasePoolId : activePool.id,
+      purchasePoolName: activePool.isAggregate ? record.purchasePoolName : activePool.name,
       purchasePoolDate: nextDate,
-      purchaseBatchId: record.purchaseBatchId || activePool.id,
-      purchaseBatchName: activePool.name,
+      purchaseBatchId: activePool.isAggregate ? record.purchaseBatchId : record.purchaseBatchId || activePool.id,
+      purchaseBatchName: activePool.isAggregate ? record.purchaseBatchName : activePool.name,
       purchaseBatchDate: nextDate,
       containerDate: nextDate,
     }));
@@ -184,7 +184,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
       records: nextRecords,
     };
     try {
-      await onSavePools([nextPool]);
+      if (!activePool.isAggregate) await onSavePools([nextPool]);
       await onSaveRecords(nextRecords);
       setMessage(`已把本池 ${nextRecords.length} 条订单的装柜日期统一修改为 ${nextDate}。`);
     } catch (error) {
@@ -400,10 +400,10 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
           {options.length === 0 && <option value="">暂无待发送采购池</option>}
           {options.map((pool) => <option key={pool.id} value={pool.id}>{pool.containerDate || '未填装柜日期'} {pool.name}（池中 {pool.submittedCount}）</option>)}
         </select></label>
-        <label>本池装柜日期<input type="date" value={poolDateDraft} onChange={(event) => setPoolDateDraft(event.target.value)} disabled={!canEditActivePool} /></label>
+        <label>本池装柜日期<input type="date" value={poolDateDraft} onChange={(event) => setPoolDateDraft(event.target.value)} disabled={!canApplyPoolDate} /></label>
         {isAdmin && (
           <div className="form-actions">
-            <button type="button" onClick={() => void applyPoolContainerDate()} disabled={!canEditActivePool || !poolDateDraft}>统一本池装柜日期</button>
+            <button type="button" onClick={() => void applyPoolContainerDate()} disabled={!canApplyPoolDate || !poolDateDraft}>统一本池装柜日期</button>
           </div>
         )}
       </div>
