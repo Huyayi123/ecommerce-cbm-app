@@ -559,6 +559,21 @@ button.danger,
   font-weight: 700;
 }
 
+.suggestion-pool-table-wrap {
+  max-height: 540px;
+}
+
+.suggestion-pool-table-wrap table {
+  min-width: 1080px;
+}
+
+.suggestion-pool-table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #eaf2f6;
+}
+
 .suggestion-table-wrap {
   max-height: 680px;
 }

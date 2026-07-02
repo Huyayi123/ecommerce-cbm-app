@@ -174,6 +174,21 @@ function App() {
     });
   }, [profile]);
 
+  useEffect(() => {
+    if (!profile || activePage !== 'inventory') return undefined;
+    const refreshInventory = () => {
+      if (document.visibilityState === 'visible') void loadCloudData();
+    };
+    const timer = window.setInterval(refreshInventory, 10000);
+    window.addEventListener('focus', refreshInventory);
+    document.addEventListener('visibilitychange', refreshInventory);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshInventory);
+      document.removeEventListener('visibilitychange', refreshInventory);
+    };
+  }, [activePage, profile]);
+
   async function persistSkuItems(nextItems: SkuItem[]) {
     await replaceSkuItems(nextItems);
     setSkuItems(nextItems);

@@ -530,7 +530,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
               <button type="button" onClick={sendCurrentToCalculator} disabled={!canEditData || validSuggestionRows(suggestions).length === 0}>仅发送当前店铺</button>
             </div>
           </div>
-          <div className="table-wrap">
+          <div className="table-wrap suggestion-pool-table-wrap">
             <table>
               <thead>
                 <tr>
