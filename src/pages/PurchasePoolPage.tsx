@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import type { AppProfile, PurchasePool, PurchaseRecord, SkuItem } from '../types';
 import { exportBatchPurchaseOrder, exportPurchaseRecords } from '../utils/exporters';
 import { formatErrorMessage } from '../utils/errors';
@@ -99,6 +99,12 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const activePool = options.find((pool) => pool.id === activePoolId);
   const poolRecords = activePool?.records.map(withPurchaseTotals) ?? [];
   const submittedRecords = poolRecords.filter((record) => record.status !== 'cancelled');
+  const imageUrlBySku = useMemo(
+    () => new Map(skuItems
+      .filter((item) => item.sku.trim())
+      .map((item) => [item.sku.trim().toUpperCase(), item.imageUrl])),
+    [skuItems],
+  );
   const totalQuantity = submittedRecords.reduce((sum, record) => sum + purchaseQuantityForRecordSku(record), 0);
   const totalAmount = submittedRecords.reduce((sum, record) => sum + record.totalAmount, 0);
   const totalCbm = submittedRecords.reduce((sum, record) => sum + record.totalCbm, 0);
@@ -276,6 +282,13 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
     );
   }
 
+  function mixedChildRows(record: PurchaseRecord) {
+    const mainSku = record.sku.trim().toUpperCase();
+    return record.mixedGroups.flatMap((group) => group.lines
+      .filter((line) => line.sku.trim().toUpperCase() && line.sku.trim().toUpperCase() !== mainSku)
+      .map((line) => ({ group, line })));
+  }
+
   return (
     <section className="panel">
       <div className="section-heading">
@@ -306,7 +319,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
         <div className="metric"><span>池中总 CBM</span><strong>{totalCbm.toFixed(4)}</strong></div>
       </div>
 
-      <div className="table-wrap inventory-table-wrap">
+      <div className="table-wrap purchase-pool-table-wrap">
         <table className="inventory-table">
           <thead>
             <tr>
@@ -316,34 +329,69 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
           <tbody>
             {submittedRecords.map((record) => {
               const imageUrl = record.imageUrl || skuItems.find((item) => item.sku.trim() && item.sku.trim().toUpperCase() === record.sku.trim().toUpperCase())?.imageUrl || '';
+              const childRows = mixedChildRows(record);
               return (
-                <tr key={record.id} className={record.note.trim() ? 'has-note-row' : undefined}>
-                  <td>{imageUrl ? <img className="sku-thumb" src={imageUrl} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
-                  <td>{editableCell(record, 'manufacturerName')}</td>
-                  <td>{editableCell(record, 'sku')}</td>
-                  <td>{editableCell(record, 'productName')}</td>
-                  <td>{editableCell(record, 'englishName')}</td>
-                  <td>{editableCell(record, 'shopName')}</td>
-                  <td>{editableCell(record, 'assignedBuyerName')}</td>
-                  <td>{editableCell(record, 'purchaseBatchDate', 'date')}</td>
-                  <td>{editableCell(record, 'purchaseBatchName')}</td>
-                  <td>{record.purchaseQuantity}</td>
-                  <td>{editableCell(record, 'cartonCount', 'number')}</td>
-                  <td>{editableCell(record, 'unitsPerCarton', 'number')}</td>
-                  <td>{editableCell(record, 'tailQuantity', 'number')}</td>
-                  <td>{packageCountFor(record)}</td>
-                  <td>{purchaseQuantityForRecordSku(record)}</td>
-                  <td>{record.isMixed ? '是' : '否'}</td>
-                  <td>{editableCell(record, 'purchasePrice', 'number')}</td>
-                  <td>{editableCell(record, 'freightCost', 'number')}</td>
-                  <td>{editableCell(record, 'totalAmount', 'number')}</td>
-                  <td>{editableCell(record, 'unitCbm', 'number')}</td>
-                  <td>{editableCell(record, 'totalCbm', 'number')}</td>
-                  <td>{editableCell(record, 'status')}</td>
-                  <td>{editableCell(record, 'loadingType')}</td>
-                  <td>{editableCell(record, 'note')}</td>
-                  <td className="row-actions">{isAdmin && <button type="button" onClick={() => void returnToBuyer(record)}>退回采购人</button>}</td>
-                </tr>
+                <Fragment key={record.id}>
+                  <tr className={record.note.trim() ? 'has-note-row' : undefined}>
+                    <td>{imageUrl ? <img className="sku-thumb" src={imageUrl} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                    <td>{editableCell(record, 'manufacturerName')}</td>
+                    <td>{editableCell(record, 'sku')}</td>
+                    <td>{editableCell(record, 'productName')}</td>
+                    <td>{editableCell(record, 'englishName')}</td>
+                    <td>{editableCell(record, 'shopName')}</td>
+                    <td>{editableCell(record, 'assignedBuyerName')}</td>
+                    <td>{editableCell(record, 'purchaseBatchDate', 'date')}</td>
+                    <td>{editableCell(record, 'purchaseBatchName')}</td>
+                    <td>{record.purchaseQuantity}</td>
+                    <td>{editableCell(record, 'cartonCount', 'number')}</td>
+                    <td>{editableCell(record, 'unitsPerCarton', 'number')}</td>
+                    <td>{editableCell(record, 'tailQuantity', 'number')}</td>
+                    <td>{packageCountFor(record)}</td>
+                    <td>{purchaseQuantityForRecordSku(record)}</td>
+                    <td>{record.isMixed ? '是' : '否'}</td>
+                    <td>{editableCell(record, 'purchasePrice', 'number')}</td>
+                    <td>{editableCell(record, 'freightCost', 'number')}</td>
+                    <td>{editableCell(record, 'totalAmount', 'number')}</td>
+                    <td>{editableCell(record, 'unitCbm', 'number')}</td>
+                    <td>{editableCell(record, 'totalCbm', 'number')}</td>
+                    <td>{editableCell(record, 'status')}</td>
+                    <td>{editableCell(record, 'loadingType')}</td>
+                    <td>{editableCell(record, 'note')}</td>
+                    <td className="row-actions">{isAdmin && <button type="button" onClick={() => void returnToBuyer(record)}>退回采购人</button>}</td>
+                  </tr>
+                  {childRows.map(({ group, line }) => {
+                    const childImageUrl = imageUrlBySku.get(line.sku.trim().toUpperCase()) || '';
+                    return (
+                      <tr className="mixed-child-row" key={`${record.id}:${group.id}:${line.id}`}>
+                        <td>{childImageUrl ? <img className="sku-thumb" src={childImageUrl} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                        <td>{record.manufacturerName}</td>
+                        <td><strong>{line.sku}</strong></td>
+                        <td><strong>{line.productName}</strong></td>
+                        <td />
+                        <td>{record.shopName}</td>
+                        <td>{record.assignedBuyerName}</td>
+                        <td>{record.purchaseBatchDate}</td>
+                        <td>{record.purchaseBatchName}</td>
+                        <td />
+                        <td />
+                        <td />
+                        <td />
+                        <td>{group.cartonCount}</td>
+                        <td>{line.quantity}</td>
+                        <td>混装子行</td>
+                        <td>{line.purchasePrice}</td>
+                        <td />
+                        <td>{line.totalAmount.toFixed(2)}</td>
+                        <td>{line.unitCbm.toFixed(8)}</td>
+                        <td>{line.totalCbm.toFixed(4)}</td>
+                        <td>{record.status}</td>
+                        <td>{record.loadingType || '整柜'}</td>
+                        <td>{`${group.groupName} ${group.cartonCount}件，与 ${record.sku || record.productName || '主商品'} 混装`}</td>
+                        <td />
+                      </tr>
+                    );
+                  })}
+                </Fragment>
               );
             })}
             {submittedRecords.length === 0 && <tr><td className="empty" colSpan={25}>暂无待发送采购订单。</td></tr>}

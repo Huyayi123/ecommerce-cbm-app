@@ -246,7 +246,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       .map((item) => [item.sku.trim().toUpperCase(), item])),
     [skuItems],
   );
-  const unconfirmedVisibleCount = visibleRecords.filter((record) => !record.isConfirmed && record.status === 'pending').length;
+  const submittableAssignedRecords = useMemo(
+    () => assignedRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase'),
+    [assignedRecords],
+  );
+  const unconfirmedVisibleCount = visibleRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase').length;
 
   useEffect(() => {
     if (newOrder.purchaseBatchId || newOrder.purchaseBatchName || newOrder.purchaseBatchDate) return;
@@ -632,8 +636,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
   async function confirmVisiblePurchases() {
     if (isViewer) return;
-    const visibleIds = new Set(visibleRecords.filter((record) => !record.isConfirmed && record.status === 'pending').map((record) => record.id));
-    if (visibleIds.size === 0) return;
+    const visibleTargets = visibleRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase');
+    const targetRecords = visibleTargets.length > 0 ? visibleTargets : submittableAssignedRecords;
+    const visibleIds = new Set(targetRecords.map((record) => record.id));
+    if (visibleIds.size === 0) {
+      setMessage('没有可提交到采购订单池的待采购订单。');
+      return;
+    }
     try {
       const confirmedRecords = records
         .filter((item) => visibleIds.has(item.id))
@@ -893,7 +902,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           )}
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'xlsx', '我的采购订单')} disabled={visibleRecords.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'csv', '我的采购订单')} disabled={visibleRecords.length === 0}>导出 CSV</button>
-          {!isViewer && <button className="primary" type="button" onClick={() => void confirmVisiblePurchases()} disabled={unconfirmedVisibleCount === 0}>提交采购订单池</button>}
+          {!isViewer && <button className="primary" type="button" onClick={() => void confirmVisiblePurchases()}>提交采购订单池{submittableAssignedRecords.length > 0 ? ` (${unconfirmedVisibleCount || submittableAssignedRecords.length})` : ''}</button>}
         </div>
       </div>
       {message && <div className="inline-notice order-save-notice" role="status">{message}</div>}
