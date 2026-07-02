@@ -66,6 +66,15 @@ function quantityFormula(cartonCount: number | null, unitsPerCarton: number | nu
   return tail > 0 ? `${tail}PCS` : '';
 }
 
+function excelFormulaText(value: string): string {
+  return value.replace(/"/g, '""');
+}
+
+function imageFormulaFor(url: string): string {
+  const trimmed = url.trim();
+  return trimmed ? `IMAGE("${excelFormulaText(trimmed)}")` : '';
+}
+
 function applyInspectionStyles(worksheet: XLSX.WorkSheet, rowCount: number, colCount: number): void {
   const thinBorder = { style: 'thin', color: { rgb: '000000' } };
   const border = { top: thinBorder, right: thinBorder, bottom: thinBorder, left: thinBorder };
@@ -128,29 +137,84 @@ export function exportResults(rows: CalculationRow[], format: ExportFormat): voi
 }
 
 export function exportSkuItems(items: SkuItem[], format: ExportFormat): void {
-  const worksheet = XLSX.utils.json_to_sheet(
-    items.map((item) => ({
-      厂家名: item.manufacturerName,
-      SKU: item.sku,
-      产品名称: item.productName,
-      英文名称: item.englishName,
-      图片链接: item.imageUrl,
-      库位: item.storageLocation,
-      采购链接: item.purchaseUrl,
-      采购单价: item.purchasePrice,
-      单品CBM: item.unitCbm,
-      总CBM: item.totalCbm,
-      总数量: item.totalQuantity,
-      店铺: item.shopName,
-      采购人: item.buyerName,
-      是否季节性产品: item.isSeasonal ? '是' : '否',
-      长cm: item.cartonLengthCm,
-      宽cm: item.cartonWidthCm,
-      高cm: item.cartonHeightCm,
-      每箱数量: item.unitsPerCarton,
-      备注: item.notes,
-    })),
-  );
+  const headers = [
+    '厂家名',
+    'SKU',
+    '产品名称',
+    '英文名称',
+    '图片预览',
+    '图片链接',
+    '库位',
+    '采购链接',
+    '采购单价',
+    '单品CBM',
+    '总CBM',
+    '总数量',
+    '店铺',
+    '采购人',
+    '是否季节性产品',
+    '长cm',
+    '宽cm',
+    '高cm',
+    '每箱数量',
+    '备注',
+  ];
+  const rows = items.map((item) => [
+    item.manufacturerName,
+    item.sku,
+    item.productName,
+    item.englishName,
+    format === 'xlsx' ? '' : imageFormulaFor(item.imageUrl),
+    item.imageUrl,
+    item.storageLocation,
+    item.purchaseUrl,
+    item.purchasePrice,
+    item.unitCbm,
+    item.totalCbm,
+    item.totalQuantity,
+    item.shopName,
+    item.buyerName,
+    item.isSeasonal ? '是' : '否',
+    item.cartonLengthCm,
+    item.cartonWidthCm,
+    item.cartonHeightCm,
+    item.unitsPerCarton,
+    item.notes,
+  ]);
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+  if (format === 'xlsx') {
+    items.forEach((item, index) => {
+      const formula = imageFormulaFor(item.imageUrl);
+      if (!formula) return;
+      const address = XLSX.utils.encode_cell({ r: index + 1, c: 4 });
+      worksheet[address] = { t: 's', f: formula, v: '' };
+    });
+    worksheet['!cols'] = [
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 28 },
+      { wch: 28 },
+      { wch: 16 },
+      { wch: 60 },
+      { wch: 16 },
+      { wch: 36 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 8 },
+      { wch: 8 },
+      { wch: 8 },
+      { wch: 10 },
+      { wch: 28 },
+    ];
+    worksheet['!rows'] = [{ hpt: 24 }, ...items.map((item) => ({ hpt: item.imageUrl.trim() ? 72 : 24 }))];
+  }
+
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'SKU体积资料库');
   writeWorkbook(workbook, 'SKU体积资料库', format);
