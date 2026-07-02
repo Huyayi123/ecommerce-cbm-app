@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { AppProfile, PurchasePool, PurchaseRecord, SkuItem } from '../types';
 import { exportBatchPurchaseOrder, exportPurchaseRecords } from '../utils/exporters';
 import { formatErrorMessage } from '../utils/errors';
@@ -26,8 +26,6 @@ type EditablePoolField =
   | 'englishName'
   | 'shopName'
   | 'assignedBuyerName'
-  | 'purchaseBatchDate'
-  | 'purchaseBatchName'
   | 'purchaseQuantity'
   | 'cartonCount'
   | 'unitsPerCarton'
@@ -132,6 +130,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const [selectedPoolId, setSelectedPoolId] = useState('');
   const [message, setMessage] = useState('');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [poolDateDraft, setPoolDateDraft] = useState('');
   const isAdmin = profile.role === 'admin';
   const poolOptions = useMemo(() => buildPoolOptions(records, pools), [pools, records]);
   const options = useMemo(() => {
@@ -143,6 +142,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const poolRecords = activePool?.records.map(withPurchaseTotals) ?? [];
   const submittedRecords = poolRecords.filter((record) => record.status !== 'cancelled');
   const canEditActivePool = isAdmin && !activePool?.isAggregate;
+  const activeContainerDate = poolDateDraft.trim() || activePool?.containerDate || '';
   const imageUrlBySku = useMemo(
     () => new Map(skuItems
       .filter((item) => item.sku.trim())
@@ -154,11 +154,51 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const totalCbm = submittedRecords.reduce((sum, record) => sum + record.totalCbm, 0);
   const totalPackages = submittedRecords.reduce((sum, record) => sum + packageCountFor(record), 0);
 
+  useEffect(() => {
+    setPoolDateDraft(activePool?.containerDate || '');
+  }, [activePool?.containerDate, activePool?.id]);
+
+  async function applyPoolContainerDate() {
+    if (!canEditActivePool || !activePool) {
+      if (activePool?.isAggregate) setMessage('请先选择一个具体采购订单池，再统一修改装柜日期。');
+      return;
+    }
+    const nextDate = poolDateDraft.trim();
+    if (!nextDate) {
+      setMessage('请先填写本池装柜日期。');
+      return;
+    }
+    const nextRecords = submittedRecords.map((record) => withPurchaseTotals({
+      ...record,
+      purchasePoolId: activePool.id,
+      purchasePoolName: activePool.name,
+      purchasePoolDate: nextDate,
+      purchaseBatchId: record.purchaseBatchId || activePool.id,
+      purchaseBatchName: activePool.name,
+      purchaseBatchDate: nextDate,
+      containerDate: nextDate,
+    }));
+    const nextPool: PurchasePool = {
+      ...activePool,
+      containerDate: nextDate,
+      records: nextRecords,
+    };
+    try {
+      await onSavePools([nextPool]);
+      await onSaveRecords(nextRecords);
+      setMessage(`已把本池 ${nextRecords.length} 条订单的装柜日期统一修改为 ${nextDate}。`);
+    } catch (error) {
+      console.error(error);
+      setMessage(`统一装柜日期失败：${formatErrorMessage(error)}`);
+    }
+  }
+
   async function sendPoolToInventory() {
     if (!canEditActivePool || !activePool || submittedRecords.length === 0) {
       if (activePool?.isAggregate) setMessage('请先选择一个具体采购池，再发送到采购 / 在途库存。');
       return;
     }
+    const nextContainerDate = poolDateDraft.trim() || activePool.containerDate;
     const now = new Date().toISOString();
     const nextRecords = submittedRecords.map((record) => withPurchaseTotals({
       ...record,
@@ -167,14 +207,15 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
       status: 'in_transit',
       purchasePoolId: activePool.id,
       purchasePoolName: activePool.name,
-      purchasePoolDate: activePool.containerDate,
+      purchasePoolDate: nextContainerDate,
       purchaseBatchId: record.purchaseBatchId || activePool.id,
-      purchaseBatchName: record.purchaseBatchName || activePool.name,
-      purchaseBatchDate: record.purchaseBatchDate || activePool.containerDate,
-      containerDate: record.containerDate || activePool.containerDate,
+      purchaseBatchName: activePool.name,
+      purchaseBatchDate: nextContainerDate,
+      containerDate: nextContainerDate,
     }));
     const nextPool: PurchasePool = {
       ...activePool,
+      containerDate: nextContainerDate,
       status: 'sent',
       sentBy: profile.id,
       sentAt: now,
@@ -359,6 +400,12 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
           {options.length === 0 && <option value="">暂无待发送采购池</option>}
           {options.map((pool) => <option key={pool.id} value={pool.id}>{pool.containerDate || '未填装柜日期'} {pool.name}（池中 {pool.submittedCount}）</option>)}
         </select></label>
+        <label>本池装柜日期<input type="date" value={poolDateDraft} onChange={(event) => setPoolDateDraft(event.target.value)} disabled={!canEditActivePool} /></label>
+        {isAdmin && (
+          <div className="form-actions">
+            <button type="button" onClick={() => void applyPoolContainerDate()} disabled={!canEditActivePool || !poolDateDraft}>统一本池装柜日期</button>
+          </div>
+        )}
       </div>
 
       <div className="summary-grid inventory-summary">
@@ -373,7 +420,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
         <table className="inventory-table">
           <thead>
             <tr>
-              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>装柜日期</th><th>批次</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
+              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>装柜日期</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -390,8 +437,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
                     <td>{editableCell(record, 'englishName')}</td>
                     <td>{editableCell(record, 'shopName')}</td>
                     <td>{editableCell(record, 'assignedBuyerName')}</td>
-                    <td>{editableCell(record, 'purchaseBatchDate', 'date')}</td>
-                    <td>{editableCell(record, 'purchaseBatchName')}</td>
+                    <td>{activeContainerDate || record.purchaseBatchDate || '-'}</td>
                     <td>{record.purchaseQuantity}</td>
                     <td>{editableCell(record, 'cartonCount', 'number')}</td>
                     <td>{editableCell(record, 'unitsPerCarton', 'number')}</td>
@@ -420,8 +466,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
                         <td />
                         <td>{record.shopName}</td>
                         <td>{record.assignedBuyerName}</td>
-                        <td>{record.purchaseBatchDate}</td>
-                        <td>{record.purchaseBatchName}</td>
+                        <td>{activeContainerDate || record.purchaseBatchDate || '-'}</td>
                         <td />
                         <td />
                         <td />
@@ -444,7 +489,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
                 </Fragment>
               );
             })}
-            {submittedRecords.length === 0 && <tr><td className="empty" colSpan={25}>暂无待发送采购订单。</td></tr>}
+            {submittedRecords.length === 0 && <tr><td className="empty" colSpan={24}>暂无待发送采购订单。</td></tr>}
           </tbody>
         </table>
       </div>

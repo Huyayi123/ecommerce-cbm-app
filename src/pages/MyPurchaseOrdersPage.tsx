@@ -76,8 +76,6 @@ const editableFields = [
   'freightCost',
   'totalAmount',
   'unitCbm',
-  'purchaseBatchName',
-  'purchaseBatchDate',
   'status',
   'loadingType',
   'note',
@@ -125,19 +123,12 @@ function createEmptyDraft(): NewOrderDraft {
   };
 }
 
-function batchDisplay(record: Pick<PurchaseRecord, 'purchaseBatchDate' | 'purchaseBatchName'>): string {
-  const name = record.purchaseBatchName.trim();
-  const date = record.purchaseBatchDate.trim();
-  if (date && name) return `${date} ${name}`;
-  return name || date || '未分配批次';
-}
-
 function poolFromRecord(record: PurchaseRecord, profile: AppProfile): PurchasePool {
-  const id = record.purchasePoolId || record.purchaseBatchId || `${record.purchaseBatchDate}|${record.purchaseBatchName}`;
+  const id = record.purchasePoolId || record.purchaseBatchId || 'current-open-purchase-pool';
   return {
     id,
-    name: record.purchasePoolName || record.purchaseBatchName || `${record.purchaseBatchDate} 批次`,
-    containerDate: record.purchasePoolDate || record.purchaseBatchDate,
+    name: record.purchasePoolName || record.purchaseBatchName || '当前采购订单池',
+    containerDate: record.purchasePoolDate || record.purchaseBatchDate || record.containerDate || '',
     status: 'open',
     createdBy: profile.id,
     createdAt: new Date().toISOString(),
@@ -145,20 +136,6 @@ function poolFromRecord(record: PurchaseRecord, profile: AppProfile): PurchasePo
     sentAt: '',
     note: '',
     records: [],
-  };
-}
-
-function withBatchDefaults(record: PurchaseRecord): PurchaseRecord {
-  const batchDate = record.purchaseBatchDate || record.purchaseDate;
-  const batchName = record.purchaseBatchName || (batchDate ? `${batchDate} 批次` : '');
-  return {
-    ...record,
-    purchaseBatchDate: batchDate,
-    purchaseBatchName: batchName,
-    purchasePoolId: record.purchasePoolId || record.purchaseBatchId,
-    purchasePoolDate: record.purchasePoolDate || batchDate,
-    purchasePoolName: record.purchasePoolName || batchName,
-    poolStatus: record.poolStatus || 'pending_purchase',
   };
 }
 
@@ -216,15 +193,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     )),
     [profile.email, records],
   );
-  const recentBatch = useMemo(() => {
-    return records
-      .filter((record) => record.purchaseBatchId || record.purchaseBatchName || record.purchaseBatchDate)
-      .sort((left, right) => (
-        (right.purchaseBatchDate || '').localeCompare(left.purchaseBatchDate || '')
-        || (right.createdAt || '').localeCompare(left.createdAt || '')
-        || (right.purchaseBatchName || '').localeCompare(left.purchaseBatchName || '')
-      ))[0];
-  }, [records]);
   const visibleRecords = useMemo(
     () => {
       if (statusFilter === 'all') return assignedRecords;
@@ -252,17 +220,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   );
   const unconfirmedVisibleCount = visibleRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase').length;
 
-  useEffect(() => {
-    if (newOrder.purchaseBatchId || newOrder.purchaseBatchName || newOrder.purchaseBatchDate) return;
-    const fallbackDate = today();
-    setNewOrder((current) => ({
-      ...current,
-      purchaseBatchId: '',
-      purchaseBatchName: `${fallbackDate} 批次`,
-      purchaseBatchDate: fallbackDate,
-    }));
-  }, [newOrder.purchaseBatchDate, newOrder.purchaseBatchId, newOrder.purchaseBatchName]);
-
   const newCartonCount = parseNumber(newOrder.cartonCount);
   const newUnitsPerCarton = parseNumber(newOrder.unitsPerCarton);
   const newTailQuantity = parseNumber(newOrder.tailQuantity);
@@ -280,10 +237,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
   function recordWithSkuDefaults(record: PurchaseRecord): PurchaseRecord {
     const skuItem = skuBySku.get(record.sku.trim().toUpperCase());
-    const withBatch = withBatchDefaults(record);
-    if (!skuItem) return withBatch;
+    const withPoolStatus = {
+      ...record,
+      poolStatus: record.poolStatus || 'pending_purchase',
+    };
+    if (!skuItem) return withPoolStatus;
     return {
-      ...withBatch,
+      ...withPoolStatus,
       purchasePrice: record.purchasePrice || skuItem.purchasePrice,
       unitCbm: record.unitCbm || skuItem.unitCbm,
       imageUrl: record.imageUrl || skuItem.imageUrl,
@@ -486,8 +446,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       return;
     }
 
-    const fallbackBatchDate = newOrder.purchaseBatchDate.trim() || today();
-    const fallbackBatchName = newOrder.purchaseBatchName.trim() || `${fallbackBatchDate} 批次`;
     const record: PurchaseRecord = withPurchaseTotals({
       id: crypto.randomUUID(),
       manufacturerName: newOrder.manufacturerName.trim(),
@@ -506,13 +464,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       freightCost: newFreightCost,
       totalAmount: newTotalAmount,
       purchaseDate: today(),
-      purchasePoolId: newOrder.purchaseBatchId.trim(),
-      purchasePoolName: fallbackBatchName,
-      purchasePoolDate: fallbackBatchDate,
+      purchasePoolId: '',
+      purchasePoolName: '',
+      purchasePoolDate: '',
       poolStatus: 'pending_purchase',
-      purchaseBatchId: newOrder.purchaseBatchId.trim(),
-      purchaseBatchName: fallbackBatchName,
-      purchaseBatchDate: fallbackBatchDate,
+      purchaseBatchId: '',
+      purchaseBatchName: '',
+      purchaseBatchDate: '',
       estimatedArrivalDate: '',
       status: newOrder.status,
       unitCbm: newUnitCbm,
@@ -545,13 +503,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     try {
       const imported = (await parsePurchaseRecordsFile(file, profile)).map((record) => withPurchaseTotals({
         ...record,
-        purchasePoolId: record.purchasePoolId || record.purchaseBatchId || recentBatch?.purchasePoolId || recentBatch?.purchaseBatchId || '',
-        purchasePoolName: record.purchasePoolName || record.purchaseBatchName || recentBatch?.purchasePoolName || recentBatch?.purchaseBatchName || '',
-        purchasePoolDate: record.purchasePoolDate || record.purchaseBatchDate || recentBatch?.purchasePoolDate || recentBatch?.purchaseBatchDate || '',
+        purchasePoolId: record.purchasePoolId || record.purchaseBatchId || '',
+        purchasePoolName: record.purchasePoolName || record.purchaseBatchName || '',
+        purchasePoolDate: record.purchasePoolDate || record.purchaseBatchDate || '',
         poolStatus: record.poolStatus || 'pending_purchase',
-        purchaseBatchId: record.purchaseBatchId || recentBatch?.purchaseBatchId || '',
-        purchaseBatchName: record.purchaseBatchName || recentBatch?.purchaseBatchName || '',
-        purchaseBatchDate: record.purchaseBatchDate || recentBatch?.purchaseBatchDate || '',
+        purchaseBatchId: record.purchaseBatchId || '',
+        purchaseBatchName: record.purchaseBatchName || '',
+        purchaseBatchDate: record.purchaseBatchDate || '',
       }));
       if (imported.length === 0) {
         setMessage('没有识别到可导入的采购订单。');
@@ -835,7 +793,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     const normalized = withPurchaseTotals(record);
     return (
       <tr className="packing-detail-row">
-        <td colSpan={24}>
+        <td colSpan={23}>
           <div className="packing-panel">
             <div className="packing-summary">
               <strong>主SKU数量：{purchaseQuantityForRecordSku(normalized)}</strong>
@@ -926,8 +884,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <label>图片链接<input value={newOrder.imageUrl} onChange={(event) => patchNewOrder('imageUrl', event.target.value)} /></label>
           <label>店铺<input value={newOrder.shopName} onChange={(event) => patchNewOrder('shopName', event.target.value)} /></label>
           <label>采购人<input value={profile.buyerName} readOnly /></label>
-          <label>装柜日期<input type="date" value={newOrder.purchaseBatchDate} onChange={(event) => patchNewOrder('purchaseBatchDate', event.target.value)} /></label>
-          <label>批次<input value={newOrder.purchaseBatchName} placeholder={recentBatch ? batchDisplay(recentBatch) : '未分配批次'} onChange={(event) => patchNewOrder('purchaseBatchName', event.target.value)} /></label>
           <label>整箱件数<input type="number" min="0" value={newOrder.cartonCount} onChange={(event) => patchNewOrder('cartonCount', event.target.value)} /></label>
           <label>每箱数量<input type="number" min="0" value={newOrder.unitsPerCarton} placeholder={defaultUnitsPerCartonText(newOrder.sku)} title={defaultUnitsPerCartonText(newOrder.sku)} onChange={(event) => patchNewOrder('unitsPerCarton', event.target.value)} /></label>
           <label>尾箱数量<input type="number" min="0" value={newOrder.tailQuantity} onChange={(event) => patchNewOrder('tailQuantity', event.target.value)} /></label>
@@ -951,7 +907,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <table className="my-orders-table">
           <thead>
             <tr>
-              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>装柜日期</th><th>批次</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
+              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -968,8 +924,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td>{input(normalized, 'englishName')}</td>
                     <td>{input(normalized, 'shopName')}</td>
                     <td>{isAdmin ? input(normalized, 'assignedBuyerName') : normalized.assignedBuyerName}</td>
-                    <td>{input(normalized, 'purchaseBatchDate', 'date')}</td>
-                    <td>{input(normalized, 'purchaseBatchName')}</td>
                     <td>{input(normalized, 'purchaseQuantity', 'number')}</td>
                     <td>{input(normalized, 'cartonCount', 'number')}</td>
                     <td>{input(normalized, 'unitsPerCarton', 'number')}</td>
@@ -999,8 +953,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                       <td />
                       <td>{normalized.shopName}</td>
                       <td>{normalized.assignedBuyerName}</td>
-                      <td>{normalized.purchaseBatchDate}</td>
-                      <td>{normalized.purchaseBatchName}</td>
                       <td />
                       <td />
                       <td />
@@ -1023,7 +975,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 </Fragment>
               );
             })}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={25}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={23}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>
