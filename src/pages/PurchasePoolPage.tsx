@@ -143,6 +143,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const submittedRecords = poolRecords.filter((record) => record.status !== 'cancelled');
   const canEditActivePool = isAdmin && !activePool?.isAggregate;
   const canApplyPoolDate = isAdmin && Boolean(activePool);
+  const canSendActivePool = isAdmin && Boolean(activePool);
   const activeContainerDate = poolDateDraft.trim() || activePool?.containerDate || '';
   const imageUrlBySku = useMemo(
     () => new Map(skuItems
@@ -212,7 +213,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   }
 
   async function sendPoolToInventory() {
-    if (!canEditActivePool || !activePool || submittedRecords.length === 0) {
+    if (!canSendActivePool || !activePool || submittedRecords.length === 0) {
       if (activePool?.isAggregate) setMessage('请先选择一个具体采购池，再发送到采购 / 在途库存。');
       return;
     }
@@ -223,25 +224,45 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
       isConfirmed: true,
       poolStatus: 'sent_to_inventory',
       status: 'in_transit',
-      purchasePoolId: activePool.id,
-      purchasePoolName: activePool.name,
-      purchasePoolDate: nextContainerDate,
-      purchaseBatchId: record.purchaseBatchId || activePool.id,
-      purchaseBatchName: activePool.name,
-      purchaseBatchDate: nextContainerDate,
-      containerDate: nextContainerDate,
+      purchasePoolId: activePool.isAggregate ? record.purchasePoolId : activePool.id,
+      purchasePoolName: activePool.isAggregate ? record.purchasePoolName : activePool.name,
+      purchasePoolDate: nextContainerDate || record.containerDate || record.purchasePoolDate || record.purchaseBatchDate || record.purchaseDate,
+      purchaseBatchId: activePool.isAggregate ? record.purchaseBatchId : record.purchaseBatchId || activePool.id,
+      purchaseBatchName: activePool.isAggregate ? record.purchaseBatchName : activePool.name,
+      purchaseBatchDate: nextContainerDate || record.containerDate || record.purchasePoolDate || record.purchaseBatchDate || record.purchaseDate,
+      containerDate: nextContainerDate || record.containerDate || record.purchasePoolDate || record.purchaseBatchDate || record.purchaseDate,
     }));
-    const nextPool: PurchasePool = {
-      ...activePool,
-      containerDate: nextContainerDate,
-      status: 'sent',
-      sentBy: profile.id,
-      sentAt: now,
-      records: [],
-    };
+    const sentRecordsById = new Set(nextRecords.map((record) => record.id));
+    const existingPoolIds = new Set(pools.map((pool) => pool.id));
+    const nextPools: PurchasePool[] = activePool.isAggregate
+      ? poolOptions.flatMap((pool): PurchasePool[] => {
+        const hasSentRecord = pool.records.some((record) => sentRecordsById.has(record.id));
+        if (!hasSentRecord || !existingPoolIds.has(pool.id)) return [];
+        const remainingRecords = pool.records.filter((record) => !sentRecordsById.has(record.id));
+        return [{
+          id: pool.id,
+          name: pool.name,
+          containerDate: nextContainerDate || pool.containerDate,
+          status: remainingRecords.length > 0 ? pool.status : 'sent',
+          createdBy: pool.createdBy,
+          createdAt: pool.createdAt,
+          sentBy: remainingRecords.length > 0 ? pool.sentBy : profile.id,
+          sentAt: remainingRecords.length > 0 ? pool.sentAt : now,
+          note: pool.note,
+          records: remainingRecords,
+        }];
+      })
+      : [{
+        ...activePool,
+        containerDate: nextContainerDate,
+        status: 'sent',
+        sentBy: profile.id,
+        sentAt: now,
+        records: [],
+      }];
     try {
       await onSaveRecords(nextRecords);
-      await onSavePools([nextPool]);
+      if (nextPools.length > 0) await onSavePools(nextPools);
       setMessage(`已发送 ${nextRecords.length} 条采购订单到采购 / 在途库存。`);
     } catch (error) {
       console.error(error);
