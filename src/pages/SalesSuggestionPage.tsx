@@ -95,6 +95,11 @@ function stockMonthsForMonthlySales(monthlySales: number): number {
   return 2;
 }
 
+function applySuggestedQuantityMinimum(monthlySales: number, quantity: number): number {
+  if (monthlySales > 5 && quantity > 0 && quantity < 30) return 30;
+  return quantity;
+}
+
 function skuKey(value: string): string {
   return value.trim().toUpperCase();
 }
@@ -256,7 +261,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
 
     const applySavedOverride = (row: SalesSuggestionRow): SalesSuggestionRow => {
       const inTransitQuantity = inTransitBySku.get(skuKey(row.sku)) ?? row.inTransitQuantity;
-      const autoSuggestedQuantity = Math.max(round(
+      const rawAutoSuggestedQuantity = Math.max(round(
         row.targetQuantity
         - row.localStockQuantity
         - row.takealotStockQuantity
@@ -264,6 +269,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         - inTransitQuantity,
         2,
       ), 0);
+      const autoSuggestedQuantity = applySuggestedQuantityMinimum(row.monthlySales, rawAutoSuggestedQuantity);
       const override = suggestedQuantityOverrides[row.rowId];
       const suggestedQuantity = override ?? autoSuggestedQuantity;
       const ratio = row.suggestedQuantity > 0 ? suggestedQuantity / row.suggestedQuantity : 0;
@@ -319,10 +325,11 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       const inTransitQuantity = inTransitBySku.get(key) ?? 0;
       const directTarget = selectedStore === 'Aicom' ? aicomDirectTargetQuantity(newProductRank, rawMonthlySales) : null;
       const targetQuantity = directTarget?.targetQuantity ?? calculatedTargetQuantity;
-      const autoSuggestedQuantity = Math.max(round(
+      const rawAutoSuggestedQuantity = Math.max(round(
         targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity,
         2,
       ), 0);
+      const autoSuggestedQuantity = applySuggestedQuantityMinimum(monthlySales, rawAutoSuggestedQuantity);
       const suggestedQuantity = suggestedQuantityOverrides[row.rowId] ?? autoSuggestedQuantity;
       const estimatedCartons =
         skuItem && skuItem.unitsPerCarton > 0 ? round(suggestedQuantity / skuItem.unitsPerCarton, 2) : null;
