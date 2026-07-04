@@ -4,6 +4,7 @@ import type { PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from '.
 import { parseSalesFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
 import { effectivePurchaseQuantity, isInventoryRecord, withPurchaseTotals } from '../utils/purchaseRecords';
+import { stockMonthsForMonthlySales, stockMonthsRuleDescription } from '../utils/stockMonths';
 import { fetchTakealotInventory, type TakealotInventoryRow } from '../utils/takealot';
 
 type Props = {
@@ -87,12 +88,6 @@ function rawField(row: TakealotInventoryRow, keys: string[]): string {
     if (value !== undefined && value !== null && String(value).trim()) return String(value);
   }
   return '';
-}
-
-function stockMonthsForMonthlySales(monthlySales: number): number {
-  if (monthlySales > 50) return 4;
-  if (monthlySales >= 21) return 3;
-  return 2;
 }
 
 function applySuggestedQuantityMinimum(monthlySales: number, quantity: number): number {
@@ -521,7 +516,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
           </select>
         </label>
         <button type="button" onClick={() => void syncTakealotInventory()} disabled={!selectedStore || isSyncingTakealot}>同步 Takealot 库存</button>
-        <span>{fileName ? `当前文件：${fileName}` : '备货规则：月销量 > 50 用 4 个月，21-50 用 3 个月，20 及以下用 2 个月'}</span>
+        <span>{fileName ? `当前文件：${fileName}` : stockMonthsRuleDescription()}</span>
       </div>
       {syncMessage && <div className="inline-notice">{syncMessage}</div>}
 
