@@ -99,6 +99,10 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function compareByStableOrder(orderById: Map<string, number>, left: PurchaseRecord, right: PurchaseRecord): number {
+  return (orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER);
+}
+
 function createEmptyDraft(): NewOrderDraft {
   return {
     manufacturerName: '',
@@ -183,15 +187,23 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollRef = useRef<ScrollSnapshot | null>(null);
   const mixedAutoSaveTimer = useRef<number | null>(null);
+  const recordOrderRef = useRef(new Map<string, number>());
   const [statusFilter, setStatusFilter] = useState<OrderFilterStatus>('pending');
   const [orderSearch, setOrderSearch] = useState('');
   const isAdmin = profile.role === 'admin';
   const isViewer = profile.role === 'viewer';
   const assignedRecords = useMemo(
-    () => records.filter((record) => (
-      record.status !== 'cancelled'
-      && record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()
-    )),
+    () => {
+      const assigned = records.filter((record) => (
+        record.status !== 'cancelled'
+        && record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()
+      ));
+      const orderById = recordOrderRef.current;
+      for (const record of assigned) {
+        if (!orderById.has(record.id)) orderById.set(record.id, orderById.size);
+      }
+      return [...assigned].sort((left, right) => compareByStableOrder(orderById, left, right));
+    },
     [profile.email, records],
   );
   const imageUrlBySku = useMemo(

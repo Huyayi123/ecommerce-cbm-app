@@ -579,7 +579,12 @@ export async function replaceSkuItems(items: SkuItem[]): Promise<void> {
 }
 
 export async function fetchPurchaseRecords(): Promise<PurchaseRecord[]> {
-  const { data, error } = await requireSupabase().from('purchase_records').select('*').order('purchase_date', { ascending: false });
+  const { data, error } = await requireSupabase()
+    .from('purchase_records')
+    .select('*')
+    .order('purchase_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: true });
   if (error) throwSupabaseError(error);
   return (data ?? []).map((row) => mapPurchaseRecord(row as PurchaseRecordRow));
 }
