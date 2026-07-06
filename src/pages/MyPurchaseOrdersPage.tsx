@@ -184,6 +184,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const pendingScrollRef = useRef<ScrollSnapshot | null>(null);
   const mixedAutoSaveTimer = useRef<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<OrderFilterStatus>('pending');
+  const [orderSearch, setOrderSearch] = useState('');
   const isAdmin = profile.role === 'admin';
   const isViewer = profile.role === 'viewer';
   const assignedRecords = useMemo(
@@ -192,15 +193,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       && record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()
     )),
     [profile.email, records],
-  );
-  const visibleRecords = useMemo(
-    () => {
-      if (statusFilter === 'all') return assignedRecords;
-      if (statusFilter === 'submitted_to_pool') return assignedRecords.filter((record) => record.poolStatus === 'submitted_to_pool');
-      if (statusFilter === 'pending') return assignedRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase');
-      return assignedRecords.filter((record) => record.status === statusFilter);
-    },
-    [assignedRecords, statusFilter],
   );
   const imageUrlBySku = useMemo(
     () => new Map(skuItems
@@ -213,6 +205,32 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       .filter((item) => item.sku.trim() && !isNewSkuValue(item.sku))
       .map((item) => [item.sku.trim().toUpperCase(), item])),
     [skuItems],
+  );
+  const visibleRecords = useMemo(
+    () => {
+      let statusRecords = assignedRecords;
+      if (statusFilter === 'submitted_to_pool') {
+        statusRecords = assignedRecords.filter((record) => record.poolStatus === 'submitted_to_pool');
+      } else if (statusFilter === 'pending') {
+        statusRecords = assignedRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase');
+      } else if (statusFilter !== 'all') {
+        statusRecords = assignedRecords.filter((record) => record.status === statusFilter);
+      }
+
+      const search = orderSearch.trim().toLowerCase();
+      if (!search) return statusRecords;
+      return statusRecords.filter((record) => {
+        const skuItem = skuBySku.get(record.sku.trim().toUpperCase());
+        const searchable = [
+          record.sku,
+          record.manufacturerName,
+          skuItem?.sku ?? '',
+          skuItem?.manufacturerName ?? '',
+        ].join(' ').toLowerCase();
+        return searchable.includes(search);
+      });
+    },
+    [assignedRecords, orderSearch, skuBySku, statusFilter],
   );
   const submittableAssignedRecords = useMemo(
     () => assignedRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase'),
@@ -871,6 +889,14 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as OrderFilterStatus)}>
             {statusFilterOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
+        </label>
+        <label>
+          搜索
+          <input
+            value={orderSearch}
+            placeholder="搜索 SKU、厂家名"
+            onChange={(event) => setOrderSearch(event.target.value)}
+          />
         </label>
         <span>当前 {visibleRecords.length} 条 / 我的订单 {assignedRecords.length} 条</span>
       </div>

@@ -217,6 +217,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
           const mixedSearchable = record.mixedGroups.flatMap((group) => group.lines.map((line) => `${line.sku} ${line.productName}`)).join(' ');
           const searchable = [
             record.sku,
+            record.manufacturerName,
             record.productName,
             record.buyerName,
             record.assignedBuyerName,
@@ -462,7 +463,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
         <div className="inventory-search-bar">
           <input
             value={searchDraft}
-            placeholder="搜索 SKU、中文名称、采购人、总重量"
+            placeholder="搜索 SKU、中文名称、厂家名、采购人、总重量"
             onChange={(event) => setSearchDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') setFilters((current) => ({ ...current, search: searchDraft }));
