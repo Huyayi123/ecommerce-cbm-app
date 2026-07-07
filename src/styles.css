@@ -920,6 +920,17 @@ th.sticky-col {
   background: #f8fafb;
 }
 
+.order-metrics-row {
+  display: flex;
+  gap: 12px;
+  margin: 12px 0 8px;
+}
+
+.order-cbm-metric {
+  width: 220px;
+  min-height: 96px;
+}
+
 .order-filter-bar label {
   display: grid;
   gap: 6px;

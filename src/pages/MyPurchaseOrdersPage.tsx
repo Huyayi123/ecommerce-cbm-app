@@ -260,6 +260,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const calculatedNewTotalAmount = round(newQuantity * newPrice + newFreightCost, 2);
   const newTotalAmount = newOrder.totalAmount.trim() ? parseNumber(newOrder.totalAmount) : calculatedNewTotalAmount;
   const newTotalCbm = round(newQuantity * newUnitCbm, 4);
+  const visibleTotalCbm = round(
+    visibleRecords.reduce((sum, record) => sum + withPurchaseTotals(recordWithSkuDefaults(record)).totalCbm, 0),
+    4,
+  );
 
   function imageUrlFor(record: PurchaseRecord): string {
     return record.imageUrl || imageUrlBySku.get(record.sku.trim().toUpperCase()) || '';
@@ -894,6 +898,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         </div>
       </div>
       {message && <div className="inline-notice order-save-notice" role="status">{message}</div>}
+
+      <div className="order-metrics-row">
+        <div className="metric order-cbm-metric">
+          <span>当前总立方数</span>
+          <strong>{visibleTotalCbm.toFixed(4)} CBM</strong>
+        </div>
+      </div>
 
       <div className="order-filter-bar">
         <label>
