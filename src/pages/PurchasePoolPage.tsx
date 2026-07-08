@@ -459,7 +459,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
         <table className="inventory-table">
           <thead>
             <tr>
-              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>装柜日期</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
+              <th className="image-sticky-col">图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>装柜日期</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -469,7 +469,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
               return (
                 <Fragment key={record.id}>
                   <tr className={record.note.trim() ? 'has-note-row' : undefined}>
-                    <td>{imageUrl ? <img className="sku-thumb" src={imageUrl} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                    <td className="image-sticky-col">{imageUrl ? <img className="sku-thumb" src={imageUrl} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                     <td>{editableCell(record, 'manufacturerName')}</td>
                     <td>{editableCell(record, 'sku')}</td>
                     <td>{editableCell(record, 'productName')}</td>
@@ -498,7 +498,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
                     const childImageUrl = imageUrlBySku.get(line.sku.trim().toUpperCase()) || '';
                     return (
                       <tr className="mixed-child-row" key={`${record.id}:${group.id}:${line.id}`}>
-                        <td>{childImageUrl ? <img className="sku-thumb" src={childImageUrl} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                        <td className="image-sticky-col">{childImageUrl ? <img className="sku-thumb" src={childImageUrl} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                         <td>{record.manufacturerName}</td>
                         <td><strong>{line.sku}</strong></td>
                         <td><strong>{line.productName}</strong></td>

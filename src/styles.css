@@ -789,6 +789,33 @@ button.danger,
   background-clip: padding-box;
 }
 
+.my-orders-table .image-sticky-col,
+.purchase-pool-table-wrap .image-sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  min-width: 82px;
+  max-width: 82px;
+  background: #ffffff;
+  box-shadow: 1px 0 0 #dce4ea;
+  background-clip: padding-box;
+}
+
+.my-orders-table th.image-sticky-col,
+.purchase-pool-table-wrap th.image-sticky-col {
+  z-index: 8;
+  background: #eaf2f6;
+}
+
+.my-orders-table .mixed-child-row .image-sticky-col,
+.purchase-pool-table-wrap .mixed-child-row .image-sticky-col {
+  background: #f8fbfc;
+}
+
+.purchase-pool-table-wrap tr.has-note-row .image-sticky-col {
+  background: #fff8df;
+}
+
 .sku-table-wrap {
   max-height: 620px;
 }

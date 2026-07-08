@@ -962,7 +962,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <table className="my-orders-table">
           <thead>
             <tr>
-              <th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
+              <th className="image-sticky-col">图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -972,7 +972,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
               return (
                 <Fragment key={record.id}>
                   <tr>
-                    <td>{imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                    <td className="image-sticky-col">{imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                     <td>{input(normalized, 'manufacturerName')}</td>
                     <td>{isAdmin ? input(normalized, 'sku') : normalized.sku}</td>
                     <td>{input(normalized, 'productName')}</td>
@@ -1001,7 +1001,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 	                  </tr>
                   {childRows.map(({ group, line }) => (
                     <tr className="mixed-child-row" key={`${normalized.id}:${group.id}:${line.id}`}>
-                      <td>{imageUrlBySku.get(line.sku.trim().toUpperCase()) ? <img className="sku-thumb" src={imageUrlBySku.get(line.sku.trim().toUpperCase())} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                      <td className="image-sticky-col">{imageUrlBySku.get(line.sku.trim().toUpperCase()) ? <img className="sku-thumb" src={imageUrlBySku.get(line.sku.trim().toUpperCase())} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                       <td>{normalized.manufacturerName}</td>
                       <td><strong>{line.sku}</strong></td>
                       <td><strong>{line.productName}</strong></td>
