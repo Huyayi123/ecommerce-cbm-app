@@ -99,8 +99,19 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function compareByStableOrder(orderById: Map<string, number>, left: PurchaseRecord, right: PurchaseRecord): number {
-  return (orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER);
+function compareNullableText(left: string, right: string): number {
+  return left.localeCompare(right, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' });
+}
+
+function compareMyPurchaseOrders(left: PurchaseRecord, right: PurchaseRecord): number {
+  const quantityDiff = right.purchaseQuantity - left.purchaseQuantity;
+  if (quantityDiff !== 0) return quantityDiff;
+
+  const leftSku = left.sku || '';
+  const rightSku = right.sku || '';
+  if (leftSku !== rightSku) return compareNullableText(leftSku, rightSku);
+
+  return compareNullableText(left.id, right.id);
 }
 
 function createEmptyDraft(): NewOrderDraft {
@@ -187,7 +198,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollRef = useRef<ScrollSnapshot | null>(null);
   const mixedAutoSaveTimer = useRef<number | null>(null);
-  const recordOrderRef = useRef(new Map<string, number>());
   const [statusFilter, setStatusFilter] = useState<OrderFilterStatus>('pending');
   const [orderSearch, setOrderSearch] = useState('');
   const isAdmin = profile.role === 'admin';
@@ -198,11 +208,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         record.status !== 'cancelled'
         && record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()
       ));
-      const orderById = recordOrderRef.current;
-      for (const record of assigned) {
-        if (!orderById.has(record.id)) orderById.set(record.id, orderById.size);
-      }
-      return [...assigned].sort((left, right) => compareByStableOrder(orderById, left, right));
+      return [...assigned].sort(compareMyPurchaseOrders);
     },
     [profile.email, records],
   );
