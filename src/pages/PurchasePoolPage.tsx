@@ -339,10 +339,12 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   }
 
   async function returnToBuyer(record: PurchaseRecord) {
-    if (!canEditActivePool || !activePool) {
-      if (activePool?.isAggregate) setMessage('请先选择一个具体采购池，再退回采购人。');
+    if (!isAdmin || !activePool) {
       return;
     }
+    const sourcePool = activePool.isAggregate
+      ? poolOptions.find((pool) => pool.records.some((item) => item.id === record.id))
+      : activePool;
     const nextRecord = withPurchaseTotals({
       ...record,
       isConfirmed: false,
@@ -351,22 +353,12 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
       poolStatus: 'pending_purchase',
     });
     try {
-      const nextPool: PurchasePool = activePool ? {
-        ...activePool,
-        records: activePool.records.filter((item) => item.id !== record.id),
-      } : {
-        id: record.purchasePoolId || record.purchaseBatchId,
-        name: record.purchasePoolName || record.purchaseBatchName,
-        containerDate: record.purchasePoolDate || record.purchaseBatchDate,
-        status: 'open',
-        createdBy: '',
-        createdAt: '',
-        sentBy: '',
-        sentAt: '',
-        note: '',
-        records: [],
-      };
-      await onSavePools([nextPool]);
+      if (sourcePool) {
+        await onSavePools([{
+          ...sourcePool,
+          records: sourcePool.records.filter((item) => item.id !== record.id),
+        }]);
+      }
       await onSaveRecords([nextRecord]);
       setMessage(`已退回 ${record.sku || record.productName} 给采购人。`);
     } catch (error) {
