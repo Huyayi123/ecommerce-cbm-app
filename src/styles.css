@@ -693,6 +693,13 @@ button.danger,
   font-weight: 600;
 }
 
+.pin-select {
+  left: 0;
+  min-width: 42px;
+  max-width: 42px;
+  text-align: center;
+}
+
 .pin-image {
   left: 42px;
   min-width: 82px;

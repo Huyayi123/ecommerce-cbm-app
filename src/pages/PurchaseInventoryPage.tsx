@@ -513,7 +513,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
           <table className="inventory-table">
             <thead>
               <tr>
-                <th>选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>批次</th><th>批次日期</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>是否混装</th><th>混装组</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
+                <th className="pin-col pin-select">选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>批次</th><th>批次日期</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>是否混装</th><th>混装组</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -523,7 +523,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
                 return (
                   <Fragment key={record.id}>
                     <tr className={normalized.note.trim() ? 'has-note-row' : undefined}>
-                  <td><input type="checkbox" checked={selectedIds.has(normalized.id)} onChange={() => toggleSelection(normalized.id)} /></td>
+                  <td className="pin-col pin-select"><input type="checkbox" checked={selectedIds.has(normalized.id)} onChange={() => toggleSelection(normalized.id)} /></td>
                   <td className="pin-col pin-image">{imageUrlFor(normalized) ? <img className="sku-thumb" src={imageUrlFor(normalized)} alt={normalized.productName || normalized.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                   <td className="pin-col pin-manufacturer"><span className="cell-ellipsis" title={normalized.manufacturerName}>{normalized.manufacturerName}</span></td>
                   <td className="pin-col pin-sku"><span className="cell-ellipsis" title={normalized.sku}>{normalized.sku}</span></td>
@@ -559,7 +559,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
                       const childImageUrl = imageUrlForMixedLine(line);
                       return (
                         <tr className="mixed-child-row" key={`${normalized.id}:${group.id}:${line.id}`}>
-                          <td />
+                          <td className="pin-col pin-select" />
                           <td className="pin-col pin-image">{childImageUrl ? <img className="sku-thumb" src={childImageUrl} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                           <td className="pin-col pin-manufacturer"><span className="cell-ellipsis" title={normalized.manufacturerName}>{normalized.manufacturerName}</span></td>
                           <td className="pin-col pin-sku"><span className="cell-ellipsis" title={line.sku}>{line.sku}</span></td>
