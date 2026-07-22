@@ -602,3 +602,78 @@ add column if not exists storage_location text;
 
 alter table public.sku_items
 add column if not exists purchase_url text;
+
+-- 2026-07-22 广告分析：只保留最近三次分析结果，明细随 run 删除。
+create table if not exists public.ad_analysis_runs (
+  id text primary key,
+  created_at timestamptz not null default now(),
+  created_by text,
+  source_file_name text,
+  row_count numeric default 0,
+  summary jsonb not null default '{}'::jsonb
+);
+
+create table if not exists public.ad_analysis_rows (
+  id text primary key,
+  run_id text not null references public.ad_analysis_runs(id) on delete cascade,
+  sku text,
+  product_name text,
+  shop_name text,
+  image_url text,
+  ad_spend numeric default 0,
+  ad_sales_quantity numeric default 0,
+  roas numeric,
+  sale_price numeric default 0,
+  platform_fee numeric default 0,
+  platform_fee_source text,
+  purchase_cost_rmb numeric default 0,
+  purchase_cost_zar numeric default 0,
+  unit_cbm numeric default 0,
+  sea_freight_cost numeric default 0,
+  warehouse_fee numeric default 0,
+  ad_cost_per_sale numeric default 0,
+  profit_rate numeric,
+  sku_rank numeric,
+  product_age_status text,
+  strategy_label text,
+  strategy_name text,
+  action_suggestion text,
+  messages text[] default '{}'
+);
+
+create index if not exists ad_analysis_runs_created_idx
+on public.ad_analysis_runs (created_at desc);
+
+create index if not exists ad_analysis_rows_run_idx
+on public.ad_analysis_rows (run_id);
+
+alter table public.ad_analysis_runs enable row level security;
+alter table public.ad_analysis_rows enable row level security;
+
+drop policy if exists "shared select ad analysis runs" on public.ad_analysis_runs;
+create policy "shared select ad analysis runs" on public.ad_analysis_runs for select to authenticated using (true);
+drop policy if exists "editor insert ad analysis runs" on public.ad_analysis_runs;
+create policy "editor insert ad analysis runs" on public.ad_analysis_runs for insert to authenticated with check (public.is_editor());
+drop policy if exists "editor update ad analysis runs" on public.ad_analysis_runs;
+create policy "editor update ad analysis runs" on public.ad_analysis_runs for update to authenticated using (public.is_editor()) with check (public.is_editor());
+drop policy if exists "editor delete ad analysis runs" on public.ad_analysis_runs;
+create policy "editor delete ad analysis runs" on public.ad_analysis_runs for delete to authenticated using (public.is_editor());
+
+drop policy if exists "shared select ad analysis rows" on public.ad_analysis_rows;
+create policy "shared select ad analysis rows" on public.ad_analysis_rows for select to authenticated using (true);
+drop policy if exists "editor insert ad analysis rows" on public.ad_analysis_rows;
+create policy "editor insert ad analysis rows" on public.ad_analysis_rows for insert to authenticated with check (public.is_editor());
+drop policy if exists "editor update ad analysis rows" on public.ad_analysis_rows;
+create policy "editor update ad analysis rows" on public.ad_analysis_rows for update to authenticated using (public.is_editor()) with check (public.is_editor());
+drop policy if exists "editor delete ad analysis rows" on public.ad_analysis_rows;
+create policy "editor delete ad analysis rows" on public.ad_analysis_rows for delete to authenticated using (public.is_editor());
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'ad_analysis_runs'
+  ) then
+    alter publication supabase_realtime add table public.ad_analysis_runs;
+  end if;
+end $$;

@@ -47,6 +47,29 @@ const PURCHASE_RECORD_HEADERS = {
   note: ['备注', 'remark', 'notes', 'note'],
 } as const;
 
+const AD_REPORT_HEADERS = {
+  sku: ['SKU', 'sku', 'Seller SKU', 'seller_sku', 'Merchant SKU', 'merchant_sku', '货号', '商品编码'],
+  productName: ['产品名称', '商品名称', 'Title', 'title', 'Product', 'product_name', 'Campaign Product'],
+  shopName: ['店铺', '店铺名称', 'shop_name', 'Store', 'store'],
+  imageUrl: ['图片', '图片链接', 'image_url', 'imageUrl', 'Image'],
+  adSpend: ['广告花费', '广告开销', 'Spend', 'spend', 'Cost', 'cost', '广告费用'],
+  adSalesQuantity: ['销量', '广告销量', '销售数量', 'Orders', 'orders', 'Units Sold', 'units_sold', 'Sales Quantity'],
+  roas: ['ROAS', 'roas', 'RoAS', 'Return on Ad Spend'],
+} as const;
+
+export type AdReportImportRow = {
+  rowId: string;
+  rowNumber: number;
+  sku: string;
+  productName: string;
+  shopName: string;
+  imageUrl: string;
+  adSpend: number;
+  adSalesQuantity: number;
+  roas: number | null;
+  raw: Record<string, unknown>;
+};
+
 function buildHeaderMap(headers: string[]): Map<string, string> {
   const headerMap = new Map<string, string>();
   for (const header of headers) {
@@ -233,6 +256,33 @@ function parseMixedGroups(value: unknown): MixedCartonGroup[] {
 
 function pickPurchaseRecordField(row: Record<string, unknown>, headers: string[], field: keyof typeof PURCHASE_RECORD_HEADERS): unknown {
   return pickField(row, headers, PURCHASE_RECORD_HEADERS[field]);
+}
+
+function pickAdReportField(row: Record<string, unknown>, headers: string[], field: keyof typeof AD_REPORT_HEADERS): unknown {
+  return pickField(row, headers, AD_REPORT_HEADERS[field]);
+}
+
+export async function parseAdReportFile(file: File): Promise<AdReportImportRow[]> {
+  const { headers, rows } = readRows(await file.arrayBuffer(), file.name);
+
+  return rows.flatMap((row, index) => {
+    const sku = String(pickAdReportField(row, headers, 'sku') ?? '').trim();
+    const productName = String(pickAdReportField(row, headers, 'productName') ?? '').trim();
+    if (!sku && !productName) return [];
+
+    return [{
+      rowId: `${Date.now()}-ad-${index}`,
+      rowNumber: index + 2,
+      sku,
+      productName,
+      shopName: String(pickAdReportField(row, headers, 'shopName') ?? '').trim(),
+      imageUrl: String(pickAdReportField(row, headers, 'imageUrl') ?? '').trim(),
+      adSpend: toNumber(pickAdReportField(row, headers, 'adSpend')) ?? 0,
+      adSalesQuantity: toNumber(pickAdReportField(row, headers, 'adSalesQuantity')) ?? 0,
+      roas: toNumber(pickAdReportField(row, headers, 'roas')),
+      raw: row,
+    }];
+  });
 }
 
 export async function parsePurchaseRecordsFile(file: File, profile: AppProfile): Promise<PurchaseRecord[]> {

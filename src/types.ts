@@ -213,6 +213,46 @@ export type RepricingAlert = {
   updatedAt: string;
 };
 
+export type AdStrategyLabel = 'no_profit' | 'green_star' | 'yellow_cow' | 'orange_question' | 'loss_product' | 'new_test' | 'new_optimize' | 'missing_data';
+
+export type AdAnalysisRow = {
+  id: string;
+  runId: string;
+  sku: string;
+  productName: string;
+  shopName: string;
+  imageUrl: string;
+  adSpend: number;
+  adSalesQuantity: number;
+  roas: number | null;
+  salePrice: number;
+  platformFee: number;
+  platformFeeSource: 'api' | 'fallback' | 'missing';
+  purchaseCostRmb: number;
+  purchaseCostZar: number;
+  unitCbm: number;
+  seaFreightCost: number;
+  warehouseFee: number;
+  adCostPerSale: number;
+  profitRate: number | null;
+  skuRank: number | null;
+  productAgeStatus: 'protection' | 'new' | 'old' | 'unknown';
+  strategyLabel: AdStrategyLabel;
+  strategyName: string;
+  actionSuggestion: string;
+  messages: string[];
+};
+
+export type AdAnalysisRun = {
+  id: string;
+  createdAt: string;
+  createdBy: string;
+  sourceFileName: string;
+  rowCount: number;
+  summary: Record<string, number>;
+  rows: AdAnalysisRow[];
+};
+
 export type AuditLog = {
   id: string;
   actorId: string;

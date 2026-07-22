@@ -4,13 +4,14 @@ import { PasswordResetPanel } from './components/PasswordResetPanel';
 import { ProfileBinding } from './components/ProfileBinding';
 import { SkuManager } from './components/SkuManager';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
+import { AdAnalysisPage } from './pages/AdAnalysisPage';
 import { ContainerCalculatorPage } from './pages/ContainerCalculatorPage';
 import { MyPurchaseOrdersPage } from './pages/MyPurchaseOrdersPage';
 import { PurchasePoolPage } from './pages/PurchasePoolPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
 import { RepricingAlertsPage } from './pages/RepricingAlertsPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
-import type { AppProfile, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
+import type { AdAnalysisRun, AppProfile, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
 import {
   appendPurchaseRecordsToPool,
   deletePurchaseRecords,
@@ -19,6 +20,7 @@ import {
   fetchProfiles,
   fetchPurchasePools,
   fetchPurchaseRecords,
+  fetchAdAnalysisRuns,
   fetchRepricingAlerts,
   fetchSalesSuggestions,
   fetchSkuItems,
@@ -28,6 +30,7 @@ import {
   replaceSkuItems,
   subscribeToSharedTables,
   updateProfileBinding,
+  saveAdAnalysisRun,
   upsertPurchasePools,
   upsertPurchaseRecords,
 } from './utils/cloudStorage';
@@ -35,9 +38,11 @@ import { formatErrorMessage } from './utils/errors';
 import { canDelete, canEdit } from './utils/permissions';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing';
+type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'ad-analysis';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
+  { key: 'repricing', label: '价格预警' },
+  { key: 'ad-analysis', label: '广告分析' },
   { key: 'suggestions', label: '月销量采购建议' },
   { key: 'calculator', label: '装柜计算' },
   { key: 'my-orders', label: '我的采购订单' },
@@ -46,10 +51,8 @@ const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'sku', label: 'SKU 资料库' },
 ];
 
-navItems.unshift({ key: 'repricing', label: '价格预警' });
-
 function isOptionalProfileLoadError(index: number, error: unknown): boolean {
-  return (index === 3 || index === 4 || index === 5) && /failed to fetch|fetch/i.test(formatErrorMessage(error));
+  return (index === 3 || index === 4 || index === 5 || index === 7) && /failed to fetch|fetch|广告分析表/i.test(formatErrorMessage(error));
 }
 
 function App() {
@@ -63,6 +66,7 @@ function App() {
   const [purchasePools, setPurchasePools] = useState<PurchasePool[]>([]);
   const [savedSalesSuggestions, setSavedSalesSuggestions] = useState<SalesSuggestionRow[]>([]);
   const [repricingAlerts, setRepricingAlerts] = useState<RepricingAlert[]>([]);
+  const [adAnalysisRuns, setAdAnalysisRuns] = useState<AdAnalysisRun[]>([]);
   const [profiles, setProfiles] = useState<AppProfile[]>([]);
   const [fileName, setFileName] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
@@ -82,6 +86,7 @@ function App() {
       fetchSalesSuggestions(),
       fetchRepricingAlerts(),
       fetchPurchasePools(),
+      fetchAdAnalysisRuns(),
     ]);
     const errors = results.flatMap((result, index) => {
       if (result.status !== 'rejected') return [];
@@ -101,6 +106,7 @@ function App() {
     if (results[4].status === 'fulfilled') setSavedSalesSuggestions(results[4].value);
     if (results[5].status === 'fulfilled') setRepricingAlerts(results[5].value);
     if (results[6].status === 'fulfilled') setPurchasePools(results[6].value);
+    if (results[7].status === 'fulfilled') setAdAnalysisRuns(results[7].value);
 
     if (errors.length > 0) {
       setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
@@ -158,6 +164,7 @@ function App() {
         setPurchasePools([]);
         setProfiles([]);
         setRepricingAlerts([]);
+        setAdAnalysisRuns([]);
         return;
       }
       void fetchProfile(user.id, user.email ?? '').then(setProfile);
@@ -399,10 +406,29 @@ function App() {
 
   return (
     <main className="app-shell">
+      <aside className="side-nav" aria-label="主导航">
+        <div className="side-nav-title">
+          <strong>电商工作台</strong>
+          <span>采购 · 库存 · 广告</span>
+        </div>
+        <nav>
+          {navItems.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={activePage === item.key ? 'active' : ''}
+              onClick={() => setActivePage(item.key)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </aside>
+      <div className="app-content">
       <header className="app-header">
         <div>
           <h1>电商采购装柜工作台</h1>
-          <p>维护 SKU 体积资料、计算装柜 CBM、管理海运在途采购，并按月销量生成采购建议。</p>
+          <p>维护 SKU 体积资料，计算装柜 CBM，管理海运在途采购，并生成采购和广告建议。</p>
         </div>
         <div className="user-panel">
           <span>{profile.displayName}</span>
@@ -434,19 +460,6 @@ function App() {
           发现 {activeRepricingAlerts.length} 个确定被跟价商品，点击查看
         </button>
       )}
-
-      <nav className="top-nav" aria-label="主导航">
-        {navItems.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={activePage === item.key ? 'active' : ''}
-            onClick={() => setActivePage(item.key)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
 
       {statusMessage && <div className="inline-notice">{statusMessage}</div>}
 
@@ -525,6 +538,16 @@ function App() {
       {activePage === 'repricing' && (
         <RepricingAlertsPage alerts={repricingAlerts} skuItems={skuItems} onRefresh={loadCloudData} />
       )}
+      {activePage === 'ad-analysis' && (
+        <AdAnalysisPage
+          skuItems={skuItems}
+          profile={profile}
+          savedRuns={adAnalysisRuns}
+          onSaveRun={saveAdAnalysisRun}
+          onRefresh={loadCloudData}
+        />
+      )}
+      </div>
     </main>
   );
 }

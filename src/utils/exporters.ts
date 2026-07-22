@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
-import type { AuditLog, CalculationRow, PurchaseRecord, SkuItem } from '../types';
+import type { AdAnalysisRow, AuditLog, CalculationRow, PurchaseRecord, SkuItem } from '../types';
 import { mixedGroupsSummary, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
@@ -307,6 +307,36 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, moduleName);
   writeWorkbook(workbook, moduleName, format);
+}
+
+export function exportAdAnalysisRows(rows: AdAnalysisRow[], format: ExportFormat): void {
+  const worksheet = XLSX.utils.json_to_sheet(rows.map((row) => ({
+    店铺: row.shopName,
+    SKU: row.sku,
+    产品名称: row.productName,
+    图片链接: row.imageUrl,
+    广告花费: row.adSpend,
+    广告销量: row.adSalesQuantity,
+    ROAS: row.roas ?? '',
+    销售单价兰特: row.salePrice,
+    采购成本人民币: row.purchaseCostRmb,
+    采购成本兰特: row.purchaseCostZar,
+    平台税费: row.platformFee,
+    平台税费来源: row.platformFeeSource === 'api' ? 'API' : row.platformFeeSource === 'fallback' ? '售价40%' : '缺失',
+    单品CBM: row.unitCbm,
+    海运费: row.seaFreightCost,
+    送仓费: row.warehouseFee,
+    单次广告成本: row.adCostPerSale,
+    利润率: row.profitRate ?? '',
+    SKU排名: row.skuRank ?? '',
+    新品状态: row.productAgeStatus,
+    分类标签: row.strategyName,
+    执行动作: row.actionSuggestion,
+    提示: row.messages.join('; '),
+  })));
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, '广告分析结果');
+  writeWorkbook(workbook, '广告分析结果', format);
 }
 
 export function exportBatchPurchaseOrder(records: PurchaseRecord[], format: ExportFormat): void {

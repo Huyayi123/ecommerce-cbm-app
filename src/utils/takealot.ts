@@ -2,6 +2,8 @@ export type TakealotInventoryRow = {
   sku: string;
   shopName: string;
   imageUrl: string;
+  salePrice: number;
+  platformFee: number | null;
   apiSalesQuantity: number;
   localStockQuantity: number;
   takealotStockQuantity: number;
@@ -46,6 +48,14 @@ function sumSalesUnits(value: unknown): number {
   }
 
   return numberValue(value);
+}
+
+function firstNumberValue(input: Record<string, unknown>, keys: string[]): number {
+  for (const key of keys) {
+    const parsed = numberValue(input[key]);
+    if (parsed > 0) return parsed;
+  }
+  return 0;
 }
 
 function isHttpUrl(value: string): boolean {
@@ -105,6 +115,8 @@ export function normalizeTakealotInventoryRow(input: Record<string, unknown>, sh
     sku: String(input.sku ?? input.seller_sku ?? input.merchant_sku ?? input.offer_sku ?? '').trim(),
     shopName,
     imageUrl: findImageUrl(input),
+    salePrice: firstNumberValue(input, ['selling_price', 'sellingPrice', 'price', 'sale_price', 'list_price', 'buyable_price']),
+    platformFee: firstNumberValue(input, ['platform_fee', 'platformFee', 'commission', 'commission_fee', 'takealot_fee', 'success_fee']) || null,
     apiSalesQuantity: sumSalesUnits(input.sales_units),
     localStockQuantity,
     takealotStockQuantity,

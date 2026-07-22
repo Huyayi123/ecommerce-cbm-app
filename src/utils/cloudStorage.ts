@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { AppProfile, AuditAction, AuditLog, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
+import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { findMatchingSkuItem, getSkuMatchKey } from './calculations';
 import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
@@ -103,6 +103,43 @@ type RepricingAlertRow = {
   is_active: boolean | null;
   checked_at: string | null;
   updated_at: string | null;
+};
+
+type AdAnalysisRunRow = {
+  id: string;
+  created_at: string;
+  created_by: string | null;
+  source_file_name: string | null;
+  row_count: number | null;
+  summary: Record<string, number> | null;
+};
+
+type AdAnalysisDetailRow = {
+  id: string;
+  run_id: string;
+  sku: string | null;
+  product_name: string | null;
+  shop_name: string | null;
+  image_url: string | null;
+  ad_spend: number | null;
+  ad_sales_quantity: number | null;
+  roas: number | null;
+  sale_price: number | null;
+  platform_fee: number | null;
+  platform_fee_source: string | null;
+  purchase_cost_rmb: number | null;
+  purchase_cost_zar: number | null;
+  unit_cbm: number | null;
+  sea_freight_cost: number | null;
+  warehouse_fee: number | null;
+  ad_cost_per_sale: number | null;
+  profit_rate: number | null;
+  sku_rank: number | null;
+  product_age_status: AdAnalysisRow['productAgeStatus'] | null;
+  strategy_label: AdAnalysisRow['strategyLabel'] | null;
+  strategy_name: string | null;
+  action_suggestion: string | null;
+  messages: string[] | null;
 };
 
 type LegacySkuRow = {
@@ -852,6 +889,78 @@ function mapRepricingAlert(row: RepricingAlertRow): RepricingAlert {
   };
 }
 
+function mapAdAnalysisRow(row: AdAnalysisDetailRow): AdAnalysisRow {
+  return {
+    id: row.id,
+    runId: row.run_id,
+    sku: row.sku ?? '',
+    productName: row.product_name ?? '',
+    shopName: row.shop_name ?? '',
+    imageUrl: row.image_url ?? '',
+    adSpend: Number(row.ad_spend ?? 0),
+    adSalesQuantity: Number(row.ad_sales_quantity ?? 0),
+    roas: row.roas === null || row.roas === undefined ? null : Number(row.roas),
+    salePrice: Number(row.sale_price ?? 0),
+    platformFee: Number(row.platform_fee ?? 0),
+    platformFeeSource: row.platform_fee_source === 'api' || row.platform_fee_source === 'fallback' ? row.platform_fee_source : 'missing',
+    purchaseCostRmb: Number(row.purchase_cost_rmb ?? 0),
+    purchaseCostZar: Number(row.purchase_cost_zar ?? 0),
+    unitCbm: Number(row.unit_cbm ?? 0),
+    seaFreightCost: Number(row.sea_freight_cost ?? 0),
+    warehouseFee: Number(row.warehouse_fee ?? 0),
+    adCostPerSale: Number(row.ad_cost_per_sale ?? 0),
+    profitRate: row.profit_rate === null || row.profit_rate === undefined ? null : Number(row.profit_rate),
+    skuRank: row.sku_rank === null || row.sku_rank === undefined ? null : Number(row.sku_rank),
+    productAgeStatus: row.product_age_status ?? 'unknown',
+    strategyLabel: row.strategy_label ?? 'missing_data',
+    strategyName: row.strategy_name ?? '',
+    actionSuggestion: row.action_suggestion ?? '',
+    messages: Array.isArray(row.messages) ? row.messages : [],
+  };
+}
+
+function toAdAnalysisDetailRow(row: AdAnalysisRow): AdAnalysisDetailRow {
+  return {
+    id: row.id,
+    run_id: row.runId,
+    sku: row.sku,
+    product_name: row.productName,
+    shop_name: row.shopName,
+    image_url: row.imageUrl,
+    ad_spend: row.adSpend,
+    ad_sales_quantity: row.adSalesQuantity,
+    roas: row.roas,
+    sale_price: row.salePrice,
+    platform_fee: row.platformFee,
+    platform_fee_source: row.platformFeeSource,
+    purchase_cost_rmb: row.purchaseCostRmb,
+    purchase_cost_zar: row.purchaseCostZar,
+    unit_cbm: row.unitCbm,
+    sea_freight_cost: row.seaFreightCost,
+    warehouse_fee: row.warehouseFee,
+    ad_cost_per_sale: row.adCostPerSale,
+    profit_rate: row.profitRate,
+    sku_rank: row.skuRank,
+    product_age_status: row.productAgeStatus,
+    strategy_label: row.strategyLabel,
+    strategy_name: row.strategyName,
+    action_suggestion: row.actionSuggestion,
+    messages: row.messages,
+  };
+}
+
+function mapAdAnalysisRun(row: AdAnalysisRunRow, rows: AdAnalysisRow[]): AdAnalysisRun {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    createdBy: row.created_by ?? '',
+    sourceFileName: row.source_file_name ?? '',
+    rowCount: Number(row.row_count ?? rows.length),
+    summary: row.summary ?? {},
+    rows,
+  };
+}
+
 export async function fetchRepricingAlerts(): Promise<RepricingAlert[]> {
   const { data, error } = await requireSupabase()
     .from('repricing_alerts')
@@ -867,6 +976,72 @@ export async function fetchRepricingAlerts(): Promise<RepricingAlert[]> {
     throw new Error(formatErrorMessage(error));
   }
   return (data ?? []).map((row) => mapRepricingAlert(row as RepricingAlertRow));
+}
+
+export async function fetchAdAnalysisRuns(): Promise<AdAnalysisRun[]> {
+  const client = requireSupabase();
+  const { data: runsData, error: runsError } = await client
+    .from('ad_analysis_runs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(3);
+  if (runsError) {
+    console.error(runsError);
+    if (isMissingColumnError(runsError) || /ad_analysis_runs/i.test(formatErrorMessage(runsError))) {
+      throw new Error(`广告分析表还没有创建，请先在 Supabase SQL Editor 执行 supabase.sql 中的广告分析表结构。原始错误：${formatErrorMessage(runsError)}`);
+    }
+    throw new Error(formatErrorMessage(runsError));
+  }
+
+  const runRows = (runsData ?? []) as AdAnalysisRunRow[];
+  const runIds = runRows.map((row) => row.id);
+  if (runIds.length === 0) return [];
+
+  const { data: detailData, error: detailError } = await client
+    .from('ad_analysis_rows')
+    .select('*')
+    .in('run_id', runIds);
+  if (detailError) throwSupabaseError(detailError);
+
+  const rowsByRun = new Map<string, AdAnalysisRow[]>();
+  for (const row of (detailData ?? []) as AdAnalysisDetailRow[]) {
+    const item = mapAdAnalysisRow(row);
+    rowsByRun.set(item.runId, [...(rowsByRun.get(item.runId) ?? []), item]);
+  }
+
+  return runRows.map((run) => mapAdAnalysisRun(run, rowsByRun.get(run.id) ?? []));
+}
+
+export async function saveAdAnalysisRun(run: AdAnalysisRun): Promise<void> {
+  const client = requireSupabase();
+  const { error: runError } = await client.from('ad_analysis_runs').upsert({
+    id: run.id,
+    created_at: run.createdAt,
+    created_by: run.createdBy,
+    source_file_name: run.sourceFileName,
+    row_count: run.rowCount,
+    summary: run.summary,
+  });
+  if (runError) throwSupabaseError(runError);
+
+  if (run.rows.length > 0) {
+    const { error: rowsError } = await client.from('ad_analysis_rows').upsert(run.rows.map(toAdAnalysisDetailRow));
+    if (rowsError) throwSupabaseError(rowsError);
+  }
+
+  const { data: allRuns, error: listError } = await client
+    .from('ad_analysis_runs')
+    .select('id,created_at')
+    .order('created_at', { ascending: false });
+  if (listError) throwSupabaseError(listError);
+
+  const staleIds = ((allRuns ?? []) as Array<{ id: string }>).slice(3).map((item) => item.id);
+  if (staleIds.length === 0) return;
+
+  const { error: deleteRowsError } = await client.from('ad_analysis_rows').delete().in('run_id', staleIds);
+  if (deleteRowsError) throwSupabaseError(deleteRowsError);
+  const { error: deleteRunsError } = await client.from('ad_analysis_runs').delete().in('id', staleIds);
+  if (deleteRunsError) throwSupabaseError(deleteRunsError);
 }
 
 function mapAuditLog(row: AuditLogRow): AuditLog {
@@ -920,6 +1095,7 @@ export function subscribeToSharedTables(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'container_rows' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_suggestions' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'repricing_alerts' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ad_analysis_runs' }, onChange)
     .subscribe();
 
   return () => {

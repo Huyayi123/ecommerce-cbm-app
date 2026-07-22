@@ -57,10 +57,68 @@ button.danger,
 }
 
 .app-shell {
-  width: calc(100vw - 32px);
+  width: 100vw;
   max-width: none;
-  margin: 0 auto;
-  padding: 28px 0;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.app-content {
+  flex: 1;
+  min-width: 0;
+  padding: 28px 16px 28px 20px;
+}
+
+.side-nav {
+  position: sticky;
+  top: 0;
+  width: 196px;
+  min-width: 196px;
+  height: 100vh;
+  padding: 18px 12px;
+  background: #ffffff;
+  border-right: 1px solid #dce4ea;
+  box-shadow: 1px 0 2px rgba(22, 32, 42, 0.03);
+}
+
+.side-nav-title {
+  display: grid;
+  gap: 4px;
+  padding: 8px 8px 14px;
+  border-bottom: 1px solid #edf2f5;
+  margin-bottom: 12px;
+}
+
+.side-nav-title strong {
+  font-size: 18px;
+}
+
+.side-nav-title span {
+  color: #667784;
+  font-size: 12px;
+}
+
+.side-nav nav {
+  display: grid;
+  gap: 6px;
+}
+
+.side-nav button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+  color: #40505c;
+}
+
+.side-nav button.active {
+  background: #136f63;
+  border-color: #136f63;
+  color: #ffffff;
 }
 
 .auth-shell {
@@ -493,6 +551,60 @@ button.danger,
 .repricing-badge.none {
   background: #eef2f4;
   color: #53616c;
+}
+
+.ad-analysis-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 18px 0;
+  padding: 12px;
+  border: 1px solid #e1e8ee;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.ad-analysis-controls label {
+  display: grid;
+  gap: 6px;
+  min-width: 190px;
+  color: #51606c;
+  font-size: 13px;
+}
+
+.ad-analysis-controls select {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #cbd6df;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.ad-analysis-controls span {
+  color: #5f6d78;
+  font-size: 14px;
+  padding-bottom: 8px;
+}
+
+.ad-analysis-table-wrap {
+  max-height: 680px;
+}
+
+.ad-analysis-table {
+  min-width: 2200px;
+}
+
+.ad-analysis-table th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.ad-product-name {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .repricing-high td {
