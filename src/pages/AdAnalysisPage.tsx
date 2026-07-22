@@ -113,9 +113,9 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
     }
     const runId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    const rows = draftRows.map((row) => ({
+    const rows = draftRows.map((row, index) => ({
       ...row,
-      id: `${runId}-${row.sku || row.productName || crypto.randomUUID()}`,
+      id: `${runId}-${index + 1}-${row.sku || row.productName || 'row'}`,
       runId,
     }));
     const run: AdAnalysisRun = {
