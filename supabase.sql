@@ -621,6 +621,7 @@ create table if not exists public.ad_analysis_rows (
   id text primary key,
   run_id text not null references public.ad_analysis_runs(id) on delete cascade,
   sku text,
+  product_id text,
   product_name text,
   shop_name text,
   image_url text,
@@ -644,6 +645,9 @@ create table if not exists public.ad_analysis_rows (
   action_suggestion text,
   messages text[] default '{}'
 );
+
+alter table public.ad_analysis_rows
+add column if not exists product_id text;
 
 create index if not exists ad_analysis_runs_created_idx
 on public.ad_analysis_runs (created_at desc);

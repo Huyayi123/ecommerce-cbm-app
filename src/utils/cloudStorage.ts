@@ -118,6 +118,7 @@ type AdAnalysisDetailRow = {
   id: string;
   run_id: string;
   sku: string | null;
+  product_id: string | null;
   product_name: string | null;
   shop_name: string | null;
   image_url: string | null;
@@ -895,6 +896,7 @@ function mapAdAnalysisRow(row: AdAnalysisDetailRow): AdAnalysisRow {
     id: row.id,
     runId: row.run_id,
     sku: row.sku ?? '',
+    productId: row.product_id ?? '',
     productName: row.product_name ?? '',
     shopName: row.shop_name ?? '',
     imageUrl: row.image_url ?? '',
@@ -925,6 +927,7 @@ function toAdAnalysisDetailRow(row: AdAnalysisRow): AdAnalysisDetailRow {
     id: row.id,
     run_id: row.runId,
     sku: row.sku,
+    product_id: row.productId,
     product_name: row.productName,
     shop_name: row.shopName,
     image_url: row.imageUrl,

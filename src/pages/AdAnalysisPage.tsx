@@ -205,7 +205,7 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
         <table className="ad-analysis-table">
           <thead>
             <tr>
-              <th>图片</th><th>店铺</th><th>TSIN</th><th>产品名称</th><th>广告花费</th><th>广告销量</th><th>ROAS</th><th>售价</th><th>采购成本RMB</th><th>采购成本兰特</th><th>平台税费</th><th>海运费</th><th>送仓费</th><th>单次广告成本</th><th>利润率</th><th>TSIN排名</th><th>新品状态</th><th>分类</th><th>执行动作</th><th>提示</th>
+              <th>图片</th><th>店铺</th><th>TSIN</th><th>Product ID</th><th>产品名称</th><th>广告花费</th><th>广告销量</th><th>ROAS</th><th>售价</th><th>采购成本RMB</th><th>采购成本兰特</th><th>平台税费</th><th>海运费</th><th>送仓费</th><th>单次广告成本</th><th>利润率</th><th>TSIN排名</th><th>新品状态</th><th>分类</th><th>执行动作</th><th>提示</th>
             </tr>
           </thead>
           <tbody>
@@ -214,6 +214,7 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
                 <td>{row.imageUrl ? <img className="sku-thumb" src={row.imageUrl} alt={row.productName || row.sku} loading="lazy" /> : '-'}</td>
                 <td>{row.shopName || '-'}</td>
                 <td>{row.sku || '-'}</td>
+                <td>{row.productId || '-'}</td>
                 <td><div className="ad-product-name" title={row.productName}>{row.productName || '-'}</div></td>
                 <td>{row.adSpend}</td>
                 <td>{row.adSalesQuantity}</td>
@@ -233,7 +234,7 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
                 <td>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</td>
               </tr>
             ))}
-            {displayRows.length === 0 && <tr><td colSpan={20} className="empty">导入广告报表后生成分析，或查看最近三次历史分析结果。</td></tr>}
+            {displayRows.length === 0 && <tr><td colSpan={21} className="empty">导入广告报表后生成分析，或查看最近三次历史分析结果。</td></tr>}
           </tbody>
         </table>
       </div>

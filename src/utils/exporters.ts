@@ -317,6 +317,7 @@ function adAnalysisExportRow(row: AdAnalysisRow): Record<string, unknown> {
   return {
     '\u5e97\u94fa': row.shopName,
     TSIN: row.sku,
+    'Product ID': row.productId,
     '\u4ea7\u54c1\u540d\u79f0': row.productName,
     '\u56fe\u7247\u94fe\u63a5': row.imageUrl,
     '\u5e7f\u544a\u82b1\u8d39': row.adSpend,

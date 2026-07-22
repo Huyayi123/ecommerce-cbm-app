@@ -140,6 +140,7 @@ export function analyzeAdRows(input: {
       id: `${input.runId}-${row.rowNumber}-${row.sku || row.productName}`,
       runId: input.runId,
       sku: row.sku,
+      productId: row.productId,
       productName: skuItem?.productName || skuItem?.englishName || row.productName,
       shopName,
       imageUrl: row.imageUrl || inventory?.imageUrl || skuItem?.imageUrl || '',

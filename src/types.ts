@@ -220,6 +220,7 @@ export type AdAnalysisRow = {
   id: string;
   runId: string;
   sku: string;
+  productId: string;
   productName: string;
   shopName: string;
   imageUrl: string;
