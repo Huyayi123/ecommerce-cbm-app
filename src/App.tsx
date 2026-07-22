@@ -40,6 +40,8 @@ import { withPurchaseTotals } from './utils/purchaseRecords';
 
 type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'ad-analysis';
 
+const ACTIVE_PAGE_STORAGE_KEY = 'ecommerce-cbm-active-page';
+
 const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'repricing', label: '价格预警' },
   { key: 'ad-analysis', label: '广告分析' },
@@ -51,12 +53,19 @@ const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'sku', label: 'SKU 资料库' },
 ];
 
+const pageKeys = new Set<PageKey>(navItems.map((item) => item.key));
+
+function getInitialActivePage(): PageKey {
+  const stored = localStorage.getItem(ACTIVE_PAGE_STORAGE_KEY) as PageKey | null;
+  return stored && pageKeys.has(stored) ? stored : 'suggestions';
+}
+
 function isOptionalProfileLoadError(index: number, error: unknown): boolean {
   return (index === 3 || index === 4 || index === 5 || index === 7) && /failed to fetch|fetch|广告分析表/i.test(formatErrorMessage(error));
 }
 
 function App() {
-  const [activePage, setActivePage] = useState<PageKey>('suggestions');
+  const [activePage, setActivePage] = useState<PageKey>(getInitialActivePage);
   const [profile, setProfile] = useState<AppProfile | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
@@ -74,6 +83,11 @@ function App() {
   function hasPasswordRecoveryToken(): boolean {
     const urlText = `${window.location.search}${window.location.hash}`.toLowerCase();
     return urlText.includes('type=recovery') || sessionStorage.getItem('passwordRecovery') === 'true';
+  }
+
+  function openPage(page: PageKey) {
+    setActivePage(page);
+    localStorage.setItem(ACTIVE_PAGE_STORAGE_KEY, page);
   }
 
   async function loadCloudData() {
@@ -317,7 +331,7 @@ function App() {
       await persistPurchaseRecords(nextRecords);
       await loadCloudData();
       setStatusMessage(`已生成 ${assignedRecords.length} 条采购任务，请采购人在“我的采购订单”确认后进入在途库存口径。`);
-      setActivePage('my-orders');
+      openPage('my-orders');
     } catch (error) {
       console.error(error);
       setStatusMessage(`采购记录保存失败：${formatErrorMessage(error)}`);
@@ -353,7 +367,7 @@ function App() {
   async function sendSuggestionsToCalculator(rows: PurchaseRow[], nextFileName: string) {
     await persistPurchaseRows(rows);
     setFileName(nextFileName);
-    setActivePage('calculator');
+    openPage('calculator');
   }
 
   async function signOut() {
@@ -417,7 +431,7 @@ function App() {
               key={item.key}
               type="button"
               className={activePage === item.key ? 'active' : ''}
-              onClick={() => setActivePage(item.key)}
+              onClick={() => openPage(item.key)}
             >
               {item.label}
             </button>
@@ -438,25 +452,25 @@ function App() {
       </header>
 
       {pendingAssignedTasks.length > 0 && (
-        <button type="button" className="task-notice" onClick={() => setActivePage('my-orders')}>
+        <button type="button" className="task-notice" onClick={() => openPage('my-orders')}>
           你有 {pendingAssignedTasks.length} 条新的待采购任务，点击查看
         </button>
       )}
 
       {pendingTaskCount > 0 && (
-        <button type="button" className="task-notice" onClick={() => setActivePage('my-orders')}>
+        <button type="button" className="task-notice" onClick={() => openPage('my-orders')}>
           当前共有 {pendingTaskCount} 条待采购任务（所有采购人），点击查看
         </button>
       )}
 
       {poolSubmittedCount > 0 && (
-        <button type="button" className="task-notice" onClick={() => setActivePage('purchase-pool')}>
+        <button type="button" className="task-notice" onClick={() => openPage('purchase-pool')}>
           采购订单池有 {poolSubmittedCount} 条待发送记录，点击查看
         </button>
       )}
 
       {activeRepricingAlerts.length > 0 && (
-        <button type="button" className="task-notice repricing-notice" onClick={() => setActivePage('repricing')}>
+        <button type="button" className="task-notice repricing-notice" onClick={() => openPage('repricing')}>
           发现 {activeRepricingAlerts.length} 个确定被跟价商品，点击查看
         </button>
       )}
