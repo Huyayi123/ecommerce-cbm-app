@@ -12,6 +12,7 @@ type ColumnKey =
   | 'imageUrl'
   | 'manufacturerName'
   | 'sku'
+  | 'tsin'
   | 'productName'
   | 'englishName'
   | 'storageLocation'
@@ -41,6 +42,7 @@ const columnOptions: Array<{ key: ColumnKey; label: string }> = [
   { key: 'imageUrl', label: '图片' },
   { key: 'manufacturerName', label: '厂家名' },
   { key: 'sku', label: 'SKU' },
+  { key: 'tsin', label: 'TSIN' },
   { key: 'productName', label: '产品名称' },
   { key: 'englishName', label: '英文名称' },
   { key: 'storageLocation', label: '库位' },
@@ -62,6 +64,7 @@ const defaultVisibleColumns = new Set<ColumnKey>([
   'imageUrl',
   'manufacturerName',
   'sku',
+  'tsin',
   'productName',
   'purchasePrice',
   'unitCbm',
@@ -75,6 +78,7 @@ const SKU_PAGE_SIZE_OPTIONS = [50, 100, 200];
 const emptyDraft: DraftSku = {
   id: '',
   sku: '',
+  tsin: '',
   productName: '',
   englishName: '',
   imageUrl: '',
@@ -103,6 +107,7 @@ function mergeImportedSku(existing: SkuItem, imported: SkuItem, recognizedFields
     ...existing,
     manufacturerName: imported.manufacturerName.trim() || existing.manufacturerName,
     sku: imported.sku.trim() || existing.sku,
+    tsin: imported.tsin.trim() || existing.tsin,
     productName: imported.productName.trim() || existing.productName,
     englishName: imported.englishName.trim() || existing.englishName,
     imageUrl: imported.imageUrl.trim() || existing.imageUrl,
@@ -128,6 +133,7 @@ function toDraft(item: SkuItem): DraftSku {
   return {
     id: item.id,
     sku: item.sku,
+    tsin: item.tsin,
     productName: item.productName,
     englishName: item.englishName,
     imageUrl: item.imageUrl,
@@ -187,7 +193,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
     const shopMatchedItems = shopFilter ? items.filter((item) => canonicalShopName(item.shopName) === shopFilter) : items;
     if (!keyword) return shopMatchedItems;
     return shopMatchedItems.filter((item) =>
-      [item.manufacturerName, item.sku, item.productName, item.englishName, item.storageLocation, item.purchaseUrl, item.shopName, item.buyerName, item.isSeasonal ? '季节性产品' : '']
+      [item.manufacturerName, item.sku, item.tsin, item.productName, item.englishName, item.storageLocation, item.purchaseUrl, item.shopName, item.buyerName, item.isSeasonal ? '季节性产品' : '']
         .some((value) => value.toLowerCase().includes(keyword)),
     );
   }, [items, searchText, shopFilter]);
@@ -421,13 +427,14 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
           </div>
           <div className="table-wrap small-table">
             <table>
-              <thead><tr><th>行号</th><th>动作</th><th>SKU</th><th>产品名称</th><th>单品CBM</th><th>失败原因</th></tr></thead>
+              <thead><tr><th>行号</th><th>动作</th><th>SKU</th><th>TSIN</th><th>产品名称</th><th>单品CBM</th><th>失败原因</th></tr></thead>
               <tbody>
                 {importPreview.rows.slice(0, 80).map((row) => (
                   <tr key={row.rowNumber} className={row.action === 'fail' ? 'error-row' : ''}>
                     <td>{row.rowNumber}</td>
                     <td>{row.action === 'create' ? '新增' : row.action === 'update' ? '更新' : '失败'}</td>
                     <td>{row.item?.sku ?? '-'}</td>
+                    <td>{row.item?.tsin ?? '-'}</td>
                     <td>{row.item?.productName ?? '-'}</td>
                     <td>{row.item?.unitCbm.toFixed(8) ?? '-'}</td>
                     <td>{row.errors.join('；') || '-'}</td>
@@ -441,6 +448,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
 
       <div className="sku-form">
         <label>SKU<input value={draft.sku} onChange={(event) => updateField('sku', event.target.value)} placeholder="例如 SKU-1001" /></label>
+        <label>TSIN<input value={draft.tsin} onChange={(event) => updateField('tsin', event.target.value)} placeholder="?? 101734429" /></label>
         <label>产品名称<input value={draft.productName} onChange={(event) => updateField('productName', event.target.value)} /></label>
         <label>英文名称<input value={draft.englishName} onChange={(event) => updateField('englishName', event.target.value)} /></label>
         <label>图片链接<input value={draft.imageUrl} onChange={(event) => updateField('imageUrl', event.target.value)} /></label>
@@ -515,6 +523,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
               {visibleColumns.has('imageUrl') && <th className="sticky-col sticky-col-1">图片</th>}
               {visibleColumns.has('manufacturerName') && <th className="sticky-col sticky-col-2">厂家名</th>}
               {visibleColumns.has('sku') && <th className="sticky-col sticky-col-3">SKU</th>}
+              {visibleColumns.has('tsin') && <th>TSIN</th>}
               {visibleColumns.has('productName') && <th className="sticky-col sticky-col-4">产品名称</th>}
               {visibleColumns.has('englishName') && <th>英文名称</th>}
               {visibleColumns.has('storageLocation') && <th>库位</th>}
@@ -540,6 +549,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
                   {visibleColumns.has('imageUrl') && <td className="sticky-col sticky-col-1">{item.imageUrl ? <img className="sku-thumb" src={item.imageUrl} alt={item.productName || item.sku || 'SKU'} loading="lazy" /> : '-'}</td>}
                   {visibleColumns.has('manufacturerName') && <td className="sticky-col sticky-col-2">{item.manufacturerName}</td>}
                   {visibleColumns.has('sku') && <td className="sticky-col sticky-col-3">{item.sku}</td>}
+                  {visibleColumns.has('tsin') && <td>{item.tsin || '-'}</td>}
                   {visibleColumns.has('productName') && <td className="sticky-col sticky-col-4">{item.productName}</td>}
                   {visibleColumns.has('englishName') && <td>{item.englishName}</td>}
                   {visibleColumns.has('storageLocation') && <td>{item.storageLocation}</td>}
@@ -564,7 +574,8 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
                 {expandedIds.has(item.id) && (
                   <tr key={`${item.id}-detail`}>
                     <td colSpan={tableColSpan} className="detail-row">
-                      <div className="detail-grid">
+                      <div className="detail-grid">                        <span>TSIN?{item.tsin || '-'}</span>
+
                         <span>英文名称：{item.englishName || '-'}</span>
                         <span>图片链接：{item.imageUrl || '-'}</span>
                         <span>库位：{item.storageLocation || '-'}</span>

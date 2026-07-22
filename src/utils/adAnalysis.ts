@@ -17,6 +17,10 @@ function skuKey(value: string): string {
   return value.trim().toUpperCase();
 }
 
+function tsinKey(value: string): string {
+  return value.trim().toUpperCase();
+}
+
 function storeKey(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -86,13 +90,15 @@ export function analyzeAdRows(input: {
   inventoryRows: TakealotInventoryRow[];
 }): AdAnalysisRow[] {
   const skuItemsBySku = new Map(input.skuItems.filter((item) => skuKey(item.sku)).map((item) => [skuKey(item.sku), item]));
+  const skuItemsByTsin = new Map(input.skuItems.filter((item) => tsinKey(item.tsin)).map((item) => [tsinKey(item.tsin), item]));
   const inventoryBySku = new Map(input.inventoryRows.filter((item) => skuKey(item.sku)).map((item) => [skuKey(item.sku), item]));
+  const inventoryByTsin = new Map(input.inventoryRows.filter((item) => tsinKey(item.tsin)).map((item) => [tsinKey(item.tsin), item]));
   const rankMap = buildSkuRankMap(input.skuItems);
 
   return input.reportRows.map((row) => {
     const sku = skuKey(row.sku);
-    const skuItem = skuItemsBySku.get(sku);
-    const inventory = inventoryBySku.get(sku);
+    const skuItem = skuItemsByTsin.get(tsinKey(row.sku)) ?? skuItemsBySku.get(sku);
+    const inventory = inventoryByTsin.get(tsinKey(row.sku)) ?? inventoryBySku.get(sku);
     const shopName = row.shopName || inventory?.shopName || skuItem?.shopName || '';
     const salePrice = round(inventory?.salePrice ?? 0, 2);
     const purchaseCostRmb = round(skuItem?.purchasePrice ?? 0, 2);
@@ -107,7 +113,8 @@ export function analyzeAdRows(input: {
     const profitRate = canCalculateProfit
       ? round((salePrice - purchaseCostZar - platformFee - seaFreightCost - adCostPerSale - warehouseFee) / purchaseCostZar, 4)
       : null;
-    const skuRank = rankMap.get(`${storeKey(shopName)}|${sku}`) ?? null;
+    const rankIdentity = skuItem?.sku || row.sku;
+    const skuRank = rankMap.get(`${storeKey(shopName)}|${skuKey(rankIdentity)}`) ?? null;
     const ageStatus = productAgeStatus(shopName, skuRank);
     const baseLabel = adLabel(profitRate, row.roas);
     const strategyLabel = applyNewProductPolicy(baseLabel, ageStatus, profitRate);

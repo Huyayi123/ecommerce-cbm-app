@@ -1,5 +1,6 @@
 export type TakealotInventoryRow = {
   sku: string;
+  tsin: string;
   shopName: string;
   imageUrl: string;
   salePrice: number;
@@ -113,6 +114,7 @@ export function normalizeTakealotInventoryRow(input: Record<string, unknown>, sh
 
   return {
     sku: String(input.sku ?? input.seller_sku ?? input.merchant_sku ?? input.offer_sku ?? '').trim(),
+    tsin: String(input.tsin_id ?? input.tsin ?? input.product_id ?? '').trim(),
     shopName,
     imageUrl: findImageUrl(input),
     salePrice: firstNumberValue(input, ['selling_price', 'sellingPrice', 'price', 'sale_price', 'list_price', 'buyable_price']),

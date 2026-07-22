@@ -36,6 +36,10 @@ function skuFor(row) {
   return String(row?.sku ?? row?.seller_sku ?? row?.merchant_sku ?? row?.offer_sku ?? '').replace(/\s+/g, '').toUpperCase();
 }
 
+function tsinFor(row) {
+  return String(row?.tsin_id ?? row?.tsin ?? row?.product_id ?? '').trim();
+}
+
 function titleFor(row) {
   return String(row?.title ?? row?.product_title ?? row?.name ?? row?.product_name ?? '').trim();
 }
@@ -118,16 +122,16 @@ async function supabaseRequest(method, path, body, headers = {}) {
   return response.json().catch(() => null);
 }
 
-async function fetchExistingSkuSet() {
-  const existing = new Set();
+async function fetchExistingSkuMap() {
+  const existing = new Map();
   const pageSize = 1000;
   for (let from = 0; ; from += pageSize) {
-    const rows = await supabaseRequest('GET', `sku_items?select=sku&sku=not.is.null&order=sku.asc&offset=${from}&limit=${pageSize}`);
+    const rows = await supabaseRequest('GET', `sku_items?select=id,sku,tsin&sku=not.is.null&order=sku.asc&offset=${from}&limit=${pageSize}`);
     const data = Array.isArray(rows) ? rows : [];
     for (const row of data) {
       const sku = String(row.sku ?? '').trim().toUpperCase();
       const normalizedSku = sku.replace(/\s+/g, '');
-      if (normalizedSku) existing.add(normalizedSku);
+      if (normalizedSku) existing.set(normalizedSku, { id: row.id, sku: normalizedSku, tsin: String(row.tsin ?? '').trim() });
     }
     if (data.length < pageSize) break;
   }
@@ -186,6 +190,7 @@ function skuInsertRow(row, storeName) {
   return {
     id: `takealot-${sku}`,
     sku,
+    tsin: tsinFor(row),
     product_name: '',
     english_name: titleFor(row),
     image_url: findImageUrl(row),
@@ -208,6 +213,24 @@ function skuInsertRow(row, storeName) {
   };
 }
 
+async function updateExistingTsinRows(rows) {
+  if (rows.length === 0) return;
+  for (let index = 0; index < rows.length; index += 200) {
+    const chunk = rows.slice(index, index + 200);
+    try {
+      await supabaseRequest('POST', 'sku_items?on_conflict=id', chunk, {
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/tsin|schema cache|PGRST204/i.test(message)) {
+        throw new Error(`sku_items 表缺少 tsin 字段，请先执行 Supabase SQL：alter table public.sku_items add column if not exists tsin text; 原始错误：${message}`);
+      }
+      throw error;
+    }
+  }
+}
+
 async function insertSkuRows(rows) {
   if (rows.length === 0) return;
   for (let index = 0; index < rows.length; index += 200) {
@@ -218,6 +241,9 @@ async function insertSkuRows(rows) {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (/tsin/i.test(message)) {
+        throw new Error(`sku_items 表缺少 tsin 字段，请先执行 Supabase SQL：alter table public.sku_items add column if not exists tsin text; 原始错误：${message}`);
+      }
       if (!/storage_location|purchase_url|schema cache|PGRST204/i.test(message)) throw error;
       const legacyChunk = chunk.map(({ storage_location, purchase_url, ...row }) => row);
       await supabaseRequest('POST', 'sku_items?on_conflict=id', legacyChunk, {
@@ -229,9 +255,10 @@ async function insertSkuRows(rows) {
 
 async function syncNewSkus(stores = DEFAULT_STORES, options = {}) {
   const dryRun = Boolean(options.dryRun);
-  const existingSkus = await fetchExistingSkuSet();
+  const existingSkus = await fetchExistingSkuMap();
   const summary = [];
   const insertedRows = [];
+  const updatedTsinRows = [];
 
   for (const storeName of stores) {
     const result = {
@@ -241,6 +268,7 @@ async function syncNewSkus(stores = DEFAULT_STORES, options = {}) {
       skippedExisting: 0,
       skippedDisabled: 0,
       skippedNoSku: 0,
+      updatedTsin: 0,
       failed: '',
       pagesFetched: 0,
       totalResults: null,
@@ -259,11 +287,18 @@ async function syncNewSkus(stores = DEFAULT_STORES, options = {}) {
           result.skippedNoSku += 1;
           continue;
         }
-        if (existingSkus.has(sku)) {
+        const tsin = tsinFor(row);
+        const existing = existingSkus.get(sku);
+        if (existing) {
           result.skippedExisting += 1;
+          if (tsin && existing.tsin !== tsin) {
+            updatedTsinRows.push({ id: existing.id, tsin, updated_at: new Date().toISOString() });
+            existingSkus.set(sku, { ...existing, tsin });
+            result.updatedTsin += 1;
+          }
           continue;
         }
-        existingSkus.add(sku);
+        existingSkus.set(sku, { id: `takealot-${sku}`, sku, tsin });
         const insertRow = skuInsertRow(row, storeName);
         rowsToInsert.push(insertRow);
       }
@@ -278,11 +313,16 @@ async function syncNewSkus(stores = DEFAULT_STORES, options = {}) {
     summary.push(result);
   }
 
+  if (!dryRun) {
+    await updateExistingTsinRows(updatedTsinRows);
+  }
+
   return {
     dryRun,
     stores,
     inserted: insertedRows.length,
-    insertedSkus: insertedRows.map((row) => ({ sku: row.sku, shopName: row.shop_name, englishName: row.english_name })),
+    updatedTsin: updatedTsinRows.length,
+    insertedSkus: insertedRows.map((row) => ({ sku: row.sku, tsin: row.tsin, shopName: row.shop_name, englishName: row.english_name })),
     summary,
   };
 }

@@ -4,6 +4,7 @@ import { canonicalShopName } from './shops';
 import { toNumber } from './number';
 
 export const SKU_FIELD_ALIASES = {
+  tsin: ['TSIN', 'tsin', 'tsin_id'],
   manufacturerName: ['厂家名', '厂家名称', '厂家', '供应商', '供应商名称', 'manufacturer_name'],
   sku: ['SKU', 'sku', '货号', '产品编码', '商品编码', '条码'],
   productName: ['产品名称', '品名', '中文名称', 'product_name'],
@@ -31,6 +32,7 @@ export type SupabaseSkuRow = {
   id: string;
   manufacturer_name: string | null;
   sku: string | null;
+  tsin?: string | null;
   product_name: string | null;
   english_name: string | null;
   image_url?: string | null;
@@ -79,6 +81,7 @@ export function supabaseSkuToFrontend(row: SupabaseSkuRow): SkuItem {
     id: row.id,
     manufacturerName: row.manufacturer_name ?? '',
     sku: row.sku ?? '',
+    tsin: row.tsin ?? '',
     productName: row.product_name ?? '',
     englishName: row.english_name ?? '',
     imageUrl: row.image_url ?? '',
@@ -106,6 +109,7 @@ export function frontendSkuToSupabase(item: SkuItem): SupabaseSkuRow {
     id: item.id,
     manufacturer_name: item.manufacturerName,
     sku: item.sku.trim() || null,
+    tsin: item.tsin.trim() || null,
     product_name: item.productName,
     english_name: item.englishName,
     image_url: item.imageUrl,
@@ -137,6 +141,7 @@ export function skuExcelRowToFrontend(row: Record<string, unknown>, headers: str
     id,
     manufacturerName: String(pickSkuExcelField(row, headers, 'manufacturerName') ?? '').trim(),
     sku: String(pickSkuExcelField(row, headers, 'sku') ?? '').trim(),
+    tsin: String(pickSkuExcelField(row, headers, 'tsin') ?? '').trim(),
     productName: String(pickSkuExcelField(row, headers, 'productName') ?? '').trim(),
     englishName: String(pickSkuExcelField(row, headers, 'englishName') ?? '').trim(),
     imageUrl: String(pickSkuExcelField(row, headers, 'imageUrl') ?? '').trim(),

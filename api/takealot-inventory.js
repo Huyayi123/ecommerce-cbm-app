@@ -29,6 +29,10 @@ function skuFor(row) {
   return String(row?.sku ?? row?.seller_sku ?? row?.merchant_sku ?? row?.offer_sku ?? '').trim().toUpperCase();
 }
 
+function tsinFor(row) {
+  return String(row?.tsin_id ?? row?.tsin ?? row?.product_id ?? '').trim().toUpperCase();
+}
+
 function rowKey(row) {
   return String(row?.offer_id ?? row?.sku ?? row?.barcode ?? JSON.stringify(row)).trim();
 }
@@ -99,7 +103,7 @@ export default async function handler(request, response) {
         seenKeys.add(key);
         newRowsOnPage += 1;
         if (isDisabledRow(row)) continue;
-        if (requestedSkus.size === 0 || requestedSkus.has(skuFor(row))) allRows.push(row);
+        if (requestedSkus.size === 0 || requestedSkus.has(skuFor(row)) || requestedSkus.has(tsinFor(row))) allRows.push(row);
       }
 
       if (rows.length < pageSize) break;

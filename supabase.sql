@@ -138,6 +138,7 @@ create table if not exists public.profiles (
 create table if not exists public.sku_items (
   id text primary key,
   sku text,
+  tsin text,
   product_name text,
   english_name text,
   image_url text,
@@ -161,6 +162,9 @@ create table if not exists public.sku_items (
 
 alter table public.sku_items
 add column if not exists purchase_price numeric default 0;
+
+alter table public.sku_items
+add column if not exists tsin text;
 
 alter table public.sku_items
 add column if not exists unit_cbm numeric default 0;

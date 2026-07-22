@@ -1,6 +1,7 @@
 export type SkuItem = {
   id: string;
   sku: string;
+  tsin: string;
   productName: string;
   englishName: string;
   imageUrl: string;

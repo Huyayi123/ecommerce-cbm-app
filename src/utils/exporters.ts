@@ -7,6 +7,7 @@ type ExportFormat = 'xlsx' | 'csv';
 const SKU_TEMPLATE_HEADERS = [
   '厂家名',
   'SKU',
+  'TSIN',
   '产品名称',
   '英文名称',
   '图片链接',
@@ -140,6 +141,7 @@ export function exportSkuItems(items: SkuItem[], format: ExportFormat): void {
   const headers = [
     '厂家名',
     'SKU',
+  'TSIN',
     '产品名称',
     '英文名称',
     '图片预览',
@@ -162,6 +164,7 @@ export function exportSkuItems(items: SkuItem[], format: ExportFormat): void {
   const rows = items.map((item) => [
     item.manufacturerName,
     item.sku,
+    item.tsin,
     item.productName,
     item.englishName,
     format === 'xlsx' ? '' : imageFormulaFor(item.imageUrl),
@@ -193,6 +196,7 @@ export function exportSkuItems(items: SkuItem[], format: ExportFormat): void {
     worksheet['!cols'] = [
       { wch: 18 },
       { wch: 18 },
+      { wch: 14 },
       { wch: 28 },
       { wch: 28 },
       { wch: 16 },

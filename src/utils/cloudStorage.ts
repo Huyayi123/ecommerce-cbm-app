@@ -244,6 +244,7 @@ function mergeSkuItemsForSave(items: SkuItem[], remote: SkuItem[]): SkuItem[] {
       id: baseItem?.id ?? item.id,
       manufacturerName: item.manufacturerName.trim() || baseItem?.manufacturerName || '',
       sku: item.sku.trim() || baseItem?.sku || '',
+      tsin: item.tsin.trim() || baseItem?.tsin || '',
       productName: item.productName.trim() || baseItem?.productName || '',
       englishName: item.englishName.trim() || baseItem?.englishName || '',
       imageUrl: item.imageUrl.trim() || baseItem?.imageUrl || '',
