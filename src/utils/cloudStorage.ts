@@ -985,7 +985,7 @@ export async function fetchAdAnalysisRuns(): Promise<AdAnalysisRun[]> {
     .from('ad_analysis_runs')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(3);
+    .limit(12);
   if (runsError) {
     console.error(runsError);
     if (isMissingColumnError(runsError) || /ad_analysis_runs/i.test(formatErrorMessage(runsError))) {
@@ -1010,7 +1010,10 @@ export async function fetchAdAnalysisRuns(): Promise<AdAnalysisRun[]> {
     rowsByRun.set(item.runId, [...(rowsByRun.get(item.runId) ?? []), item]);
   }
 
-  return runRows.map((run) => mapAdAnalysisRun(run, rowsByRun.get(run.id) ?? []));
+  return runRows
+    .map((run) => mapAdAnalysisRun(run, rowsByRun.get(run.id) ?? []))
+    .filter((run) => run.rows.length > 0)
+    .slice(0, 3);
 }
 
 export async function saveAdAnalysisRun(run: AdAnalysisRun): Promise<void> {
@@ -1027,7 +1030,11 @@ export async function saveAdAnalysisRun(run: AdAnalysisRun): Promise<void> {
 
   if (run.rows.length > 0) {
     const { error: rowsError } = await client.from('ad_analysis_rows').upsert(run.rows.map(toAdAnalysisDetailRow));
-    if (rowsError) throwSupabaseError(rowsError);
+    if (rowsError) {
+      await client.from('ad_analysis_rows').delete().eq('run_id', run.id);
+      await client.from('ad_analysis_runs').delete().eq('id', run.id);
+      throwSupabaseError(rowsError);
+    }
   }
 
   const { data: allRuns, error: listError } = await client
@@ -1036,7 +1043,18 @@ export async function saveAdAnalysisRun(run: AdAnalysisRun): Promise<void> {
     .order('created_at', { ascending: false });
   if (listError) throwSupabaseError(listError);
 
-  const staleIds = ((allRuns ?? []) as Array<{ id: string }>).slice(3).map((item) => item.id);
+  const allRunIds = ((allRuns ?? []) as Array<{ id: string }>).map((item) => item.id);
+  if (allRunIds.length === 0) return;
+
+  const { data: savedRows, error: savedRowsError } = await client
+    .from('ad_analysis_rows')
+    .select('run_id')
+    .in('run_id', allRunIds);
+  if (savedRowsError) throwSupabaseError(savedRowsError);
+
+  const runsWithRows = new Set(((savedRows ?? []) as Array<{ run_id: string }>).map((item) => item.run_id));
+  const completeRunIds = allRunIds.filter((id) => runsWithRows.has(id));
+  const staleIds = allRunIds.filter((id) => !runsWithRows.has(id)).concat(completeRunIds.slice(3));
   if (staleIds.length === 0) return;
 
   const { error: deleteRowsError } = await client.from('ad_analysis_rows').delete().in('run_id', staleIds);

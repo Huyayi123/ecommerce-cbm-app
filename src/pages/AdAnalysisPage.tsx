@@ -61,7 +61,8 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
     return Array.from(new Set([...DEFAULT_STORES, ...fromSku, ...fromRuns]));
   }, [savedRuns, skuItems]);
 
-  const currentRun = useMemo(() => savedRuns.find((run) => run.id === selectedRunId) ?? savedRuns[0], [savedRuns, selectedRunId]);
+  const visibleRuns = useMemo(() => savedRuns.filter((run) => run.rows.length > 0), [savedRuns]);
+  const currentRun = useMemo(() => visibleRuns.find((run) => run.id === selectedRunId) ?? visibleRuns[0], [selectedRunId, visibleRuns]);
   const currentRows = currentRun?.rows ?? [];
 
   const draftRows = useMemo(() => {
@@ -184,8 +185,8 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
             setReportRows([]);
             setInventoryRows([]);
           }}>
-            {savedRuns.length === 0 && <option value="">暂无历史</option>}
-            {savedRuns.map((run) => <option key={run.id} value={run.id}>{dateText(run.createdAt)} - {run.sourceFileName || '广告分析'}</option>)}
+            {visibleRuns.length === 0 && <option value="">暂无历史</option>}
+            {visibleRuns.map((run) => <option key={run.id} value={run.id}>{dateText(run.createdAt)} - {run.sourceFileName || '广告分析'}</option>)}
           </select>
         </label>
         <span>{fileName ? `当前导入：${fileName}` : currentRun ? `当前历史：${dateText(currentRun.createdAt)}` : '请先导入广告报表'}</span>
