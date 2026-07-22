@@ -113,13 +113,13 @@ export function analyzeAdRows(input: {
     const strategyLabel = applyNewProductPolicy(baseLabel, ageStatus, profitRate);
     const messages: string[] = [];
 
-    if (!skuItem) messages.push('SKU资料库未找到该 SKU');
+    if (!skuItem) messages.push('SKU资料库未找到该 TSIN 对应资料');
     if (purchaseCostRmb <= 0) messages.push('采购成本缺失，无法换算兰特成本');
     if (salePrice <= 0) messages.push('Takealot 售价缺失');
     if (row.roas === null) messages.push('广告报表 ROAS 缺失');
     if (row.adSalesQuantity <= 0) messages.push('广告销量为 0，无法计算单次广告成本');
     if (platformFeeSource === 'fallback') messages.push('平台税费用售价 40% 估算');
-    if (ageStatus === 'unknown') messages.push('无法根据 SKU 排名判断新品状态');
+    if (ageStatus === 'unknown') messages.push('无法根据 TSIN 排名判断新品状态');
 
     return {
       id: `${input.runId}-${row.rowNumber}-${row.sku || row.productName}`,

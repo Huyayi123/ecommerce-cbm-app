@@ -48,7 +48,7 @@ const PURCHASE_RECORD_HEADERS = {
 } as const;
 
 const AD_REPORT_HEADERS = {
-  sku: ['SKU', 'sku', 'Seller SKU', 'seller_sku', 'Merchant SKU', 'merchant_sku', '货号', '商品编码'],
+  sku: ['TSIN', 'tsin', 'SKU', 'sku', 'Seller SKU', 'seller_sku', 'Merchant SKU', 'merchant_sku', '货号', '商品编码'],
   productName: ['产品名称', '商品名称', 'Title', 'title', 'Product', 'product_name', 'Campaign Product'],
   shopName: ['店铺', '店铺名称', 'shop_name', 'Store', 'store'],
   imageUrl: ['图片', '图片链接', 'image_url', 'imageUrl', 'Image'],
@@ -317,7 +317,7 @@ export async function parseAdReportFile(file: File): Promise<AdReportImportRow[]
   const { headers, rows, headerRowIndex } = readRowsWithDetectedHeader(await file.arrayBuffer(), file.name, AD_REPORT_HEADERS);
 
   return rows.flatMap((row, index) => {
-    const sku = String(pickAdReportField(row, headers, 'sku') ?? pickDirectField(row, ['SKU', 'Seller SKU', 'Product SKU', 'Product ID', 'PLID', 'TSIN']) ?? '').trim();
+    const sku = String(pickAdReportField(row, headers, 'sku') ?? pickDirectField(row, ['TSIN', 'SKU', 'Seller SKU', 'Product SKU', 'Product ID', 'PLID']) ?? '').trim();
     const productName = String(pickAdReportField(row, headers, 'productName') ?? pickDirectField(row, ['Product Name', 'Product Title', 'Title']) ?? '').trim();
     if (!sku && !productName) return [];
 

@@ -312,7 +312,7 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
 export function exportAdAnalysisRows(rows: AdAnalysisRow[], format: ExportFormat): void {
   const worksheet = XLSX.utils.json_to_sheet(rows.map((row) => ({
     店铺: row.shopName,
-    SKU: row.sku,
+    TSIN: row.sku,
     产品名称: row.productName,
     图片链接: row.imageUrl,
     广告花费: row.adSpend,
@@ -328,7 +328,7 @@ export function exportAdAnalysisRows(rows: AdAnalysisRow[], format: ExportFormat
     送仓费: row.warehouseFee,
     单次广告成本: row.adCostPerSale,
     利润率: row.profitRate ?? '',
-    SKU排名: row.skuRank ?? '',
+    TSIN排名: row.skuRank ?? '',
     新品状态: row.productAgeStatus,
     分类标签: row.strategyName,
     执行动作: row.actionSuggestion,

@@ -94,8 +94,8 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
     }
     try {
       setIsSyncing(true);
-      const skus = reportRows.map((row) => row.sku).filter(Boolean);
-      const rows = await fetchTakealotInventory(selectedStore, skus);
+      const tsins = reportRows.map((row) => row.sku).filter(Boolean);
+      const rows = await fetchTakealotInventory(selectedStore, tsins);
       setInventoryRows(rows);
       setMessage(`已同步 ${rows.length} 条 ${selectedStore} Takealot 数据`);
     } catch (error) {
@@ -148,7 +148,7 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
       <div className="section-heading">
         <div>
           <h2>广告分析</h2>
-          <p>导入广告报表后，结合 SKU 成本、CBM 和 Takealot 售价生成广告调整建议；只输出建议，不自动修改广告。</p>
+          <p>导入广告报表后，结合 TSIN、成本、CBM 和 Takealot 售价生成广告调整建议；只输出建议，不自动修改广告。</p>
         </div>
         <div className="export-actions">
           <label className="file-button">
@@ -204,7 +204,7 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
         <table className="ad-analysis-table">
           <thead>
             <tr>
-              <th>图片</th><th>店铺</th><th>SKU</th><th>产品名称</th><th>广告花费</th><th>广告销量</th><th>ROAS</th><th>售价</th><th>采购成本RMB</th><th>采购成本兰特</th><th>平台税费</th><th>海运费</th><th>送仓费</th><th>单次广告成本</th><th>利润率</th><th>SKU排名</th><th>新品状态</th><th>分类</th><th>执行动作</th><th>提示</th>
+              <th>图片</th><th>店铺</th><th>TSIN</th><th>产品名称</th><th>广告花费</th><th>广告销量</th><th>ROAS</th><th>售价</th><th>采购成本RMB</th><th>采购成本兰特</th><th>平台税费</th><th>海运费</th><th>送仓费</th><th>单次广告成本</th><th>利润率</th><th>TSIN排名</th><th>新品状态</th><th>分类</th><th>执行动作</th><th>提示</th>
             </tr>
           </thead>
           <tbody>
