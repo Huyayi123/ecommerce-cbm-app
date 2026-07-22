@@ -313,36 +313,69 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
   writeWorkbook(workbook, moduleName, format);
 }
 
-export function exportAdAnalysisRows(rows: AdAnalysisRow[], format: ExportFormat): void {
-  const worksheet = XLSX.utils.json_to_sheet(rows.map((row) => ({
-    店铺: row.shopName,
+function adAnalysisExportRow(row: AdAnalysisRow): Record<string, unknown> {
+  return {
+    '\u5e97\u94fa': row.shopName,
     TSIN: row.sku,
-    产品名称: row.productName,
-    图片链接: row.imageUrl,
-    广告花费: row.adSpend,
-    广告销量: row.adSalesQuantity,
+    '\u4ea7\u54c1\u540d\u79f0': row.productName,
+    '\u56fe\u7247\u94fe\u63a5': row.imageUrl,
+    '\u5e7f\u544a\u82b1\u8d39': row.adSpend,
+    '\u5e7f\u544a\u9500\u91cf': row.adSalesQuantity,
     ROAS: row.roas ?? '',
-    销售单价兰特: row.salePrice,
-    采购成本人民币: row.purchaseCostRmb,
-    采购成本兰特: row.purchaseCostZar,
-    平台税费: row.platformFee,
-    平台税费来源: row.platformFeeSource === 'api' ? 'API' : row.platformFeeSource === 'fallback' ? '售价40%' : '缺失',
-    单品CBM: row.unitCbm,
-    海运费: row.seaFreightCost,
-    送仓费: row.warehouseFee,
-    单次广告成本: row.adCostPerSale,
-    利润率: row.profitRate ?? '',
-    TSIN排名: row.skuRank ?? '',
-    新品状态: row.productAgeStatus,
-    分类标签: row.strategyName,
-    执行动作: row.actionSuggestion,
-    提示: row.messages.join('; '),
-  })));
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, '广告分析结果');
-  writeWorkbook(workbook, '广告分析结果', format);
+    '\u9500\u552e\u5355\u4ef7\u5170\u7279': row.salePrice,
+    '\u91c7\u8d2d\u6210\u672c\u4eba\u6c11\u5e01': row.purchaseCostRmb,
+    '\u91c7\u8d2d\u6210\u672c\u5170\u7279': row.purchaseCostZar,
+    '\u5e73\u53f0\u7a0e\u8d39': row.platformFee,
+    '\u5e73\u53f0\u7a0e\u8d39\u6765\u6e90': row.platformFeeSource === 'api' ? 'API' : row.platformFeeSource === 'fallback' ? '\u552e\u4ef740%' : '\u7f3a\u5931',
+    '\u5355\u54c1CBM': row.unitCbm,
+    '\u6d77\u8fd0\u8d39': row.seaFreightCost,
+    '\u9001\u4ed3\u8d39': row.warehouseFee,
+    '\u5355\u6b21\u5e7f\u544a\u6210\u672c': row.adCostPerSale,
+    '\u5229\u6da6\u7387': row.profitRate ?? '',
+    'TSIN\u6392\u540d': row.skuRank ?? '',
+    '\u65b0\u54c1\u72b6\u6001': row.productAgeStatus,
+    '\u5206\u7c7b\u6807\u7b7e': row.strategyName,
+    '\u6267\u884c\u52a8\u4f5c': row.actionSuggestion,
+    '\u63d0\u793a': row.messages.join('; '),
+  };
 }
 
+function adAnalysisSheetName(value: string, usedNames: Set<string>): string {
+  const fallback = '\u672a\u5206\u7c7b';
+  const base = (value || fallback).replace(/[\\/?*:[\]]/g, ' ').trim().slice(0, 31) || fallback;
+  let candidate = base;
+  let suffix = 2;
+  while (usedNames.has(candidate)) {
+    const suffixText = ' ' + suffix;
+    candidate = base.slice(0, 31 - suffixText.length) + suffixText;
+    suffix += 1;
+  }
+  usedNames.add(candidate);
+  return candidate;
+}
+
+export function exportAdAnalysisRows(rows: AdAnalysisRow[], format: ExportFormat): void {
+  const workbook = XLSX.utils.book_new();
+  const allRows = rows.map(adAnalysisExportRow);
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(allRows), '\u5168\u90e8');
+
+  if (format === 'xlsx') {
+    const allSheetName = '\u5168\u90e8';
+    const usedNames = new Set([allSheetName]);
+    const groups = new Map<string, AdAnalysisRow[]>();
+    for (const row of rows) {
+      const key = row.strategyName || '\u672a\u5206\u7c7b';
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+
+    for (const [strategyName, groupRows] of groups) {
+      const worksheet = XLSX.utils.json_to_sheet(groupRows.map(adAnalysisExportRow));
+      XLSX.utils.book_append_sheet(workbook, worksheet, adAnalysisSheetName(strategyName, usedNames));
+    }
+  }
+
+  writeWorkbook(workbook, '\u5e7f\u544a\u5206\u6790\u7ed3\u679c', format);
+}
 export function exportBatchPurchaseOrder(records: PurchaseRecord[], format: ExportFormat): void {
   const exportRows = [...records]
     .map(withPurchaseTotals)
