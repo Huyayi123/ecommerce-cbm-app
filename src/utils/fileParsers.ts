@@ -174,6 +174,49 @@ function readRows(buffer: ArrayBuffer, fileName: string): { headers: string[]; r
   return { headers, rows };
 }
 
+function readRowsWithDetectedHeader(
+  buffer: ArrayBuffer,
+  fileName: string,
+  aliasGroups: Record<string, readonly string[]>,
+): { headers: string[]; rows: Record<string, unknown>[]; headerRowIndex: number } {
+  const isCsv = /\.csv$/i.test(fileName);
+  const workbook = isCsv ? XLSX.read(decodeCsv(buffer), { type: 'string' }) : XLSX.read(buffer, { type: 'array' });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) return { headers: [], rows: [], headerRowIndex: -1 };
+
+  const worksheet = workbook.Sheets[firstSheetName];
+  if (!isCsv) fillMergedCells(worksheet);
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '', raw: false });
+  const aliases = Object.values(aliasGroups).flat().map(normalizeHeader);
+  let bestRowIndex = 0;
+  let bestScore = -1;
+
+  matrix.slice(0, 30).forEach((row, index) => {
+    const score = row.reduce<number>((total, value) => {
+      const header = normalizeHeader(String(value ?? '').trim());
+      return total + (header && aliases.includes(header) ? 1 : 0);
+    }, 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestRowIndex = index;
+    }
+  });
+
+  const rawHeaders = matrix[bestRowIndex] ?? [];
+  const headers = rawHeaders.map((value, index) => String(value ?? '').trim() || `__EMPTY_${index}`);
+  const rows = matrix.slice(bestRowIndex + 1).flatMap((line) => {
+    const isEmpty = line.every((value) => String(value ?? '').trim() === '');
+    if (isEmpty) return [];
+    const row: Record<string, unknown> = {};
+    headers.forEach((header, index) => {
+      row[header] = line[index] ?? '';
+    });
+    return [row];
+  });
+
+  return { headers, rows, headerRowIndex: bestRowIndex };
+}
+
 export async function parsePurchaseFile(file: File): Promise<PurchaseRow[]> {
   const { headers, rows } = readRows(await file.arrayBuffer(), file.name);
 
@@ -262,23 +305,31 @@ function pickAdReportField(row: Record<string, unknown>, headers: string[], fiel
   return pickField(row, headers, AD_REPORT_HEADERS[field]);
 }
 
+function pickDirectField(row: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== null && String(value).trim()) return value;
+  }
+  return undefined;
+}
+
 export async function parseAdReportFile(file: File): Promise<AdReportImportRow[]> {
-  const { headers, rows } = readRows(await file.arrayBuffer(), file.name);
+  const { headers, rows, headerRowIndex } = readRowsWithDetectedHeader(await file.arrayBuffer(), file.name, AD_REPORT_HEADERS);
 
   return rows.flatMap((row, index) => {
-    const sku = String(pickAdReportField(row, headers, 'sku') ?? '').trim();
-    const productName = String(pickAdReportField(row, headers, 'productName') ?? '').trim();
+    const sku = String(pickAdReportField(row, headers, 'sku') ?? pickDirectField(row, ['SKU', 'Seller SKU', 'Product SKU', 'Product ID', 'PLID', 'TSIN']) ?? '').trim();
+    const productName = String(pickAdReportField(row, headers, 'productName') ?? pickDirectField(row, ['Product Name', 'Product Title', 'Title']) ?? '').trim();
     if (!sku && !productName) return [];
 
     return [{
       rowId: `${Date.now()}-ad-${index}`,
-      rowNumber: index + 2,
+      rowNumber: headerRowIndex + index + 2,
       sku,
       productName,
-      shopName: String(pickAdReportField(row, headers, 'shopName') ?? '').trim(),
+      shopName: String(pickAdReportField(row, headers, 'shopName') ?? pickDirectField(row, ['Store', 'Brand Name']) ?? '').trim(),
       imageUrl: String(pickAdReportField(row, headers, 'imageUrl') ?? '').trim(),
-      adSpend: toNumber(pickAdReportField(row, headers, 'adSpend')) ?? 0,
-      adSalesQuantity: toNumber(pickAdReportField(row, headers, 'adSalesQuantity')) ?? 0,
+      adSpend: toNumber(pickAdReportField(row, headers, 'adSpend') ?? pickDirectField(row, ['Ad Spend', 'Spend'])) ?? 0,
+      adSalesQuantity: toNumber(pickAdReportField(row, headers, 'adSalesQuantity') ?? pickDirectField(row, ['Orders (SKU)', 'Orders', 'Units Sold'])) ?? 0,
       roas: toNumber(pickAdReportField(row, headers, 'roas')),
       raw: row,
     }];
