@@ -117,7 +117,9 @@ export function analyzeAdRows(input: {
     const skuRank = rankMap.get(`${storeKey(shopName)}|${skuKey(rankIdentity)}`) ?? null;
     const ageStatus = productAgeStatus(shopName, skuRank);
     const baseLabel = adLabel(profitRate, row.roas);
-    const strategyLabel = applyNewProductPolicy(baseLabel, ageStatus, profitRate);
+    const strategyLabel = ageStatus === 'old' && row.adSalesQuantity <= 0
+      ? 'no_profit'
+      : applyNewProductPolicy(baseLabel, ageStatus, profitRate);
     const messages: string[] = [];
 
     if (!skuItem) messages.push('SKU资料库未找到该 TSIN 对应资料');
@@ -125,6 +127,7 @@ export function analyzeAdRows(input: {
     if (salePrice <= 0) messages.push('Takealot 售价缺失');
     if (row.roas === null) messages.push('广告报表 ROAS 缺失');
     if (row.adSalesQuantity <= 0) messages.push('广告销量为 0，无法计算单次广告成本');
+    if (ageStatus === 'old' && row.adSalesQuantity <= 0) messages.push('老品广告销量为 0，直接判定为广告无利润');
     if (platformFeeSource === 'fallback') messages.push('平台税费用售价 40% 估算');
     if (ageStatus === 'unknown') messages.push('无法根据 TSIN 排名判断新品状态');
 
