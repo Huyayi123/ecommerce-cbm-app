@@ -40,8 +40,13 @@ function strategy(label: AdStrategyLabel): { strategyName: string; actionSuggest
 }
 
 function adLabel(profitRate: number | null, roas: number | null): AdStrategyLabel {
-  if (profitRate === null || roas === null) return 'missing_data';
+  if (roas === null) return 'missing_data';
+  if (profitRate === null) return roasLabel(roas);
   if (profitRate <= 0) return 'no_profit';
+  return roasLabel(roas);
+}
+
+function roasLabel(roas: number): AdStrategyLabel {
   if (roas <= 2) return 'loss_product';
   if (roas > 10) return 'green_star';
   if (roas > 5) return 'yellow_cow';
