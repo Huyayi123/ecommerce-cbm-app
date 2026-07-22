@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { AdAnalysisRun, AppProfile, SkuItem } from '../types';
 import { analyzeAdRows, summarizeAdRows } from '../utils/adAnalysis';
 import { exportAdAnalysisRows } from '../utils/exporters';
@@ -16,6 +16,59 @@ type Props = {
 };
 
 const DEFAULT_STORES = ['Bestby', 'Arfast', 'Aicom', 'MegaValue', 'KeepFit', 'Lifon', 'PatPaw'];
+const AD_ANALYSIS_DRAFT_STORAGE_KEY = 'ecommerce-cbm-ad-analysis-draft';
+
+type AdAnalysisDraft = {
+  reportRows: AdReportImportRow[];
+  inventoryRows: TakealotInventoryRow[];
+  fileName: string;
+  selectedStore: string;
+};
+
+function loadAdAnalysisDraft(): AdAnalysisDraft | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(AD_ANALYSIS_DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<AdAnalysisDraft>;
+    return {
+      reportRows: Array.isArray(parsed.reportRows) ? parsed.reportRows : [],
+      inventoryRows: Array.isArray(parsed.inventoryRows) ? parsed.inventoryRows : [],
+      fileName: typeof parsed.fileName === 'string' ? parsed.fileName : '',
+      selectedStore: typeof parsed.selectedStore === 'string' ? parsed.selectedStore : '',
+    };
+  } catch {
+    localStorage.removeItem(AD_ANALYSIS_DRAFT_STORAGE_KEY);
+    return null;
+  }
+}
+
+function compactReportRows(rows: AdReportImportRow[]): AdReportImportRow[] {
+  return rows.map((row) => ({ ...row, raw: {} }));
+}
+
+function compactInventoryRows(rows: TakealotInventoryRow[]): TakealotInventoryRow[] {
+  return rows.map(({ raw: _raw, ...row }) => row);
+}
+
+function saveAdAnalysisDraft(draft: AdAnalysisDraft): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(AD_ANALYSIS_DRAFT_STORAGE_KEY, JSON.stringify({
+      reportRows: compactReportRows(draft.reportRows),
+      inventoryRows: compactInventoryRows(draft.inventoryRows),
+      fileName: draft.fileName,
+      selectedStore: draft.selectedStore,
+    }));
+  } catch (error) {
+    console.warn('广告分析草稿缓存失败', error);
+  }
+}
+
+function clearAdAnalysisDraft(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(AD_ANALYSIS_DRAFT_STORAGE_KEY);
+}
 
 function labelClass(value: string): string {
   if (value === 'green_star') return 'good';
@@ -46,10 +99,10 @@ function dateText(value: string): string {
 }
 
 export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefresh }: Props) {
-  const [reportRows, setReportRows] = useState<AdReportImportRow[]>([]);
-  const [inventoryRows, setInventoryRows] = useState<TakealotInventoryRow[]>([]);
-  const [fileName, setFileName] = useState('');
-  const [selectedStore, setSelectedStore] = useState('');
+  const [reportRows, setReportRows] = useState<AdReportImportRow[]>(() => loadAdAnalysisDraft()?.reportRows ?? []);
+  const [inventoryRows, setInventoryRows] = useState<TakealotInventoryRow[]>(() => loadAdAnalysisDraft()?.inventoryRows ?? []);
+  const [fileName, setFileName] = useState(() => loadAdAnalysisDraft()?.fileName ?? '');
+  const [selectedStore, setSelectedStore] = useState(() => loadAdAnalysisDraft()?.selectedStore ?? '');
   const [selectedRunId, setSelectedRunId] = useState('');
   const [message, setMessage] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -76,6 +129,14 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
 
   const displayRows = draftRows.length > 0 ? draftRows : currentRows;
   const displaySummary = useMemo(() => summarizeAdRows(displayRows), [displayRows]);
+
+  useEffect(() => {
+    if (reportRows.length === 0) {
+      clearAdAnalysisDraft();
+      return;
+    }
+    saveAdAnalysisDraft({ reportRows, inventoryRows, fileName, selectedStore });
+  }, [fileName, inventoryRows, reportRows, selectedStore]);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -133,6 +194,8 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
       await onSaveRun(run);
       setReportRows([]);
       setInventoryRows([]);
+      setFileName('');
+      clearAdAnalysisDraft();
       setSelectedRunId(runId);
       setMessage('广告分析结果已保存，系统只保留最近三次');
       await onRefresh();
@@ -184,6 +247,8 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
             setSelectedRunId(event.target.value);
             setReportRows([]);
             setInventoryRows([]);
+            setFileName('');
+            clearAdAnalysisDraft();
           }}>
             {visibleRuns.length === 0 && <option value="">暂无历史</option>}
             {visibleRuns.map((run) => <option key={run.id} value={run.id}>{dateText(run.createdAt)} - {run.sourceFileName || '广告分析'}</option>)}
