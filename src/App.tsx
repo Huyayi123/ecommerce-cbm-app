@@ -335,6 +335,7 @@ function App() {
     } catch (error) {
       console.error(error);
       setStatusMessage(`采购记录保存失败：${formatErrorMessage(error)}`);
+      throw error;
     }
   }
 
@@ -495,9 +496,7 @@ function App() {
           fileName={fileName}
           onRowsChange={(rows) => void persistPurchaseRows(rows)}
           onFileNameChange={setFileName}
-          onRecordsCreate={(records) => {
-            void appendPurchaseRecords(records);
-          }}
+          onRecordsCreate={appendPurchaseRecords}
           canEditData={true}
         />
       )}

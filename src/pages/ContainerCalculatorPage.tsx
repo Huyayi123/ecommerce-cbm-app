@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PurchaseUploader } from '../components/PurchaseUploader';
 import { ResultsTable } from '../components/ResultsTable';
 import { SummaryCards } from '../components/SummaryCards';
@@ -12,7 +12,7 @@ type Props = {
   fileName: string;
   onRowsChange: (rows: PurchaseRow[]) => void;
   onFileNameChange: (fileName: string) => void;
-  onRecordsCreate: (records: PurchaseRecord[]) => void;
+  onRecordsCreate: (records: PurchaseRecord[]) => Promise<void>;
   canEditData?: boolean;
 };
 
@@ -85,6 +85,9 @@ export function ContainerCalculatorPage({
 }: Props) {
   const [duplicateMessage, setDuplicateMessage] = useState('');
   const [syncMessage, setSyncMessage] = useState('');
+  const [createMessage, setCreateMessage] = useState('');
+  const [isCreatingTasks, setIsCreatingTasks] = useState(false);
+  const isCreatingTasksRef = useRef(false);
   const [workingRows, setWorkingRows] = useState<PurchaseRow[]>(purchaseRows);
   const calculationRows = useMemo(() => calculateRows(workingRows, skuItems), [workingRows, skuItems]);
   const summary = useMemo(() => summarize(calculationRows), [calculationRows]);
@@ -125,6 +128,7 @@ export function ContainerCalculatorPage({
     onFileNameChange('');
     setDuplicateMessage('');
     setSyncMessage('');
+    setCreateMessage('');
   }
 
   function syncSkuDataToWorkingRows() {
@@ -159,6 +163,7 @@ export function ContainerCalculatorPage({
         };
       });
       setSyncMessage(updatedCount > 0 ? `已同步 ${updatedCount} 条 SKU 资料到当前装柜计算。` : '没有找到可同步的 SKU 资料。');
+      setCreateMessage('');
       onRowsChange(next);
       return next;
     });
@@ -210,15 +215,31 @@ export function ContainerCalculatorPage({
     };
   }
 
-  function createPurchaseTasks() {
-    if (!canEditData) return;
+  async function createPurchaseTasks() {
+    if (!canEditData || isCreatingTasksRef.current) return;
     const records = toPurchaseRecords(calculationRows);
+    if (records.length === 0) {
+      setCreateMessage('没有可生成的采购任务，请确认采购数量、SKU 匹配和异常提示。');
+      return;
+    }
     const missing = records.filter((record) => !record.assignedBuyerName.trim()).map((record) => record.sku || record.productName).filter(Boolean);
     if (missing.length > 0) {
       const ok = window.confirm(`以下 SKU 未分配采购人，保存后无法自动分配到个人采购订单中：\n${missing.join('\n')}\n\n是否继续保存？`);
       if (!ok) return;
     }
-    if (records.length > 0) onRecordsCreate(records);
+    try {
+      isCreatingTasksRef.current = true;
+      setIsCreatingTasks(true);
+      setCreateMessage(`正在生成 ${records.length} 条采购任务...`);
+      await onRecordsCreate(records);
+      setCreateMessage(`已生成 ${records.length} 条采购任务。`);
+    } catch (error) {
+      console.error(error);
+      setCreateMessage(error instanceof Error ? error.message : '生成采购任务失败，请稍后重试。');
+    } finally {
+      isCreatingTasksRef.current = false;
+      setIsCreatingTasks(false);
+    }
   }
 
   return (
@@ -230,6 +251,7 @@ export function ContainerCalculatorPage({
           const normalized = normalizeRows(rows);
           setDuplicateMessage(rows.length !== normalized.rows.length ? '已自动合并重复 SKU 的采购数量' : '');
           setSyncMessage('');
+          setCreateMessage('');
           setWorkingRows(normalized.rows);
           onRowsChange(normalized.rows);
           onFileNameChange(name);
@@ -238,6 +260,7 @@ export function ContainerCalculatorPage({
 
       {duplicateMessage && <div className="inline-notice">{duplicateMessage}</div>}
       {syncMessage && <div className="inline-notice">{syncMessage}</div>}
+      {createMessage && <div className="inline-notice">{createMessage}</div>}
 
       <section className="panel compact-panel">
         <div className="section-heading">
@@ -245,8 +268,8 @@ export function ContainerCalculatorPage({
             <h2>装柜采购单</h2>
             <p>确认计划数量、单价和 CBM 后，生成采购任务并分配给采购人；这里不直接形成在途库存。</p>
           </div>
-          <button className="primary" type="button" onClick={createPurchaseTasks} disabled={!canEditData || savableCount === 0}>
-            生成采购任务
+          <button className="primary" type="button" onClick={() => void createPurchaseTasks()} disabled={!canEditData || savableCount === 0 || isCreatingTasks}>
+            {isCreatingTasks ? '生成中...' : '生成采购任务'}
           </button>
         </div>
       </section>
