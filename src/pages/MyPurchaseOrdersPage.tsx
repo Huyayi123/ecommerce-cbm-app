@@ -878,11 +878,15 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   }
 
   return (
-    <section className="panel">
-      <div className="section-heading">
-        <div>
+    <section className="panel my-orders-panel">
+      <div className="section-heading my-orders-heading">
+        <div className="my-orders-title-block">
           <h2>我的采购订单</h2>
           <p>普通整箱只填整箱件数、每箱数量和尾箱数量；混装商品再单独新增混装组。</p>
+          <div className="metric order-cbm-metric">
+            <span>当前总立方数</span>
+            <strong>{visibleTotalCbm.toFixed(4)} CBM</strong>
+          </div>
         </div>
         <div className="export-actions">
           {!isViewer && (
@@ -905,13 +909,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       </div>
       {message && <div className="inline-notice order-save-notice" role="status">{message}</div>}
 
-      <div className="order-metrics-row">
-        <div className="metric order-cbm-metric">
-          <span>当前总立方数</span>
-          <strong>{visibleTotalCbm.toFixed(4)} CBM</strong>
-        </div>
-      </div>
-
       <div className="order-filter-bar">
         <label>
           状态筛选
@@ -919,7 +916,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
             {statusFilterOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </label>
-        <label>
+        <label className="order-search-field">
           搜索
           <input
             value={orderSearch}
@@ -927,7 +924,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
             onChange={(event) => setOrderSearch(event.target.value)}
           />
         </label>
-        <span>当前 {visibleRecords.length} 条 / 我的订单 {assignedRecords.length} 条</span>
+        <span className="order-count-text">当前 {visibleRecords.length} 条 / 我的订单 {assignedRecords.length} 条</span>
       </div>
 
       {!isViewer && (

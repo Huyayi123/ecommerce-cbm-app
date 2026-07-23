@@ -1054,49 +1054,96 @@ th.sticky-col {
   padding-bottom: 1px;
 }
 
+.my-orders-panel {
+  padding: 14px;
+}
+
+.my-orders-heading {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.my-orders-title-block {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.my-orders-title-block h2 {
+  width: 100%;
+}
+
+.my-orders-title-block p {
+  margin: 0;
+}
+
+.my-orders-heading .export-actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+.order-cbm-metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 0;
+  width: auto;
+  padding: 8px 12px;
+  background: #f8fafb;
+}
+
+.order-cbm-metric span {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.order-cbm-metric strong {
+  font-size: 18px;
+  white-space: nowrap;
+}
+
 .order-filter-bar {
   display: flex;
   align-items: end;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin: 12px 0;
-  padding: 12px;
+  gap: 10px;
+  margin: 10px 0 12px;
+  padding: 10px;
   border: 1px solid #e1e8ee;
   border-radius: 8px;
   background: #f8fafb;
 }
 
-.order-metrics-row {
-  display: flex;
-  gap: 12px;
-  margin: 12px 0 8px;
-}
-
-.order-cbm-metric {
-  width: 220px;
-  min-height: 96px;
-}
-
 .order-filter-bar label {
   display: grid;
-  gap: 6px;
-  min-width: 180px;
+  gap: 5px;
+  min-width: 150px;
   color: #51606c;
   font-size: 13px;
 }
 
-.order-filter-bar select {
-  height: 36px;
+.order-filter-bar .order-search-field {
+  flex: 1 1 520px;
+  min-width: 420px;
+}
+
+.order-filter-bar select,
+.order-filter-bar input {
+  width: 100%;
+  height: 34px;
   padding: 0 10px;
   border: 1px solid #cbd6df;
   border-radius: 6px;
   background: #ffffff;
 }
 
-.order-filter-bar span {
+.order-filter-bar .order-count-text {
+  flex: 0 0 auto;
   color: #5f6d78;
   font-size: 14px;
   padding-bottom: 8px;
+  white-space: nowrap;
 }
 
 .packing-detail-row td {
@@ -1318,5 +1365,18 @@ tbody tr:last-child td {
 
   .sku-form {
     grid-template-columns: repeat(4, minmax(120px, 1fr));
+  }
+
+  .my-orders-heading,
+  .order-filter-bar {
+    flex-wrap: wrap;
+  }
+
+  .my-orders-heading .export-actions {
+    justify-content: flex-start;
+  }
+
+  .order-filter-bar .order-search-field {
+    min-width: 320px;
   }
 }
