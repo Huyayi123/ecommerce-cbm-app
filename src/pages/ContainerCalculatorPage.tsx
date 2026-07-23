@@ -3,7 +3,7 @@ import { PurchaseUploader } from '../components/PurchaseUploader';
 import { ResultsTable } from '../components/ResultsTable';
 import { SummaryCards } from '../components/SummaryCards';
 import type { CalculationRow, PurchaseRecord, PurchaseRow, SkuItem } from '../types';
-import { calculateRows, getSkuMatchKey, summarize } from '../utils/calculations';
+import { calculateRows, findMatchingSkuItem, getSkuMatchKey, summarize } from '../utils/calculations';
 import { round } from '../utils/number';
 
 type Props = {
@@ -84,6 +84,7 @@ export function ContainerCalculatorPage({
   canEditData = true,
 }: Props) {
   const [duplicateMessage, setDuplicateMessage] = useState('');
+  const [syncMessage, setSyncMessage] = useState('');
   const [workingRows, setWorkingRows] = useState<PurchaseRow[]>(purchaseRows);
   const calculationRows = useMemo(() => calculateRows(workingRows, skuItems), [workingRows, skuItems]);
   const summary = useMemo(() => summarize(calculationRows), [calculationRows]);
@@ -123,6 +124,44 @@ export function ContainerCalculatorPage({
     onRowsChange([]);
     onFileNameChange('');
     setDuplicateMessage('');
+    setSyncMessage('');
+  }
+
+  function syncSkuDataToWorkingRows() {
+    setWorkingRows((current) => {
+      let updatedCount = 0;
+      const next = current.map((row) => {
+        const shopKey = String(row.shopName ?? row.raw.shopName ?? '').trim().toLowerCase();
+        const scopedSkuItems = shopKey
+          ? skuItems.filter((item) => item.shopName.trim().toLowerCase() === shopKey)
+          : skuItems;
+        const skuItem = findMatchingSkuItem(row, scopedSkuItems) ?? findMatchingSkuItem(row, skuItems);
+        if (!skuItem) return row;
+
+        updatedCount += 1;
+        return {
+          ...row,
+          sku: skuItem.sku || row.sku,
+          productName: skuItem.productName || row.productName,
+          englishName: skuItem.englishName || row.englishName,
+          imageUrl: skuItem.imageUrl || row.imageUrl,
+          manufacturerName: skuItem.manufacturerName || row.manufacturerName,
+          shopName: skuItem.shopName || row.shopName,
+          raw: {
+            ...row.raw,
+            sku: skuItem.sku || row.sku,
+            productName: skuItem.productName || row.productName,
+            englishName: skuItem.englishName || row.englishName,
+            imageUrl: skuItem.imageUrl || row.imageUrl,
+            manufacturerName: skuItem.manufacturerName || row.manufacturerName,
+            shopName: skuItem.shopName || row.shopName,
+          },
+        };
+      });
+      setSyncMessage(updatedCount > 0 ? `已同步 ${updatedCount} 条 SKU 资料到当前装柜计算。` : '没有找到可同步的 SKU 资料。');
+      onRowsChange(next);
+      return next;
+    });
   }
 
   function recalculateDrafts(changes: { quantities: Record<string, number | null>; totalCbms: Record<string, number | null> }) {
@@ -190,6 +229,7 @@ export function ContainerCalculatorPage({
         onLoaded={(rows, name) => {
           const normalized = normalizeRows(rows);
           setDuplicateMessage(rows.length !== normalized.rows.length ? '已自动合并重复 SKU 的采购数量' : '');
+          setSyncMessage('');
           setWorkingRows(normalized.rows);
           onRowsChange(normalized.rows);
           onFileNameChange(name);
@@ -197,6 +237,7 @@ export function ContainerCalculatorPage({
       />
 
       {duplicateMessage && <div className="inline-notice">{duplicateMessage}</div>}
+      {syncMessage && <div className="inline-notice">{syncMessage}</div>}
 
       <section className="panel compact-panel">
         <div className="section-heading">
@@ -218,6 +259,7 @@ export function ContainerCalculatorPage({
         onDeleteRow={deleteWorkingRow}
         onClearRows={clearWorkingRows}
         onRecalculate={recalculateDrafts}
+        onSyncSkuData={syncSkuDataToWorkingRows}
       />
     </>
   );

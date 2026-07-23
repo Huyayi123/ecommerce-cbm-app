@@ -10,6 +10,7 @@ type Props = {
   onDeleteRow: (rowId: string) => void;
   onClearRows: () => void;
   onRecalculate: (changes: { quantities: Record<string, number | null>; totalCbms: Record<string, number | null> }) => void;
+  onSyncSkuData: () => void;
 };
 
 function parseQuantity(value: string): number | null {
@@ -19,7 +20,7 @@ function parseQuantity(value: string): number | null {
   return Number.isFinite(quantity) ? quantity : null;
 }
 
-export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChange, onDeleteRow, onClearRows, onRecalculate }: Props) {
+export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChange, onDeleteRow, onClearRows, onRecalculate, onSyncSkuData }: Props) {
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
   const [draftTotalCbms, setDraftTotalCbms] = useState<Record<string, string>>({});
   const totalPurchaseAmount = rows.reduce((sum, row) => sum + (row.totalAmount ?? 0), 0);
@@ -83,6 +84,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
         </div>
         <div className="export-actions">
           <button type="button" onClick={commitAllDrafts} disabled={rows.length === 0}>重新计算</button>
+          <button type="button" onClick={onSyncSkuData} disabled={rows.length === 0}>同步 SKU 资料</button>
           <button type="button" onClick={onClearRows} disabled={rows.length === 0}>清空全部</button>
           <button type="button" onClick={() => exportResults(rows, 'xlsx')} disabled={rows.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportResults(rows, 'csv')} disabled={rows.length === 0}>导出 CSV</button>
