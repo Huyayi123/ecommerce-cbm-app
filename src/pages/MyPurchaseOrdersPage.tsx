@@ -195,7 +195,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [newOrder, setNewOrder] = useState<NewOrderDraft>(() => createEmptyDraft());
   const [message, setMessage] = useState('');
-  const [isUndoingRecentBatches, setIsUndoingRecentBatches] = useState(false);
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollRef = useRef<ScrollSnapshot | null>(null);
   const mixedAutoSaveTimer = useRef<number | null>(null);
@@ -256,23 +255,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     [assignedRecords],
   );
   const unconfirmedVisibleCount = visibleRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase').length;
-  const recentPendingBatchGroups = useMemo(() => {
-    const groups = new Map<string, { key: string; label: string; records: PurchaseRecord[]; sortValue: string }>();
-    for (const record of records) {
-      if (record.status !== 'pending' || record.poolStatus !== 'pending_purchase' || record.isConfirmed) continue;
-      const key = record.purchaseBatchId || record.purchasePoolId || `${record.purchaseBatchDate}|${record.purchaseBatchName}` || record.id;
-      const label = record.purchaseBatchName || record.purchasePoolName || record.purchaseBatchId || record.purchasePoolId || '未命名批次';
-      const sortValue = record.createdAt || record.purchaseBatchId || record.purchasePoolId || record.purchaseBatchDate || '';
-      const existing = groups.get(key);
-      if (existing) {
-        existing.records.push(record);
-        if (sortValue > existing.sortValue) existing.sortValue = sortValue;
-      } else {
-        groups.set(key, { key, label, records: [record], sortValue });
-      }
-    }
-    return Array.from(groups.values()).sort((left, right) => right.sortValue.localeCompare(left.sortValue));
-  }, [records]);
 
   const newCartonCount = parseNumber(newOrder.cartonCount);
   const newUnitsPerCarton = parseNumber(newOrder.unitsPerCarton);
@@ -697,30 +679,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     }
   }
 
-  async function undoRecentGeneratedBatches() {
-    if (!isAdmin || isViewer || isUndoingRecentBatches) return;
-    const targetGroups = recentPendingBatchGroups.slice(0, 4);
-    const targetIds = targetGroups.flatMap((group) => group.records.map((record) => record.id));
-    if (targetIds.length === 0) {
-      setMessage('没有可撤回的待采购批次。');
-      return;
-    }
-    const detail = targetGroups.map((group, index) => `${index + 1}. ${group.label}：${group.records.length} 条`).join('\n');
-    const ok = window.confirm(`将撤回最近 ${targetGroups.length} 个待采购批次，共 ${targetIds.length} 条采购任务：\n\n${detail}\n\n只会删除未确认、未进入采购订单池/在途库存的待采购任务。是否继续？`);
-    if (!ok) return;
-    try {
-      setIsUndoingRecentBatches(true);
-      if (onDeleteRecords) await onDeleteRecords(targetIds);
-      else await onChange(records.filter((record) => !targetIds.includes(record.id)));
-      setMessage(`已撤回 ${targetGroups.length} 个批次，共 ${targetIds.length} 条采购任务。`);
-    } catch (error) {
-      console.error(error);
-      setMessage(`撤回失败：${formatErrorMessage(error)}`);
-    } finally {
-      setIsUndoingRecentBatches(false);
-    }
-  }
-
   async function addMixedGroup(record: PurchaseRecord) {
     if (isViewer) return;
     const nextRecord = {
@@ -942,7 +900,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           )}
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'xlsx', '我的采购订单')} disabled={visibleRecords.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'csv', '我的采购订单')} disabled={visibleRecords.length === 0}>导出 CSV</button>
-          {isAdmin && !isViewer && <button className="danger" type="button" onClick={() => void undoRecentGeneratedBatches()} disabled={recentPendingBatchGroups.length === 0 || isUndoingRecentBatches}>{isUndoingRecentBatches ? '撤回中...' : '撤回最近4个生成批次'}</button>}
           {!isViewer && <button className="primary" type="button" onClick={() => void confirmVisiblePurchases()}>提交采购订单池{submittableAssignedRecords.length > 0 ? ` (${unconfirmedVisibleCount || submittableAssignedRecords.length})` : ''}</button>}
         </div>
       </div>
