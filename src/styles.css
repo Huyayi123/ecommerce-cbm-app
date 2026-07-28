@@ -939,6 +939,23 @@ button.danger,
   width: 78px;
 }
 
+.my-orders-table .my-orders-compact-text {
+  min-width: 72px;
+  max-width: 84px;
+  width: 78px;
+  padding-left: 6px;
+  padding-right: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.my-orders-table .my-orders-compact-text input {
+  width: 66px;
+  min-width: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
 .my-orders-table .image-sticky-col,
 .purchase-pool-table-wrap .image-sticky-col {
   position: sticky;
