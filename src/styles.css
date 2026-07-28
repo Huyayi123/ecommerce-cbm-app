@@ -914,6 +914,21 @@ button.danger,
   background-clip: padding-box;
 }
 
+.my-orders-table .my-orders-narrow-number {
+  min-width: 68px;
+  max-width: 76px;
+  width: 72px;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.my-orders-table .my-orders-narrow-number input {
+  width: 58px;
+  min-width: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
 .my-orders-table .image-sticky-col,
 .purchase-pool-table-wrap .image-sticky-col {
   position: sticky;
