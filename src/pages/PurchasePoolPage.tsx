@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { AppProfile, PurchasePool, PurchaseRecord, SkuItem } from '../types';
 import { exportBatchPurchaseOrder, exportPurchaseRecords } from '../utils/exporters';
 import { formatErrorMessage } from '../utils/errors';
+import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
 import { calculatedPurchaseTotalAmount, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
 
 type Props = {
@@ -148,7 +149,13 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const imageUrlBySku = useMemo(
     () => new Map(skuItems
       .filter((item) => item.sku.trim())
-      .map((item) => [item.sku.trim().toUpperCase(), item.imageUrl])),
+      .map((item) => [skuLookupKey(item.sku), item.imageUrl])),
+    [skuItems],
+  );
+  const skuBySku = useMemo(
+    () => new Map(skuItems
+      .filter((item) => item.sku.trim())
+      .map((item) => [skuLookupKey(item.sku), item])),
     [skuItems],
   );
   const totalQuantity = submittedRecords.reduce((sum, record) => sum + purchaseQuantityForRecordSku(record), 0);
@@ -456,7 +463,8 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
           </thead>
           <tbody>
             {submittedRecords.map((record) => {
-              const imageUrl = record.imageUrl || skuItems.find((item) => item.sku.trim() && item.sku.trim().toUpperCase() === record.sku.trim().toUpperCase())?.imageUrl || '';
+              const imageUrl = record.imageUrl || imageUrlBySku.get(skuLookupKey(record.sku)) || '';
+              const purchaseUrl = purchaseUrlForRecord(record, skuBySku);
               const childRows = mixedChildRows(record);
               return (
                 <Fragment key={record.id}>
@@ -484,10 +492,17 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
                     <td>{editableCell(record, 'status')}</td>
                     <td>{editableCell(record, 'loadingType')}</td>
                     <td>{editableCell(record, 'note')}</td>
-                    <td className="row-actions">{isAdmin && <button type="button" onClick={() => void returnToBuyer(record)}>退回采购人</button>}</td>
+                    <td className="row-actions">
+                      {purchaseUrl ? (
+                        <button type="button" onClick={() => openPurchaseUrl(purchaseUrl)}>1688下单</button>
+                      ) : (
+                        <span className="muted-action">无采购链接</span>
+                      )}
+                      {isAdmin && <button type="button" onClick={() => void returnToBuyer(record)}>退回采购人</button>}
+                    </td>
                   </tr>
                   {childRows.map(({ group, line }) => {
-                    const childImageUrl = imageUrlBySku.get(line.sku.trim().toUpperCase()) || '';
+                    const childImageUrl = imageUrlBySku.get(skuLookupKey(line.sku)) || '';
                     return (
                       <tr className="mixed-child-row" key={`${record.id}:${group.id}:${line.id}`}>
                         <td className="image-sticky-col">{childImageUrl ? <img className="sku-thumb" src={childImageUrl} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>

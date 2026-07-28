@@ -4,6 +4,7 @@ import { formatErrorMessage } from '../utils/errors';
 import { exportPurchaseRecords } from '../utils/exporters';
 import { parsePurchaseRecordsFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
+import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
 import { calculatedPurchaseTotalAmount, effectivePurchaseQuantity, mixedQuantityForOtherSkus, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
 
 type Props = {
@@ -215,13 +216,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const imageUrlBySku = useMemo(
     () => new Map(skuItems
       .filter((item) => item.sku.trim() && !isNewSkuValue(item.sku))
-      .map((item) => [item.sku.trim().toUpperCase(), item.imageUrl])),
+      .map((item) => [skuLookupKey(item.sku), item.imageUrl])),
     [skuItems],
   );
   const skuBySku = useMemo(
     () => new Map(skuItems
       .filter((item) => item.sku.trim() && !isNewSkuValue(item.sku))
-      .map((item) => [item.sku.trim().toUpperCase(), item])),
+      .map((item) => [skuLookupKey(item.sku), item])),
     [skuItems],
   );
   const visibleRecords = useMemo(
@@ -238,7 +239,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       const search = orderSearch.trim().toLowerCase();
       if (!search) return statusRecords;
       return statusRecords.filter((record) => {
-        const skuItem = skuBySku.get(record.sku.trim().toUpperCase());
+        const skuItem = skuBySku.get(skuLookupKey(record.sku));
         const searchable = [
           record.sku,
           record.manufacturerName,
@@ -272,11 +273,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   );
 
   function imageUrlFor(record: PurchaseRecord): string {
-    return record.imageUrl || imageUrlBySku.get(record.sku.trim().toUpperCase()) || '';
+    return record.imageUrl || imageUrlBySku.get(skuLookupKey(record.sku)) || '';
   }
 
   function recordWithSkuDefaults(record: PurchaseRecord): PurchaseRecord {
-    const skuItem = skuBySku.get(record.sku.trim().toUpperCase());
+    const skuItem = skuBySku.get(skuLookupKey(record.sku));
     const withPoolStatus = {
       ...record,
       poolStatus: record.poolStatus || 'pending_purchase',
@@ -295,7 +296,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   }
 
   function defaultUnitsPerCartonText(sku: string): string {
-    const skuItem = skuBySku.get(sku.trim().toUpperCase());
+    const skuItem = skuBySku.get(skuLookupKey(sku));
     if (!skuItem || skuItem.unitsPerCarton <= 0) return '未配置默认装箱数';
     return `默认装箱数：${skuItem.unitsPerCarton}`;
   }
@@ -371,7 +372,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       if (field !== 'sku' || typeof value !== 'string') return next;
       if (!value.trim() || isNewSkuValue(value)) return next;
 
-      const skuItem = skuBySku.get(value.trim().toUpperCase());
+      const skuItem = skuBySku.get(skuLookupKey(value));
       if (!skuItem) return next;
 
       return {
@@ -425,7 +426,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           hasChanges = true;
         }
         if (lineChanged) {
-          const skuItem = skuBySku.get(nextLine.sku.trim().toUpperCase());
+          const skuItem = skuBySku.get(skuLookupKey(nextLine.sku));
           if (skuItem && !nextLine.productName.trim()) nextLine.productName = skuItem.productName;
           if (skuItem && nextLine.purchasePrice === 0) nextLine.purchasePrice = skuItem.purchasePrice;
           if (skuItem && nextLine.unitCbm === 0) nextLine.unitCbm = skuItem.unitCbm;
@@ -734,7 +735,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     if (field === 'quantity' || field === 'purchasePrice' || field === 'unitCbm') nextLine[field] = parseNumber(value);
     else nextLine[field] = value;
     if (field === 'sku') {
-      const skuItem = skuBySku.get(value.trim().toUpperCase());
+      const skuItem = skuBySku.get(skuLookupKey(value));
       if (skuItem) {
         nextLine = { ...nextLine, productName: skuItem.productName, purchasePrice: skuItem.purchasePrice, unitCbm: skuItem.unitCbm };
       }
@@ -966,6 +967,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
             {visibleRecords.map((record) => {
               const normalized = withPurchaseTotals(recordWithSkuDefaults(record));
               const childRows = mixedChildRows(normalized);
+              const purchaseUrl = purchaseUrlForRecord(normalized, skuBySku);
               return (
                 <Fragment key={record.id}>
                   <tr>
@@ -992,13 +994,18 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td>{input(normalized, 'loadingType')}</td>
                     <td>{input(normalized, 'note')}</td>
                     <td className="row-actions">
+                      {purchaseUrl ? (
+                        <button type="button" onClick={() => openPurchaseUrl(purchaseUrl)}>1688下单</button>
+                      ) : (
+                        <span className="muted-action">无采购链接</span>
+                      )}
                       <button type="button" onClick={() => toggleExpanded(record.id)}>{expandedRows.has(record.id) ? '收起混装' : '混装'}</button>
                       {!isViewer && <button className="danger" type="button" onClick={() => void deleteRecord(record.id)}>删除</button>}
                     </td>
 	                  </tr>
                   {childRows.map(({ group, line }) => (
                     <tr className="mixed-child-row" key={`${normalized.id}:${group.id}:${line.id}`}>
-                      <td className="image-sticky-col">{imageUrlBySku.get(line.sku.trim().toUpperCase()) ? <img className="sku-thumb" src={imageUrlBySku.get(line.sku.trim().toUpperCase())} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                      <td className="image-sticky-col">{imageUrlBySku.get(skuLookupKey(line.sku)) ? <img className="sku-thumb" src={imageUrlBySku.get(skuLookupKey(line.sku))} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                       <td>{normalized.manufacturerName}</td>
                       <td><strong>{line.sku}</strong></td>
                       <td><strong>{line.productName}</strong></td>

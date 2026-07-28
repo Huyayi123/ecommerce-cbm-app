@@ -360,6 +360,12 @@ button.danger,
   align-items: center;
 }
 
+.muted-action {
+  color: #8a98a5;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .sku-form,
 .record-form {
   display: grid;
