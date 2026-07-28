@@ -929,6 +929,16 @@ button.danger,
   padding-right: 4px;
 }
 
+.my-orders-table .my-orders-medium-number {
+  min-width: 90px;
+  max-width: 100px;
+  width: 96px;
+}
+
+.my-orders-table .my-orders-medium-number input {
+  width: 78px;
+}
+
 .my-orders-table .image-sticky-col,
 .purchase-pool-table-wrap .image-sticky-col {
   position: sticky;

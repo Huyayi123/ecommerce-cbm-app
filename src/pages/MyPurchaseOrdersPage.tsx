@@ -960,7 +960,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <table className="my-orders-table">
           <thead>
             <tr>
-              <th className="image-sticky-col">图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>计划采购数量</th><th className="my-orders-narrow-number">整箱件数</th><th className="my-orders-narrow-number">每箱数量</th><th className="my-orders-narrow-number">尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number">运费</th><th className="my-orders-narrow-number">总金额</th><th className="my-orders-narrow-number">单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
+              <th className="image-sticky-col">图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>计划采购数量</th><th className="my-orders-narrow-number">整箱件数</th><th className="my-orders-narrow-number">每箱数量</th><th className="my-orders-narrow-number">尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -986,9 +986,9 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td>{purchaseQuantityForRecordSku(normalized)}</td>
                     <td>{normalized.isMixed ? '是' : '否'}</td>
                     <td className="my-orders-narrow-number">{input(normalized, 'purchasePrice', 'number')}</td>
-                    <td className="my-orders-narrow-number">{input(normalized, 'freightCost', 'number')}</td>
-                    <td className="my-orders-narrow-number">{input(normalized, 'totalAmount', 'number')}</td>
-                    <td className="my-orders-narrow-number">{input(normalized, 'unitCbm', 'number')}</td>
+                    <td className="my-orders-narrow-number my-orders-medium-number">{input(normalized, 'freightCost', 'number')}</td>
+                    <td className="my-orders-narrow-number my-orders-medium-number">{input(normalized, 'totalAmount', 'number')}</td>
+                    <td className="my-orders-narrow-number my-orders-medium-number">{input(normalized, 'unitCbm', 'number')}</td>
                     <td>{normalized.totalCbm.toFixed(4)}</td>
                     <td>{input(normalized, 'status')}</td>
                     <td>{input(normalized, 'loadingType')}</td>
