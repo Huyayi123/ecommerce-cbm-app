@@ -584,7 +584,7 @@ drop policy if exists "profiles select own or admin" on public.profiles;
 drop policy if exists "profiles shared select" on public.profiles;
 create policy "profiles shared select" on public.profiles
 for select to authenticated
-using (public.current_role() <> 'logistics' or id = auth.uid() or public.is_admin());
+using (coalesce(public.current_role()::text, '') <> 'logistics' or id = auth.uid() or public.is_admin());
 
 drop policy if exists "profiles insert own" on public.profiles;
 create policy "profiles insert own" on public.profiles
@@ -604,7 +604,7 @@ using (id = auth.uid())
 with check (id = auth.uid());
 
 drop policy if exists "shared select sku" on public.sku_items;
-create policy "shared select sku" on public.sku_items for select to authenticated using (public.current_role() <> 'logistics');
+create policy "shared select sku" on public.sku_items for select to authenticated using (coalesce(public.current_role()::text, '') <> 'logistics');
 drop policy if exists "editor insert sku" on public.sku_items;
 create policy "editor insert sku" on public.sku_items for insert to authenticated with check (public.is_editor());
 drop policy if exists "editor update sku" on public.sku_items;
@@ -613,7 +613,7 @@ drop policy if exists "admin delete sku" on public.sku_items;
 create policy "admin delete sku" on public.sku_items for delete to authenticated using (public.is_admin());
 
 drop policy if exists "shared select purchase" on public.purchase_records;
-create policy "shared select purchase" on public.purchase_records for select to authenticated using (public.current_role() <> 'logistics');
+create policy "shared select purchase" on public.purchase_records for select to authenticated using (coalesce(public.current_role()::text, '') <> 'logistics');
 drop policy if exists "editor insert purchase" on public.purchase_records;
 create policy "editor insert purchase" on public.purchase_records for insert to authenticated with check (public.is_editor());
 drop policy if exists "editor update purchase" on public.purchase_records;
@@ -628,7 +628,7 @@ using (
 );
 
 drop policy if exists "shared select purchase pools" on public.purchase_pools;
-create policy "shared select purchase pools" on public.purchase_pools for select to authenticated using (public.current_role() <> 'logistics');
+create policy "shared select purchase pools" on public.purchase_pools for select to authenticated using (coalesce(public.current_role()::text, '') <> 'logistics');
 drop policy if exists "admin insert purchase pools" on public.purchase_pools;
 drop policy if exists "editor insert purchase pools" on public.purchase_pools;
 create policy "editor insert purchase pools" on public.purchase_pools for insert to authenticated with check (public.is_editor());
@@ -718,7 +718,7 @@ with check (
 );
 
 drop policy if exists "shared select container" on public.container_rows;
-create policy "shared select container" on public.container_rows for select to authenticated using (public.current_role() <> 'logistics');
+create policy "shared select container" on public.container_rows for select to authenticated using (coalesce(public.current_role()::text, '') <> 'logistics');
 drop policy if exists "editor insert container" on public.container_rows;
 create policy "editor insert container" on public.container_rows for insert to authenticated with check (public.is_editor());
 drop policy if exists "editor update container" on public.container_rows;
