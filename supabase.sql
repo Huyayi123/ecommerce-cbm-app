@@ -175,9 +175,19 @@ create unique index if not exists sku_items_internal_code_idx
 on public.sku_items (internal_code)
 where internal_code is not null and internal_code <> '';
 
-with numbered as (
-  select id, lpad(row_number() over (order by coalesce(manufacturer_name, ''), coalesce(sku, ''), coalesce(product_name, ''), id)::text, 5, '0') as next_code
+with existing as (
+  select coalesce(max(internal_code::integer), 0) as max_code
   from public.sku_items
+  where internal_code ~ '^\d{5}$'
+),
+numbered as (
+  select
+    id,
+    lpad((existing.max_code + row_number() over (
+      order by coalesce(manufacturer_name, ''), coalesce(sku, ''), coalesce(product_name, ''), id
+    ))::text, 5, '0') as next_code
+  from public.sku_items
+  cross join existing
   where coalesce(internal_code, '') = ''
 )
 update public.sku_items s
