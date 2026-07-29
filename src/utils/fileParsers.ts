@@ -15,6 +15,7 @@ import {
 const PURCHASE_QUANTITY_HEADERS = ['采购数量', '数量', 'qty', 'Qty', 'QTY', 'purchaseQuantity'];
 const SALES_QUANTITY_HEADERS = ['月销量', '销售数量', '销量', '销售件数', 'monthlySales', 'salesQuantity'];
 const PURCHASE_RECORD_HEADERS = {
+  internalCode: ['内部编号', '内部产品编号', 'internal_code', 'internalCode'],
   manufacturerName: ['厂家名', '厂家', '供应商', 'manufacturer_name'],
   sku: ['SKU', 'sku', '货号', '产品编码', '商品编码'],
   productName: ['产品名称', '品名', '中文名称', 'product_name'],
@@ -362,6 +363,7 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
 
     return [withPurchaseTotals({
       id: crypto.randomUUID(),
+      internalCode: String(pickPurchaseRecordField(row, headers, 'internalCode') ?? '').trim(),
       manufacturerName: String(pickPurchaseRecordField(row, headers, 'manufacturerName') ?? '').trim(),
       sku,
       productName,
@@ -398,6 +400,13 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
       isMixed: parseBoolean(pickPurchaseRecordField(row, headers, 'isMixed')),
       mixedGroups: parseMixedGroups(pickPurchaseRecordField(row, headers, 'mixedGroups')),
       logisticsTotalCbm,
+      logisticsBatchId: '',
+      logisticsConfirmationStatus: 'unassigned',
+      logisticsLoadedCartonCount: null,
+      logisticsLoadedTailQuantity: 0,
+      logisticsLeftCartonCount: null,
+      logisticsLeftTailQuantity: 0,
+      logisticsSourceRecordId: '',
       note: String(pickPurchaseRecordField(row, headers, 'note') ?? `导入行 ${index + 2}`).trim(),
     })];
   });

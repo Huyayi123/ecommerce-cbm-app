@@ -1,5 +1,6 @@
 export type SkuItem = {
   id: string;
+  internalCode: string;
   sku: string;
   tsin: string;
   productName: string;
@@ -29,6 +30,7 @@ export type SkuItem = {
 export type PurchaseRow = {
   rowId: string;
   rowNumber: number;
+  internalCode?: string;
   sku: string;
   productName: string;
   englishName: string;
@@ -43,7 +45,9 @@ export type PurchaseRow = {
 export type PurchaseStatus = 'pending' | 'in_transit' | 'arrived' | 'cancelled';
 export type PurchasePoolStatus = 'open' | 'sent' | 'closed';
 export type PurchaseRecordPoolStatus = 'pending_purchase' | 'submitted_to_pool' | 'sent_to_inventory';
-export type UserRole = 'admin' | 'buyer' | 'viewer';
+export type UserRole = 'admin' | 'buyer' | 'viewer' | 'logistics';
+export type LogisticsBatchStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
+export type LogisticsConfirmationStatus = 'unassigned' | 'draft' | 'submitted' | 'approved' | 'rejected';
 export type AuditAction =
   | 'sku_created'
   | 'sku_updated'
@@ -86,6 +90,7 @@ export type MixedCartonGroup = {
 
 export type PurchaseRecord = {
   id: string;
+  internalCode: string;
   manufacturerName: string;
   sku: string;
   productName: string;
@@ -122,9 +127,58 @@ export type PurchaseRecord = {
   isMixed: boolean;
   mixedGroups: MixedCartonGroup[];
   logisticsTotalCbm: number | null;
+  logisticsBatchId: string;
+  logisticsConfirmationStatus: LogisticsConfirmationStatus;
+  logisticsLoadedCartonCount: number | null;
+  logisticsLoadedTailQuantity: number;
+  logisticsLeftCartonCount: number | null;
+  logisticsLeftTailQuantity: number;
+  logisticsSourceRecordId: string;
   note: string;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type LogisticsBatchItem = {
+  id: string;
+  batchId: string;
+  purchaseRecordId: string;
+  internalCode: string;
+  manufacturerName: string;
+  sku: string;
+  productName: string;
+  englishName: string;
+  imageUrl: string;
+  shopName: string;
+  containerDate: string;
+  cartonCount: number | null;
+  unitsPerCarton: number | null;
+  tailQuantity: number;
+  loadingType: PurchaseRecord['loadingType'];
+  isMixed: boolean;
+  mixedGroupsSummary: string;
+  loadedCartonCount: number | null;
+  loadedTailQuantity: number;
+  leftCartonCount: number | null;
+  leftTailQuantity: number;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LogisticsBatch = {
+  id: string;
+  containerDate: string;
+  logisticsUserId: string;
+  logisticsEmail: string;
+  status: LogisticsBatchStatus;
+  createdBy: string;
+  createdAt: string;
+  submittedAt: string;
+  reviewedBy: string;
+  reviewedAt: string;
+  note: string;
+  items: LogisticsBatchItem[];
 };
 
 export type PurchasePool = {
@@ -143,6 +197,7 @@ export type PurchasePool = {
 export type CalculationRow = {
   rowId: string;
   rowNumber: number;
+  internalCode: string;
   sku: string;
   manufacturerName: string;
   productName: string;

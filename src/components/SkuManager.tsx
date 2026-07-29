@@ -10,6 +10,7 @@ import { CANONICAL_SHOP_NAMES, canonicalShopName } from '../utils/shops';
 type DraftSku = Omit<SkuItem, 'cartonCbm' | 'unitCbm'>;
 type ColumnKey =
   | 'imageUrl'
+  | 'internalCode'
   | 'manufacturerName'
   | 'sku'
   | 'productName'
@@ -39,6 +40,7 @@ type Props = {
 
 const columnOptions: Array<{ key: ColumnKey; label: string }> = [
   { key: 'imageUrl', label: '图片' },
+  { key: 'internalCode', label: '内部编号' },
   { key: 'manufacturerName', label: '厂家名' },
   { key: 'sku', label: 'SKU' },
   { key: 'productName', label: '产品名称' },
@@ -60,6 +62,7 @@ const columnOptions: Array<{ key: ColumnKey; label: string }> = [
 
 const defaultVisibleColumns = new Set<ColumnKey>([
   'imageUrl',
+  'internalCode',
   'manufacturerName',
   'sku',
   'productName',
@@ -74,6 +77,7 @@ const SKU_PAGE_SIZE_OPTIONS = [50, 100, 200];
 
 const emptyDraft: DraftSku = {
   id: '',
+  internalCode: '',
   sku: '',
   tsin: '',
   productName: '',
@@ -102,6 +106,7 @@ function mergeImportedSku(existing: SkuItem, imported: SkuItem, recognizedFields
   const hasField = (field: string) => recognizedFields.has(field);
   return hydrateSku({
     ...existing,
+    internalCode: existing.internalCode,
     manufacturerName: imported.manufacturerName.trim() || existing.manufacturerName,
     sku: imported.sku.trim() || existing.sku,
     tsin: imported.tsin.trim() || existing.tsin,
@@ -129,6 +134,7 @@ function mergeImportedSku(existing: SkuItem, imported: SkuItem, recognizedFields
 function toDraft(item: SkuItem): DraftSku {
   return {
     id: item.id,
+    internalCode: item.internalCode,
     sku: item.sku,
     tsin: item.tsin,
     productName: item.productName,
@@ -190,7 +196,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
     const shopMatchedItems = shopFilter ? items.filter((item) => canonicalShopName(item.shopName) === shopFilter) : items;
     if (!keyword) return shopMatchedItems;
     return shopMatchedItems.filter((item) =>
-      [item.manufacturerName, item.sku, item.tsin, item.productName, item.englishName, item.storageLocation, item.purchaseUrl, item.shopName, item.buyerName, item.isSeasonal ? '季节性产品' : '']
+      [item.internalCode, item.manufacturerName, item.sku, item.tsin, item.productName, item.englishName, item.storageLocation, item.purchaseUrl, item.shopName, item.buyerName, item.isSeasonal ? '季节性产品' : '']
         .some((value) => value.toLowerCase().includes(keyword)),
     );
   }, [items, searchText, shopFilter]);
@@ -231,6 +237,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
     const item = hydrateSku({
       ...draft,
       id: editingId ?? crypto.randomUUID(),
+      internalCode: draft.internalCode,
       sku: draft.sku.trim(),
       shopName: canonicalShopName(draft.shopName),
       updatedAt: new Date().toISOString(),
@@ -242,7 +249,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
       } else {
         const existing = findMatchingSkuItem(item, items);
         await onChange(existing
-          ? items.map((current) => (current.id === existing.id ? { ...item, id: existing.id } : current))
+          ? items.map((current) => (current.id === existing.id ? { ...item, id: existing.id, internalCode: current.internalCode } : current))
           : [item, ...items]);
       }
       setImportMessage(editingId ? 'SKU 已保存' : 'SKU 已新增');
@@ -311,7 +318,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
         updatedCount += 1;
         const existingKey = getSkuMatchKey(existing) || existing.id;
         mergedByKey.delete(existingKey);
-        mergedByKey.set(key, mergeImportedSku(existing, { ...row.item, id: existing.id, shopName: canonicalShopName(row.item.shopName) }, recognizedFields));
+        mergedByKey.set(key, mergeImportedSku(existing, { ...row.item, id: existing.id, internalCode: existing.internalCode, shopName: canonicalShopName(row.item.shopName) }, recognizedFields));
         affectedIds.add(existing.id);
       } else {
         createdCount += 1;
@@ -443,6 +450,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
       )}
 
       <div className="sku-form">
+        <label>内部编号<input value={draft.internalCode || '保存后自动生成'} readOnly /></label>
         <label>SKU<input value={draft.sku} onChange={(event) => updateField('sku', event.target.value)} placeholder="例如 SKU-1001" /></label>
         <label>产品名称<input value={draft.productName} onChange={(event) => updateField('productName', event.target.value)} /></label>
         <label>英文名称<input value={draft.englishName} onChange={(event) => updateField('englishName', event.target.value)} /></label>
@@ -516,6 +524,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
           <thead>
             <tr>
               {visibleColumns.has('imageUrl') && <th className="sticky-col sticky-col-1">图片</th>}
+              {visibleColumns.has('internalCode') && <th>内部编号</th>}
               {visibleColumns.has('manufacturerName') && <th className="sticky-col sticky-col-2">厂家名</th>}
               {visibleColumns.has('sku') && <th className="sticky-col sticky-col-3">SKU</th>}
               {visibleColumns.has('productName') && <th className="sticky-col sticky-col-4">产品名称</th>}
@@ -541,6 +550,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
               <Fragment key={item.id}>
                 <tr className={recentImportIds.has(item.id) ? 'recent-import-row' : undefined}>
                   {visibleColumns.has('imageUrl') && <td className="sticky-col sticky-col-1">{item.imageUrl ? <img className="sku-thumb" src={item.imageUrl} alt={item.productName || item.sku || 'SKU'} loading="lazy" /> : '-'}</td>}
+                  {visibleColumns.has('internalCode') && <td><strong>{item.internalCode || '-'}</strong></td>}
                   {visibleColumns.has('manufacturerName') && <td className="sticky-col sticky-col-2">{item.manufacturerName}</td>}
                   {visibleColumns.has('sku') && <td className="sticky-col sticky-col-3">{item.sku}</td>}
                   {visibleColumns.has('productName') && <td className="sticky-col sticky-col-4">{item.productName}</td>}
@@ -569,6 +579,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
                     <td colSpan={tableColSpan} className="detail-row">
                       <div className="detail-grid">
 
+                        <span>内部编号：{item.internalCode || '-'}</span>
                         <span>英文名称：{item.englishName || '-'}</span>
                         <span>图片链接：{item.imageUrl || '-'}</span>
                         <span>库位：{item.storageLocation || '-'}</span>

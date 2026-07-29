@@ -494,6 +494,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
     const record: PurchaseRecord = withPurchaseTotals({
       id: crypto.randomUUID(),
+      internalCode: '',
       manufacturerName: newOrder.manufacturerName.trim(),
       sku,
       productName: newOrder.productName.trim(),
@@ -530,6 +531,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       isMixed: false,
       mixedGroups: [],
       logisticsTotalCbm: null,
+      logisticsBatchId: '',
+      logisticsConfirmationStatus: 'unassigned',
+      logisticsLoadedCartonCount: null,
+      logisticsLoadedTailQuantity: 0,
+      logisticsLeftCartonCount: null,
+      logisticsLeftTailQuantity: 0,
+      logisticsSourceRecordId: '',
       note: newOrder.note.trim(),
     });
 
@@ -840,7 +848,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     const normalized = withPurchaseTotals(record);
     return (
       <tr className="packing-detail-row">
-        <td colSpan={23}>
+        <td colSpan={24}>
           <div className="packing-panel">
             <div className="packing-summary">
               <strong>主SKU数量：{purchaseQuantityForRecordSku(normalized)}</strong>
@@ -966,7 +974,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <table className="my-orders-table">
           <thead>
             <tr>
-              <th className="image-sticky-col">图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th className="my-orders-compact-text">店铺</th><th className="my-orders-compact-text">采购人</th><th>计划采购数量</th><th className="my-orders-narrow-number">整箱件数</th><th className="my-orders-narrow-number">每箱数量</th><th className="my-orders-narrow-number">尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
+              <th className="image-sticky-col">图片</th><th>厂家名</th><th>内部编号</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th className="my-orders-compact-text">店铺</th><th className="my-orders-compact-text">采购人</th><th>计划采购数量</th><th className="my-orders-narrow-number">整箱件数</th><th className="my-orders-narrow-number">每箱数量</th><th className="my-orders-narrow-number">尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -979,6 +987,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                   <tr>
                     <td className="image-sticky-col">{imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                     <td>{input(normalized, 'manufacturerName')}</td>
+                    <td><strong>{normalized.internalCode || '-'}</strong></td>
                     <td>{isAdmin ? input(normalized, 'sku') : normalized.sku}</td>
                     <td>{input(normalized, 'productName')}</td>
                     <td>{input(normalized, 'englishName')}</td>
@@ -1013,6 +1022,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <tr className="mixed-child-row" key={`${normalized.id}:${group.id}:${line.id}`}>
                       <td className="image-sticky-col">{imageUrlBySku.get(skuLookupKey(line.sku)) ? <img className="sku-thumb" src={imageUrlBySku.get(skuLookupKey(line.sku))} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                       <td>{normalized.manufacturerName}</td>
+                      <td>{normalized.internalCode || '-'}</td>
                       <td><strong>{line.sku}</strong></td>
                       <td><strong>{line.productName}</strong></td>
                       <td />
@@ -1040,7 +1050,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 </Fragment>
               );
             })}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={23}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={24}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>

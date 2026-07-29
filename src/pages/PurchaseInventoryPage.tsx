@@ -29,6 +29,7 @@ const statusLabels: Record<PurchaseStatus, string> = {
 
 const emptyDraft: DraftRecord = {
   id: '',
+  internalCode: '',
   manufacturerName: '',
   sku: '',
   productName: '',
@@ -64,6 +65,13 @@ const emptyDraft: DraftRecord = {
   isMixed: false,
   mixedGroups: [],
   logisticsTotalCbm: null,
+  logisticsBatchId: '',
+  logisticsConfirmationStatus: 'unassigned',
+  logisticsLoadedCartonCount: null,
+  logisticsLoadedTailQuantity: 0,
+  logisticsLeftCartonCount: null,
+  logisticsLeftTailQuantity: 0,
+  logisticsSourceRecordId: '',
   note: '',
 };
 
@@ -343,6 +351,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
   function editRecord(record: PurchaseRecord) {
     setDraft({
       id: record.id,
+      internalCode: record.internalCode,
       manufacturerName: record.manufacturerName,
       sku: record.sku,
       productName: record.productName,
@@ -378,6 +387,13 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
       isMixed: record.isMixed,
       mixedGroups: record.mixedGroups,
       logisticsTotalCbm: record.logisticsTotalCbm,
+      logisticsBatchId: record.logisticsBatchId,
+      logisticsConfirmationStatus: record.logisticsConfirmationStatus,
+      logisticsLoadedCartonCount: record.logisticsLoadedCartonCount,
+      logisticsLoadedTailQuantity: record.logisticsLoadedTailQuantity,
+      logisticsLeftCartonCount: record.logisticsLeftCartonCount,
+      logisticsLeftTailQuantity: record.logisticsLeftTailQuantity,
+      logisticsSourceRecordId: record.logisticsSourceRecordId,
       note: record.note,
     });
     setEditingId(record.id);
@@ -513,7 +529,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
           <table className="inventory-table">
             <thead>
               <tr>
-                <th className="pin-col pin-select">选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>批次</th><th>批次日期</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>是否混装</th><th>混装组</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
+                <th className="pin-col pin-select">选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>内部编号</th><th>批次</th><th>批次日期</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>是否混装</th><th>混装组</th><th>物流确认</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -528,6 +544,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
                   <td className="pin-col pin-manufacturer"><span className="cell-ellipsis" title={normalized.manufacturerName}>{normalized.manufacturerName}</span></td>
                   <td className="pin-col pin-sku"><span className="cell-ellipsis" title={normalized.sku}>{normalized.sku}</span></td>
                   <td className="pin-col pin-product"><span className="cell-ellipsis" title={normalized.productName}>{normalized.productName}</span></td>
+                  <td><strong>{normalized.internalCode || '-'}</strong></td>
                   <td>{batchLabel(normalized)}</td>
                   <td>{normalized.purchaseBatchDate || '-'}</td>
                   <td>{normalized.cartonCount ?? ''}</td>
@@ -536,6 +553,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
                   <td>{packageCountFor(normalized) || logisticsText(normalized.cartonCount)}</td>
                   <td>{normalized.isMixed ? '是' : '否'}</td>
                   <td>{mixedGroupsSummary(normalized)}</td>
+                  <td>{normalized.logisticsConfirmationStatus === 'unassigned' ? '-' : normalized.logisticsConfirmationStatus}</td>
                   <td>{needsLogisticsMetrics(normalized) ? logisticsText(normalized.totalWeightKg, 2) : ''}</td>
                   <td>{needsLogisticsMetrics(normalized) ? logisticsText(normalized.logisticsTotalCbm, 4) : ''}</td>
                   <td>{normalized.shopName}</td>
@@ -564,6 +582,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
                           <td className="pin-col pin-manufacturer"><span className="cell-ellipsis" title={normalized.manufacturerName}>{normalized.manufacturerName}</span></td>
                           <td className="pin-col pin-sku"><span className="cell-ellipsis" title={line.sku}>{line.sku}</span></td>
                           <td className="pin-col pin-product"><span className="cell-ellipsis" title={line.productName}>{line.productName}</span></td>
+                          <td>{normalized.internalCode || '-'}</td>
                           <td>{batchLabel(normalized)}</td>
                           <td>{normalized.purchaseBatchDate || '-'}</td>
                           <td />
@@ -572,6 +591,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
                           <td />
                           <td>混装子行</td>
                           <td>{`${group.groupName} ${group.cartonCount}件`}</td>
+                          <td>{normalized.logisticsConfirmationStatus === 'unassigned' ? '-' : normalized.logisticsConfirmationStatus}</td>
                           <td />
                           <td />
                           <td>{normalized.shopName}</td>
@@ -593,7 +613,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
                   </Fragment>
                 );
               })}
-              {filteredRecords.length === 0 && <tr><td colSpan={28} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
+              {filteredRecords.length === 0 && <tr><td colSpan={30} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
             </tbody>
           </table>
         </div>

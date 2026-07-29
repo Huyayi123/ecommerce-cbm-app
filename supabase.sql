@@ -6,6 +6,8 @@ exception
   when duplicate_object then null;
 end $$;
 
+alter type public.app_role add value if not exists 'logistics';
+
 create table if not exists public.repricing_products (
   id text primary key,
   shop_name text not null,
@@ -167,6 +169,23 @@ alter table public.sku_items
 add column if not exists tsin text;
 
 alter table public.sku_items
+add column if not exists internal_code text;
+
+create unique index if not exists sku_items_internal_code_idx
+on public.sku_items (internal_code)
+where internal_code is not null and internal_code <> '';
+
+with numbered as (
+  select id, lpad(row_number() over (order by coalesce(manufacturer_name, ''), coalesce(sku, ''), coalesce(product_name, ''), id)::text, 5, '0') as next_code
+  from public.sku_items
+  where coalesce(internal_code, '') = ''
+)
+update public.sku_items s
+set internal_code = numbered.next_code
+from numbered
+where s.id = numbered.id;
+
+alter table public.sku_items
 add column if not exists unit_cbm numeric default 0;
 
 alter table public.sku_items
@@ -301,6 +320,30 @@ alter table public.purchase_records
 add column if not exists logistics_total_cbm numeric;
 
 alter table public.purchase_records
+add column if not exists internal_code text;
+
+alter table public.purchase_records
+add column if not exists logistics_batch_id text;
+
+alter table public.purchase_records
+add column if not exists logistics_confirmation_status text not null default 'unassigned';
+
+alter table public.purchase_records
+add column if not exists logistics_loaded_carton_count numeric;
+
+alter table public.purchase_records
+add column if not exists logistics_loaded_tail_quantity numeric not null default 0;
+
+alter table public.purchase_records
+add column if not exists logistics_left_carton_count numeric;
+
+alter table public.purchase_records
+add column if not exists logistics_left_tail_quantity numeric not null default 0;
+
+alter table public.purchase_records
+add column if not exists logistics_source_record_id text;
+
+alter table public.purchase_records
 add column if not exists purchase_batch_id text;
 
 alter table public.purchase_records
@@ -347,6 +390,56 @@ on public.purchase_records (purchase_pool_date, purchase_pool_id, pool_status);
 create index if not exists purchase_records_is_confirmed_idx
 on public.purchase_records (is_confirmed);
 
+create table if not exists public.logistics_batches (
+  id text primary key,
+  container_date date not null,
+  logistics_user_id uuid references auth.users(id) on delete set null,
+  logistics_email text,
+  status text not null default 'draft',
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  submitted_at timestamptz,
+  reviewed_by uuid references auth.users(id) on delete set null,
+  reviewed_at timestamptz,
+  note text not null default ''
+);
+
+create table if not exists public.logistics_batch_items (
+  id text primary key,
+  batch_id text not null references public.logistics_batches(id) on delete cascade,
+  purchase_record_id text,
+  internal_code text,
+  manufacturer_name text,
+  sku text,
+  product_name text,
+  english_name text,
+  image_url text,
+  shop_name text,
+  container_date date,
+  carton_count numeric,
+  units_per_carton numeric,
+  tail_quantity numeric not null default 0,
+  loading_type text,
+  is_mixed boolean not null default false,
+  mixed_groups_summary text,
+  loaded_carton_count numeric,
+  loaded_tail_quantity numeric not null default 0,
+  left_carton_count numeric,
+  left_tail_quantity numeric not null default 0,
+  note text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists logistics_batches_container_date_idx
+on public.logistics_batches (container_date desc);
+
+create index if not exists logistics_batches_user_idx
+on public.logistics_batches (logistics_user_id, status);
+
+create index if not exists logistics_batch_items_batch_idx
+on public.logistics_batch_items (batch_id, internal_code);
+
 create table if not exists public.purchase_pools (
   id text primary key,
   name text not null,
@@ -365,6 +458,7 @@ on public.purchase_pools (status, container_date desc, created_at desc);
 create table if not exists public.container_rows (
   id text primary key,
   row_number integer,
+  internal_code text,
   sku text,
   product_name text,
   english_name text,
@@ -382,6 +476,9 @@ add column if not exists english_name text;
 
 alter table public.container_rows
 add column if not exists manufacturer_name text;
+
+alter table public.container_rows
+add column if not exists internal_code text;
 
 create table if not exists public.sales_suggestions (
   id text primary key,
@@ -480,12 +577,14 @@ alter table public.purchase_pools enable row level security;
 alter table public.container_rows enable row level security;
 alter table public.sales_suggestions enable row level security;
 alter table public.audit_logs enable row level security;
+alter table public.logistics_batches enable row level security;
+alter table public.logistics_batch_items enable row level security;
 
 drop policy if exists "profiles select own or admin" on public.profiles;
 drop policy if exists "profiles shared select" on public.profiles;
 create policy "profiles shared select" on public.profiles
 for select to authenticated
-using (true);
+using (public.current_role() <> 'logistics' or id = auth.uid() or public.is_admin());
 
 drop policy if exists "profiles insert own" on public.profiles;
 create policy "profiles insert own" on public.profiles
@@ -505,7 +604,7 @@ using (id = auth.uid())
 with check (id = auth.uid());
 
 drop policy if exists "shared select sku" on public.sku_items;
-create policy "shared select sku" on public.sku_items for select to authenticated using (true);
+create policy "shared select sku" on public.sku_items for select to authenticated using (public.current_role() <> 'logistics');
 drop policy if exists "editor insert sku" on public.sku_items;
 create policy "editor insert sku" on public.sku_items for insert to authenticated with check (public.is_editor());
 drop policy if exists "editor update sku" on public.sku_items;
@@ -514,7 +613,7 @@ drop policy if exists "admin delete sku" on public.sku_items;
 create policy "admin delete sku" on public.sku_items for delete to authenticated using (public.is_admin());
 
 drop policy if exists "shared select purchase" on public.purchase_records;
-create policy "shared select purchase" on public.purchase_records for select to authenticated using (true);
+create policy "shared select purchase" on public.purchase_records for select to authenticated using (public.current_role() <> 'logistics');
 drop policy if exists "editor insert purchase" on public.purchase_records;
 create policy "editor insert purchase" on public.purchase_records for insert to authenticated with check (public.is_editor());
 drop policy if exists "editor update purchase" on public.purchase_records;
@@ -529,7 +628,7 @@ using (
 );
 
 drop policy if exists "shared select purchase pools" on public.purchase_pools;
-create policy "shared select purchase pools" on public.purchase_pools for select to authenticated using (true);
+create policy "shared select purchase pools" on public.purchase_pools for select to authenticated using (public.current_role() <> 'logistics');
 drop policy if exists "admin insert purchase pools" on public.purchase_pools;
 drop policy if exists "editor insert purchase pools" on public.purchase_pools;
 create policy "editor insert purchase pools" on public.purchase_pools for insert to authenticated with check (public.is_editor());
@@ -537,8 +636,89 @@ drop policy if exists "admin update purchase pools" on public.purchase_pools;
 drop policy if exists "editor update purchase pools" on public.purchase_pools;
 create policy "editor update purchase pools" on public.purchase_pools for update to authenticated using (public.is_editor()) with check (public.is_editor());
 
+drop policy if exists "admin select logistics batches" on public.logistics_batches;
+drop policy if exists "logistics select assigned batches" on public.logistics_batches;
+create policy "logistics select assigned batches" on public.logistics_batches
+for select to authenticated
+using (
+  public.is_admin()
+  or logistics_user_id = auth.uid()
+  or lower(coalesce(logistics_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+);
+
+drop policy if exists "admin write logistics batches" on public.logistics_batches;
+create policy "admin write logistics batches" on public.logistics_batches
+for all to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "logistics update assigned batches" on public.logistics_batches;
+create policy "logistics update assigned batches" on public.logistics_batches
+for update to authenticated
+using (
+  status in ('draft', 'rejected')
+  and (
+    logistics_user_id = auth.uid()
+    or lower(coalesce(logistics_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+  )
+)
+with check (
+  status in ('draft', 'submitted')
+  and (
+    logistics_user_id = auth.uid()
+    or lower(coalesce(logistics_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+  )
+);
+
+drop policy if exists "logistics select assigned items" on public.logistics_batch_items;
+create policy "logistics select assigned items" on public.logistics_batch_items
+for select to authenticated
+using (
+  exists (
+    select 1 from public.logistics_batches b
+    where b.id = batch_id
+      and (
+        public.is_admin()
+        or b.logistics_user_id = auth.uid()
+        or lower(coalesce(b.logistics_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      )
+  )
+);
+
+drop policy if exists "admin write logistics items" on public.logistics_batch_items;
+create policy "admin write logistics items" on public.logistics_batch_items
+for all to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "logistics update assigned items" on public.logistics_batch_items;
+create policy "logistics update assigned items" on public.logistics_batch_items
+for update to authenticated
+using (
+  exists (
+    select 1 from public.logistics_batches b
+    where b.id = batch_id
+      and b.status in ('draft', 'rejected')
+      and (
+        b.logistics_user_id = auth.uid()
+        or lower(coalesce(b.logistics_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      )
+  )
+)
+with check (
+  exists (
+    select 1 from public.logistics_batches b
+    where b.id = batch_id
+      and b.status in ('draft', 'rejected')
+      and (
+        b.logistics_user_id = auth.uid()
+        or lower(coalesce(b.logistics_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      )
+  )
+);
+
 drop policy if exists "shared select container" on public.container_rows;
-create policy "shared select container" on public.container_rows for select to authenticated using (true);
+create policy "shared select container" on public.container_rows for select to authenticated using (public.current_role() <> 'logistics');
 drop policy if exists "editor insert container" on public.container_rows;
 create policy "editor insert container" on public.container_rows for insert to authenticated with check (public.is_editor());
 drop policy if exists "editor update container" on public.container_rows;
@@ -593,6 +773,20 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'audit_logs'
   ) then
     alter publication supabase_realtime add table public.audit_logs;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'logistics_batches'
+  ) then
+    alter publication supabase_realtime add table public.logistics_batches;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'logistics_batch_items'
+  ) then
+    alter publication supabase_realtime add table public.logistics_batch_items;
   end if;
 end $$;
 

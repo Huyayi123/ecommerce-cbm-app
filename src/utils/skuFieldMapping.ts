@@ -4,6 +4,7 @@ import { canonicalShopName } from './shops';
 import { toNumber } from './number';
 
 export const SKU_FIELD_ALIASES = {
+  internalCode: ['内部编号', '内部产品编号', 'internal_code', 'internalCode'],
   tsin: ['TSIN', 'tsin', 'tsin_id'],
   manufacturerName: ['厂家名', '厂家名称', '厂家', '供应商', '供应商名称', 'manufacturer_name'],
   sku: ['SKU', 'sku', '货号', '产品编码', '商品编码', '条码'],
@@ -30,6 +31,7 @@ export type SkuFrontendField = keyof typeof SKU_FIELD_ALIASES;
 
 export type SupabaseSkuRow = {
   id: string;
+  internal_code?: string | null;
   manufacturer_name: string | null;
   sku: string | null;
   tsin?: string | null;
@@ -79,6 +81,7 @@ export function pickSkuExcelField(row: Record<string, unknown>, headers: string[
 export function supabaseSkuToFrontend(row: SupabaseSkuRow): SkuItem {
   return hydrateSku({
     id: row.id,
+    internalCode: row.internal_code ?? '',
     manufacturerName: row.manufacturer_name ?? '',
     sku: row.sku ?? '',
     tsin: row.tsin ?? '',
@@ -107,6 +110,7 @@ export function supabaseSkuToFrontend(row: SupabaseSkuRow): SkuItem {
 export function frontendSkuToSupabase(item: SkuItem): SupabaseSkuRow {
   return {
     id: item.id,
+    internal_code: item.internalCode,
     manufacturer_name: item.manufacturerName,
     sku: item.sku.trim() || null,
     tsin: item.tsin.trim() || null,
@@ -139,6 +143,7 @@ export function skuExcelRowToFrontend(row: Record<string, unknown>, headers: str
 
   return hydrateSku({
     id,
+    internalCode: String(pickSkuExcelField(row, headers, 'internalCode') ?? '').trim(),
     manufacturerName: String(pickSkuExcelField(row, headers, 'manufacturerName') ?? '').trim(),
     sku: String(pickSkuExcelField(row, headers, 'sku') ?? '').trim(),
     tsin: String(pickSkuExcelField(row, headers, 'tsin') ?? '').trim(),

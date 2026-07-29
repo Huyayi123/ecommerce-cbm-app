@@ -96,6 +96,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
           <thead>
             <tr>
               <th>图片</th>
+              <th>内部编号</th>
               <th>厂家名</th>
               <th>SKU</th>
               <th>产品名称</th>
@@ -114,6 +115,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
             {rows.map((row) => (
               <tr key={row.rowId} className={row.status === 'error' ? 'error-row' : ''}>
                 <td>{row.imageUrl ? <img className="sku-thumb" src={row.imageUrl} alt={row.productName || row.sku || 'SKU'} loading="lazy" /> : '-'}</td>
+                <td><strong>{row.internalCode || '-'}</strong></td>
                 <td>{row.manufacturerName || '-'}</td>
                 <td>{row.sku || '-'}</td>
                 <td>{row.productName || '-'}</td>

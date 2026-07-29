@@ -1,12 +1,14 @@
 import { supabase } from '../lib/supabase';
-import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
+import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, LogisticsBatch, LogisticsBatchItem, LogisticsBatchStatus, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { findMatchingSkuItem, getSkuMatchKey } from './calculations';
+import { ensureInternalCodes } from './internalCodes';
 import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
 import { frontendSkuToSupabase, supabaseSkuToFrontend, type SupabaseSkuRow } from './skuFieldMapping';
 
 type PurchaseRecordRow = {
   id: string;
+  internal_code?: string | null;
   manufacturer_name: string | null;
   sku: string;
   product_name: string | null;
@@ -43,6 +45,13 @@ type PurchaseRecordRow = {
   is_mixed?: boolean | null;
   mixed_groups?: unknown;
   logistics_total_cbm?: number | null;
+  logistics_batch_id?: string | null;
+  logistics_confirmation_status?: string | null;
+  logistics_loaded_carton_count?: number | null;
+  logistics_loaded_tail_quantity?: number | null;
+  logistics_left_carton_count?: number | null;
+  logistics_left_tail_quantity?: number | null;
+  logistics_source_record_id?: string | null;
   note: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -61,9 +70,51 @@ type PurchasePoolRow = {
   records?: unknown;
 };
 
+type LogisticsBatchRow = {
+  id: string;
+  container_date: string | null;
+  logistics_user_id: string | null;
+  logistics_email: string | null;
+  status: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  submitted_at: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  note: string | null;
+};
+
+type LogisticsBatchItemRow = {
+  id: string;
+  batch_id: string;
+  purchase_record_id: string | null;
+  internal_code: string | null;
+  manufacturer_name: string | null;
+  sku: string | null;
+  product_name: string | null;
+  english_name: string | null;
+  image_url: string | null;
+  shop_name: string | null;
+  container_date: string | null;
+  carton_count: number | null;
+  units_per_carton: number | null;
+  tail_quantity: number | null;
+  loading_type: PurchaseRecord['loadingType'] | null;
+  is_mixed: boolean | null;
+  mixed_groups_summary: string | null;
+  loaded_carton_count: number | null;
+  loaded_tail_quantity: number | null;
+  left_carton_count: number | null;
+  left_tail_quantity: number | null;
+  note: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 type ContainerRow = {
   id: string;
   row_number: number | null;
+  internal_code?: string | null;
   sku: string | null;
   product_name: string | null;
   english_name: string | null;
@@ -145,6 +196,7 @@ type AdAnalysisDetailRow = {
 
 type LegacySkuRow = {
   id: string;
+  internal_code?: string | null;
   sku: string | null;
   product_name: string;
   english_name: string;
@@ -181,6 +233,7 @@ function isMissingColumnError(error: unknown): boolean {
 function frontendSkuToLegacySupabase(item: SkuItem): LegacySkuRow {
   return {
     id: item.id,
+    internal_code: item.internalCode || null,
     sku: item.sku.trim() || null,
     product_name: item.productName,
     english_name: item.englishName,
@@ -243,6 +296,7 @@ function mergeSkuItemsForSave(items: SkuItem[], remote: SkuItem[]): SkuItem[] {
     merged.set(key, {
       ...item,
       id: baseItem?.id ?? item.id,
+      internalCode: item.internalCode.trim() || baseItem?.internalCode || '',
       manufacturerName: item.manufacturerName.trim() || baseItem?.manufacturerName || '',
       sku: item.sku.trim() || baseItem?.sku || '',
       tsin: item.tsin.trim() || baseItem?.tsin || '',
@@ -308,6 +362,7 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
   const poolStatus: PurchaseRecordPoolStatus = isLegacyInventory ? 'sent_to_inventory' : rawPoolStatus ?? 'pending_purchase';
   return withPurchaseTotals({
     id: row.id,
+    internalCode: row.internal_code ?? '',
     manufacturerName: row.manufacturer_name ?? '',
     sku: row.sku,
     productName: row.product_name ?? '',
@@ -344,6 +399,15 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     isMixed: Boolean(row.is_mixed ?? false),
     mixedGroups: normalizeMixedGroups(row.mixed_groups),
     logisticsTotalCbm: row.logistics_total_cbm === null || row.logistics_total_cbm === undefined ? null : Number(row.logistics_total_cbm),
+    logisticsBatchId: row.logistics_batch_id ?? '',
+    logisticsConfirmationStatus: row.logistics_confirmation_status === 'draft' || row.logistics_confirmation_status === 'submitted' || row.logistics_confirmation_status === 'approved' || row.logistics_confirmation_status === 'rejected'
+      ? row.logistics_confirmation_status
+      : 'unassigned',
+    logisticsLoadedCartonCount: row.logistics_loaded_carton_count === null || row.logistics_loaded_carton_count === undefined ? null : Number(row.logistics_loaded_carton_count),
+    logisticsLoadedTailQuantity: Number(row.logistics_loaded_tail_quantity ?? 0),
+    logisticsLeftCartonCount: row.logistics_left_carton_count === null || row.logistics_left_carton_count === undefined ? null : Number(row.logistics_left_carton_count),
+    logisticsLeftTailQuantity: Number(row.logistics_left_tail_quantity ?? 0),
+    logisticsSourceRecordId: row.logistics_source_record_id ?? '',
     note: row.note ?? '',
     createdAt: row.created_at ?? '',
     updatedAt: row.updated_at ?? '',
@@ -368,6 +432,101 @@ function mapPurchasePool(row: PurchasePoolRow): PurchasePool {
     sentAt: row.sent_at ?? '',
     note: row.note ?? '',
     records: normalizePoolRecords(row.records),
+  };
+}
+
+function logisticsStatus(value: string | null | undefined): LogisticsBatchStatus {
+  return value === 'submitted' || value === 'approved' || value === 'rejected' ? value : 'draft';
+}
+
+function mapLogisticsBatchItem(row: LogisticsBatchItemRow): LogisticsBatchItem {
+  return {
+    id: row.id,
+    batchId: row.batch_id,
+    purchaseRecordId: row.purchase_record_id ?? '',
+    internalCode: row.internal_code ?? '',
+    manufacturerName: row.manufacturer_name ?? '',
+    sku: row.sku ?? '',
+    productName: row.product_name ?? '',
+    englishName: row.english_name ?? '',
+    imageUrl: row.image_url ?? '',
+    shopName: row.shop_name ?? '',
+    containerDate: row.container_date ?? '',
+    cartonCount: row.carton_count === null || row.carton_count === undefined ? null : Number(row.carton_count),
+    unitsPerCarton: row.units_per_carton === null || row.units_per_carton === undefined ? null : Number(row.units_per_carton),
+    tailQuantity: Number(row.tail_quantity ?? 0),
+    loadingType: row.loading_type ?? '',
+    isMixed: Boolean(row.is_mixed ?? false),
+    mixedGroupsSummary: row.mixed_groups_summary ?? '',
+    loadedCartonCount: row.loaded_carton_count === null || row.loaded_carton_count === undefined ? null : Number(row.loaded_carton_count),
+    loadedTailQuantity: Number(row.loaded_tail_quantity ?? 0),
+    leftCartonCount: row.left_carton_count === null || row.left_carton_count === undefined ? null : Number(row.left_carton_count),
+    leftTailQuantity: Number(row.left_tail_quantity ?? 0),
+    note: row.note ?? '',
+    createdAt: row.created_at ?? '',
+    updatedAt: row.updated_at ?? '',
+  };
+}
+
+function mapLogisticsBatch(row: LogisticsBatchRow, items: LogisticsBatchItem[]): LogisticsBatch {
+  return {
+    id: row.id,
+    containerDate: row.container_date ?? '',
+    logisticsUserId: row.logistics_user_id ?? '',
+    logisticsEmail: row.logistics_email ?? '',
+    status: logisticsStatus(row.status),
+    createdBy: row.created_by ?? '',
+    createdAt: row.created_at ?? '',
+    submittedAt: row.submitted_at ?? '',
+    reviewedBy: row.reviewed_by ?? '',
+    reviewedAt: row.reviewed_at ?? '',
+    note: row.note ?? '',
+    items,
+  };
+}
+
+function toLogisticsBatchRow(batch: LogisticsBatch): LogisticsBatchRow {
+  return {
+    id: batch.id,
+    container_date: dateOrNull(batch.containerDate),
+    logistics_user_id: batch.logisticsUserId || null,
+    logistics_email: batch.logisticsEmail || null,
+    status: batch.status,
+    created_by: batch.createdBy || null,
+    created_at: batch.createdAt || new Date().toISOString(),
+    submitted_at: batch.submittedAt || null,
+    reviewed_by: batch.reviewedBy || null,
+    reviewed_at: batch.reviewedAt || null,
+    note: batch.note,
+  };
+}
+
+function toLogisticsBatchItemRow(item: LogisticsBatchItem): LogisticsBatchItemRow {
+  return {
+    id: item.id,
+    batch_id: item.batchId,
+    purchase_record_id: item.purchaseRecordId || null,
+    internal_code: item.internalCode,
+    manufacturer_name: item.manufacturerName,
+    sku: item.sku,
+    product_name: item.productName,
+    english_name: item.englishName,
+    image_url: item.imageUrl,
+    shop_name: item.shopName,
+    container_date: dateOrNull(item.containerDate),
+    carton_count: item.cartonCount,
+    units_per_carton: item.unitsPerCarton,
+    tail_quantity: item.tailQuantity,
+    loading_type: item.loadingType || null,
+    is_mixed: item.isMixed,
+    mixed_groups_summary: item.mixedGroupsSummary,
+    loaded_carton_count: item.loadedCartonCount,
+    loaded_tail_quantity: item.loadedTailQuantity,
+    left_carton_count: item.leftCartonCount,
+    left_tail_quantity: item.leftTailQuantity,
+    note: item.note,
+    created_at: item.createdAt || null,
+    updated_at: item.updatedAt || null,
   };
 }
 
@@ -396,6 +555,7 @@ function normalizePoolRecord(value: unknown): PurchaseRecord {
   const payload = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   return mapPurchaseRecord({
     id: String(payload.id ?? crypto.randomUUID()),
+    internal_code: String(payload.internalCode ?? payload.internal_code ?? ''),
     manufacturer_name: String(payload.manufacturerName ?? payload.manufacturer_name ?? ''),
     sku: String(payload.sku ?? ''),
     product_name: String(payload.productName ?? payload.product_name ?? ''),
@@ -432,6 +592,13 @@ function normalizePoolRecord(value: unknown): PurchaseRecord {
     is_mixed: Boolean(payload.isMixed ?? payload.is_mixed ?? false),
     mixed_groups: payload.mixedGroups ?? payload.mixed_groups,
     logistics_total_cbm: nullableNumber(payload.logisticsTotalCbm ?? payload.logistics_total_cbm),
+    logistics_batch_id: String(payload.logisticsBatchId ?? payload.logistics_batch_id ?? ''),
+    logistics_confirmation_status: String(payload.logisticsConfirmationStatus ?? payload.logistics_confirmation_status ?? 'unassigned'),
+    logistics_loaded_carton_count: nullableNumber(payload.logisticsLoadedCartonCount ?? payload.logistics_loaded_carton_count),
+    logistics_loaded_tail_quantity: Number(payload.logisticsLoadedTailQuantity ?? payload.logistics_loaded_tail_quantity ?? 0),
+    logistics_left_carton_count: nullableNumber(payload.logisticsLeftCartonCount ?? payload.logistics_left_carton_count),
+    logistics_left_tail_quantity: Number(payload.logisticsLeftTailQuantity ?? payload.logistics_left_tail_quantity ?? 0),
+    logistics_source_record_id: String(payload.logisticsSourceRecordId ?? payload.logistics_source_record_id ?? ''),
     note: String(payload.note ?? ''),
     created_at: String(payload.createdAt ?? payload.created_at ?? ''),
     updated_at: String(payload.updatedAt ?? payload.updated_at ?? ''),
@@ -447,6 +614,7 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
   const normalized = withPurchaseTotals(record);
   return {
     id: normalized.id,
+    internal_code: normalized.internalCode || null,
     manufacturer_name: normalized.manufacturerName,
     sku: normalized.sku,
     product_name: normalized.productName,
@@ -483,6 +651,13 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     is_mixed: normalized.isMixed,
     mixed_groups: normalized.mixedGroups,
     logistics_total_cbm: normalized.logisticsTotalCbm,
+    logistics_batch_id: normalized.logisticsBatchId || null,
+    logistics_confirmation_status: normalized.logisticsConfirmationStatus || 'unassigned',
+    logistics_loaded_carton_count: normalized.logisticsLoadedCartonCount,
+    logistics_loaded_tail_quantity: normalized.logisticsLoadedTailQuantity,
+    logistics_left_carton_count: normalized.logisticsLeftCartonCount,
+    logistics_left_tail_quantity: normalized.logisticsLeftTailQuantity,
+    logistics_source_record_id: normalized.logisticsSourceRecordId || null,
     note: normalized.note,
   };
 }
@@ -491,6 +666,7 @@ function mapContainerRow(row: ContainerRow): PurchaseRow {
   return {
     rowId: row.id,
     rowNumber: Number(row.row_number ?? 0),
+    internalCode: row.internal_code ?? (typeof row.raw?.internalCode === 'string' ? row.raw.internalCode : ''),
     sku: row.sku ?? '',
     productName: row.product_name ?? '',
     englishName: row.english_name ?? '',
@@ -507,12 +683,13 @@ function toContainerRow(row: PurchaseRow): ContainerRow {
   return {
     id: row.rowId,
     row_number: row.rowNumber,
+    internal_code: row.internalCode ?? null,
     sku: row.sku,
     product_name: row.productName,
     english_name: row.englishName,
     manufacturer_name: row.manufacturerName,
     purchase_quantity: row.purchaseQuantity,
-    raw: { ...row.raw, shopName: row.shopName ?? row.raw.shopName ?? '', imageUrl: row.imageUrl ?? row.raw.imageUrl ?? '', manualTotalCbm: row.manualTotalCbm ?? null },
+    raw: { ...row.raw, internalCode: row.internalCode ?? row.raw.internalCode ?? '', shopName: row.shopName ?? row.raw.shopName ?? '', imageUrl: row.imageUrl ?? row.raw.imageUrl ?? '', manualTotalCbm: row.manualTotalCbm ?? null },
   };
 }
 
@@ -592,13 +769,13 @@ export async function fetchSkuItems(): Promise<SkuItem[]> {
     if (!data || data.length < pageSize) break;
   }
 
-  return rows.map((row) => supabaseSkuToFrontend(row));
+  return ensureInternalCodes(rows.map((row) => supabaseSkuToFrontend(row)));
 }
 
 export async function replaceSkuItems(items: SkuItem[]): Promise<void> {
   const client = requireSupabase();
   const remote = await fetchSkuItems();
-  const normalizedItems = mergeSkuItemsForSave(items, remote);
+  const normalizedItems = ensureInternalCodes(mergeSkuItemsForSave(items, remote));
   const nextIds = new Set(normalizedItems.map((item) => item.id));
   const deleteIds = remote.map((item) => item.id).filter((id) => !nextIds.has(id));
 
@@ -626,6 +803,92 @@ export async function fetchPurchaseRecords(): Promise<PurchaseRecord[]> {
     .order('id', { ascending: true });
   if (error) throwSupabaseError(error);
   return (data ?? []).map((row) => mapPurchaseRecord(row as PurchaseRecordRow));
+}
+
+export async function fetchLogisticsBatches(): Promise<LogisticsBatch[]> {
+  const client = requireSupabase();
+  const { data: batchData, error: batchError } = await client
+    .from('logistics_batches')
+    .select('*')
+    .order('container_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (batchError) {
+    console.error(batchError);
+    if (isMissingColumnError(batchError) || /logistics_batches/i.test(formatErrorMessage(batchError))) {
+      throw new Error(`物流装柜确认表还没有创建，请先在 Supabase SQL Editor 执行 supabase.sql 中的物流模块 SQL。原始错误：${formatErrorMessage(batchError)}`);
+    }
+    throw new Error(formatErrorMessage(batchError));
+  }
+
+  const rows = (batchData ?? []) as LogisticsBatchRow[];
+  const ids = rows.map((row) => row.id);
+  if (ids.length === 0) return [];
+
+  const { data: itemData, error: itemError } = await client
+    .from('logistics_batch_items')
+    .select('*')
+    .in('batch_id', ids)
+    .order('internal_code', { ascending: true });
+  if (itemError) throwSupabaseError(itemError);
+
+  const itemsByBatch = new Map<string, LogisticsBatchItem[]>();
+  for (const row of (itemData ?? []) as LogisticsBatchItemRow[]) {
+    const item = mapLogisticsBatchItem(row);
+    itemsByBatch.set(item.batchId, [...(itemsByBatch.get(item.batchId) ?? []), item]);
+  }
+
+  return rows.map((row) => mapLogisticsBatch(row, itemsByBatch.get(row.id) ?? []));
+}
+
+export async function upsertLogisticsBatch(batch: LogisticsBatch): Promise<void> {
+  const client = requireSupabase();
+  const now = new Date().toISOString();
+  const normalized: LogisticsBatch = {
+    ...batch,
+    createdAt: batch.createdAt || now,
+    items: batch.items.map((item) => ({ ...item, batchId: batch.id, createdAt: item.createdAt || now, updatedAt: now })),
+  };
+
+  const { error: batchError } = await client.from('logistics_batches').upsert(toLogisticsBatchRow(normalized));
+  if (batchError) throwSupabaseError(batchError);
+
+  const { error: deleteError } = await client.from('logistics_batch_items').delete().eq('batch_id', normalized.id);
+  if (deleteError) throwSupabaseError(deleteError);
+
+  if (normalized.items.length > 0) {
+    const { error: itemsError } = await client.from('logistics_batch_items').insert(normalized.items.map(toLogisticsBatchItemRow));
+    if (itemsError) throwSupabaseError(itemsError);
+  }
+}
+
+export async function updateLogisticsBatchStatus(batch: LogisticsBatch): Promise<void> {
+  const { error } = await requireSupabase().from('logistics_batches').upsert(toLogisticsBatchRow(batch));
+  if (error) throwSupabaseError(error);
+}
+
+export async function submitLogisticsBatch(batch: LogisticsBatch): Promise<void> {
+  const client = requireSupabase();
+  const submittedAt = batch.submittedAt || new Date().toISOString();
+  for (const item of batch.items) {
+    const { error } = await client
+      .from('logistics_batch_items')
+      .update({
+        loaded_carton_count: item.loadedCartonCount,
+        loaded_tail_quantity: item.loadedTailQuantity,
+        left_carton_count: item.leftCartonCount,
+        left_tail_quantity: item.leftTailQuantity,
+        note: item.note,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', item.id);
+    if (error) throwSupabaseError(error);
+  }
+
+  const { error: batchError } = await client
+    .from('logistics_batches')
+    .update({ status: 'submitted', submitted_at: submittedAt, note: batch.note })
+    .eq('id', batch.id);
+  if (batchError) throwSupabaseError(batchError);
 }
 
 export async function fetchPurchasePools(): Promise<PurchasePool[]> {
@@ -1118,6 +1381,8 @@ export function subscribeToSharedTables(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_suggestions' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'repricing_alerts' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'ad_analysis_runs' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'logistics_batches' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'logistics_batch_items' }, onChange)
     .subscribe();
 
   return () => {

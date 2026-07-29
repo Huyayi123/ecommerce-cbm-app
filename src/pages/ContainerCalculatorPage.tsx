@@ -34,6 +34,7 @@ function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
     .filter((row) => row.status !== 'error' && (row.sku || row.productName || row.englishName) && row.purchaseQuantity && row.purchaseQuantity > 0)
     .map((row) => ({
       id: crypto.randomUUID(),
+      internalCode: row.internalCode,
       manufacturerName: row.manufacturerName,
       sku: row.sku,
       productName: row.productName,
@@ -70,6 +71,13 @@ function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
       isMixed: false,
       mixedGroups: [],
       logisticsTotalCbm: null,
+      logisticsBatchId: '',
+      logisticsConfirmationStatus: 'unassigned',
+      logisticsLoadedCartonCount: null,
+      logisticsLoadedTailQuantity: 0,
+      logisticsLeftCartonCount: null,
+      logisticsLeftTailQuantity: 0,
+      logisticsSourceRecordId: '',
       note: '',
     }));
 }

@@ -626,6 +626,104 @@ button.danger,
   background: #fff4df;
 }
 
+.logistics-admin-bar,
+.logistics-batch-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid #e1e8ee;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.logistics-admin-bar label {
+  display: grid;
+  gap: 6px;
+  min-width: 220px;
+  color: #51606c;
+  font-size: 13px;
+}
+
+.logistics-admin-bar select,
+.logistics-table input {
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid #cbd6df;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.logistics-batch-tabs {
+  align-items: center;
+}
+
+.logistics-batch-tabs button.active {
+  background: #136f63;
+  border-color: #136f63;
+  color: #ffffff;
+}
+
+.logistics-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: #eef2f4;
+  color: #40505c;
+}
+
+.logistics-status.submitted {
+  background: #fff7e6;
+  color: #8a5a00;
+}
+
+.logistics-status.approved {
+  background: #eef8f5;
+  color: #136f63;
+}
+
+.logistics-status.rejected {
+  background: #fff2f0;
+  color: #b42318;
+}
+
+.logistics-summary {
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+}
+
+.logistics-table-wrap {
+  max-height: 680px;
+}
+
+.logistics-table {
+  min-width: 2200px;
+}
+
+.logistics-table th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.logistics-table .cell-ellipsis {
+  display: block;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.logistics-table input[type="number"] {
+  width: 84px;
+}
+
+.logistics-table td:nth-child(18) input {
+  width: 220px;
+}
+
 .audit-panel summary {
   cursor: pointer;
   font-size: 20px;

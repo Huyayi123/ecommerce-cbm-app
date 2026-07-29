@@ -15,7 +15,7 @@ export function calcUnitCbm(cartonCbm: number, unitsPerCarton: number): number {
   return round(cartonCbm, 8);
 }
 
-type HydratableSku = Omit<SkuItem, 'cartonCbm' | 'unitCbm' | 'storageLocation' | 'purchaseUrl' | 'tsin'> & Partial<Pick<SkuItem, 'storageLocation' | 'purchaseUrl' | 'tsin'>>;
+type HydratableSku = Omit<SkuItem, 'cartonCbm' | 'unitCbm' | 'storageLocation' | 'purchaseUrl' | 'tsin' | 'internalCode'> & Partial<Pick<SkuItem, 'storageLocation' | 'purchaseUrl' | 'tsin' | 'internalCode'>>;
 
 export function hydrateSku(item: HydratableSku): SkuItem {
   const cartonCbm = calcCartonCbm(item.cartonLengthCm, item.cartonWidthCm, item.cartonHeightCm);
@@ -26,6 +26,7 @@ export function hydrateSku(item: HydratableSku): SkuItem {
   const cbmSource = unitCbmFromManual ? 'imported' : unitCbmFromTotal ? 'total' : unitCbmFromCarton ? 'carton' : 'missing';
   return {
     ...item,
+    internalCode: item.internalCode ?? '',
     tsin: item.tsin ?? '',
     storageLocation: item.storageLocation ?? '',
     purchaseUrl: item.purchaseUrl ?? '',
@@ -146,6 +147,7 @@ export function calculateRows(purchases: PurchaseRow[], skuItems: SkuItem[]): Ca
     return {
       rowId: purchase.rowId,
       rowNumber: purchase.rowNumber,
+      internalCode: skuItem?.internalCode || purchase.internalCode || '',
       sku: skuItem?.sku || purchase.sku,
       manufacturerName: skuItem?.manufacturerName ?? '',
       productName: skuItem?.productName ?? '',

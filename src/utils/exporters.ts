@@ -6,6 +6,7 @@ type ExportFormat = 'xlsx' | 'csv';
 
 const SKU_TEMPLATE_HEADERS = [
   '厂家名',
+  '内部编号',
   'SKU',
   'TSIN',
   '产品名称',
@@ -119,6 +120,7 @@ export function exportResults(rows: CalculationRow[], format: ExportFormat): voi
   const worksheet = XLSX.utils.json_to_sheet(
     rows.map((row) => ({
       厂家名: row.manufacturerName,
+      内部编号: row.internalCode,
       SKU: row.sku,
       产品名称: row.productName,
       图片链接: row.imageUrl,
@@ -241,6 +243,7 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
       批次: normalized.purchaseBatchName,
       批次日期: normalized.purchaseBatchDate,
       厂家名: normalized.manufacturerName,
+      内部编号: normalized.internalCode,
       SKU: normalized.sku,
       产品名称: normalized.productName,
       英文名称: normalized.englishName,
@@ -275,6 +278,7 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
       批次: normalized.purchaseBatchName,
       批次日期: normalized.purchaseBatchDate,
       厂家名: normalized.manufacturerName,
+      内部编号: normalized.internalCode,
       SKU: line.sku,
       产品名称: line.productName,
       英文名称: '',
@@ -392,6 +396,7 @@ export function exportBatchPurchaseOrder(records: PurchaseRecord[], format: Expo
     批次: record.purchaseBatchName || '未分配批次',
     装柜日期: record.purchaseBatchDate || record.containerDate,
     厂家名: record.manufacturerName,
+    内部编号: record.internalCode,
     SKU: record.sku,
     产品名称: record.productName,
     英文名称: record.englishName,

@@ -1,5 +1,6 @@
 import type { PurchaseRecord, PurchaseRow, PurchaseStatus, SkuItem } from '../types';
 import { hydrateSku } from './calculations';
+import { ensureInternalCodes } from './internalCodes';
 import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
 
 const STORAGE_KEY = 'container-cbm-calculator:sku-items';
@@ -11,10 +12,12 @@ export function loadSkuItems(): SkuItem[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
 
-    return parsed.map((item) =>
+    return ensureInternalCodes(parsed.map((item) =>
       hydrateSku({
         id: String(item.id ?? crypto.randomUUID()),
+        internalCode: String(item.internalCode ?? item.internal_code ?? ''),
         sku: String(item.sku ?? ''),
+        tsin: String(item.tsin ?? ''),
         productName: String(item.productName ?? ''),
         englishName: String(item.englishName ?? ''),
         imageUrl: String(item.imageUrl ?? item.image_url ?? ''),
@@ -36,7 +39,7 @@ export function loadSkuItems(): SkuItem[] {
         cbmSource: item.cbmSource ?? 'missing',
         updatedAt: String(item.updatedAt ?? new Date().toISOString()),
       }),
-    );
+    ));
   } catch {
     return [];
   }
@@ -65,6 +68,7 @@ export function loadPurchaseRows(): PurchaseRow[] {
     return parsed.map((row, index) => ({
       rowId: String(row.rowId ?? crypto.randomUUID()),
       rowNumber: Number(row.rowNumber ?? index + 2),
+      internalCode: String(row.internalCode ?? row.internal_code ?? row.raw?.internalCode ?? ''),
       sku: String(row.sku ?? ''),
       productName: String(row.productName ?? ''),
       englishName: String(row.englishName ?? ''),
@@ -110,6 +114,7 @@ export function loadPurchaseRecords(): PurchaseRecord[] {
       const isConfirmed = Boolean(record.isConfirmed ?? status !== 'pending');
       return withPurchaseTotals({
         id: String(record.id ?? crypto.randomUUID()),
+        internalCode: String(record.internalCode ?? record.internal_code ?? ''),
         manufacturerName: String(record.manufacturerName ?? ''),
         sku: String(record.sku ?? ''),
         productName: String(record.productName ?? ''),
@@ -146,6 +151,18 @@ export function loadPurchaseRecords(): PurchaseRecord[] {
         isMixed: Boolean(record.isMixed ?? record.is_mixed ?? false),
         mixedGroups: normalizeMixedGroups(record.mixedGroups ?? record.mixed_groups),
         logisticsTotalCbm: nullableNumber(record.logisticsTotalCbm),
+        logisticsBatchId: String(record.logisticsBatchId ?? record.logistics_batch_id ?? ''),
+        logisticsConfirmationStatus: (
+          record.logisticsConfirmationStatus === 'draft'
+          || record.logisticsConfirmationStatus === 'submitted'
+          || record.logisticsConfirmationStatus === 'approved'
+          || record.logisticsConfirmationStatus === 'rejected'
+        ) ? record.logisticsConfirmationStatus : 'unassigned',
+        logisticsLoadedCartonCount: nullableNumber(record.logisticsLoadedCartonCount ?? record.logistics_loaded_carton_count),
+        logisticsLoadedTailQuantity: nullableNumber(record.logisticsLoadedTailQuantity ?? record.logistics_loaded_tail_quantity) ?? 0,
+        logisticsLeftCartonCount: nullableNumber(record.logisticsLeftCartonCount ?? record.logistics_left_carton_count),
+        logisticsLeftTailQuantity: nullableNumber(record.logisticsLeftTailQuantity ?? record.logistics_left_tail_quantity) ?? 0,
+        logisticsSourceRecordId: String(record.logisticsSourceRecordId ?? record.logistics_source_record_id ?? ''),
         note: String(record.note ?? ''),
       });
     });

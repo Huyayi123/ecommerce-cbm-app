@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { AuthPanel } from './components/AuthPanel';
 import { PasswordResetPanel } from './components/PasswordResetPanel';
 import { ProfileBinding } from './components/ProfileBinding';
@@ -6,12 +6,13 @@ import { SkuManager } from './components/SkuManager';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { AdAnalysisPage } from './pages/AdAnalysisPage';
 import { ContainerCalculatorPage } from './pages/ContainerCalculatorPage';
+import { LogisticsLoadingPage } from './pages/LogisticsLoadingPage';
 import { MyPurchaseOrdersPage } from './pages/MyPurchaseOrdersPage';
 import { PurchasePoolPage } from './pages/PurchasePoolPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
 import { RepricingAlertsPage } from './pages/RepricingAlertsPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
-import type { AdAnalysisRun, AppProfile, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
+import type { AdAnalysisRun, AppProfile, LogisticsBatch, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
 import {
   appendPurchaseRecordsToPool,
   deletePurchaseRecords,
@@ -25,26 +26,32 @@ import {
   fetchSalesSuggestions,
   fetchSkuItems,
   fetchSkuItemsForImport,
+  fetchLogisticsBatches,
   replaceContainerRows,
   replacePurchaseRecords,
   replaceSkuItems,
   subscribeToSharedTables,
   updateProfileBinding,
   saveAdAnalysisRun,
+  submitLogisticsBatch,
+  updateLogisticsBatchStatus,
+  upsertLogisticsBatch,
   upsertPurchasePools,
   upsertPurchaseRecords,
 } from './utils/cloudStorage';
 import { formatErrorMessage } from './utils/errors';
+import { applyApprovedLogisticsBatch } from './utils/logistics';
 import { canDelete, canEdit } from './utils/permissions';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'ad-analysis';
+type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'ad-analysis' | 'logistics';
 
 const ACTIVE_PAGE_STORAGE_KEY = 'ecommerce-cbm-active-page';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'repricing', label: '价格预警' },
   { key: 'ad-analysis', label: '广告分析' },
+  { key: 'logistics', label: '物流装柜确认' },
   { key: 'suggestions', label: '月销量采购建议' },
   { key: 'calculator', label: '装柜计算' },
   { key: 'my-orders', label: '我的采购订单' },
@@ -73,6 +80,7 @@ function App() {
   const [purchaseRows, setPurchaseRows] = useState<PurchaseRow[]>([]);
   const [purchaseRecords, setPurchaseRecords] = useState<PurchaseRecord[]>([]);
   const [purchasePools, setPurchasePools] = useState<PurchasePool[]>([]);
+  const [logisticsBatches, setLogisticsBatches] = useState<LogisticsBatch[]>([]);
   const [savedSalesSuggestions, setSavedSalesSuggestions] = useState<SalesSuggestionRow[]>([]);
   const [repricingAlerts, setRepricingAlerts] = useState<RepricingAlert[]>([]);
   const [adAnalysisRuns, setAdAnalysisRuns] = useState<AdAnalysisRun[]>([]);
@@ -90,8 +98,20 @@ function App() {
     localStorage.setItem(ACTIVE_PAGE_STORAGE_KEY, page);
   }
 
-  async function loadCloudData() {
+  async function loadCloudData(activeProfile = profile) {
     if (!supabase) return;
+    if (activeProfile?.role === 'logistics') {
+      try {
+        const batches = await fetchLogisticsBatches();
+        setLogisticsBatches(batches);
+        setProfiles((current) => (current.some((item) => item.id === activeProfile.id) ? current : [activeProfile, ...current]));
+      } catch (error) {
+        console.error('物流批次加载失败', error);
+        setStatusMessage(`物流批次加载失败：${formatErrorMessage(error)}`);
+      }
+      return;
+    }
+
     const results = await Promise.allSettled([
       fetchSkuItems(),
       fetchContainerRows(),
@@ -101,6 +121,7 @@ function App() {
       fetchRepricingAlerts(),
       fetchPurchasePools(),
       fetchAdAnalysisRuns(),
+      fetchLogisticsBatches(),
     ]);
     const errors = results.flatMap((result, index) => {
       if (result.status !== 'rejected') return [];
@@ -121,6 +142,7 @@ function App() {
     if (results[5].status === 'fulfilled') setRepricingAlerts(results[5].value);
     if (results[6].status === 'fulfilled') setPurchasePools(results[6].value);
     if (results[7].status === 'fulfilled') setAdAnalysisRuns(results[7].value);
+    if (results[8].status === 'fulfilled') setLogisticsBatches(results[8].value);
 
     if (errors.length > 0) {
       setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
@@ -137,14 +159,17 @@ function App() {
       const { data } = await supabase.auth.getSession();
       const user = data.session?.user;
       if (user) {
+        let activeProfile: AppProfile;
         try {
-          setProfile(await fetchProfile(user.id, user.email ?? ''));
+          activeProfile = await fetchProfile(user.id, user.email ?? '');
+          setProfile(activeProfile);
         } catch (error) {
           console.error(error);
-          setProfile({ id: user.id, email: user.email ?? '', role: 'viewer', displayName: user.email ?? '', buyerName: '' });
+          activeProfile = { id: user.id, email: user.email ?? '', role: 'viewer', displayName: user.email ?? '', buyerName: '' };
+          setProfile(activeProfile);
           setStatusMessage(`账号资料加载失败：${formatErrorMessage(error)}`);
         }
-        await loadCloudData();
+        await loadCloudData(activeProfile);
       } else {
         setProfile(null);
       }
@@ -176,13 +201,16 @@ function App() {
         setPurchaseRows([]);
         setPurchaseRecords([]);
         setPurchasePools([]);
+        setLogisticsBatches([]);
         setProfiles([]);
         setRepricingAlerts([]);
         setAdAnalysisRuns([]);
         return;
       }
-      void fetchProfile(user.id, user.email ?? '').then(setProfile);
-      void loadCloudData();
+      void fetchProfile(user.id, user.email ?? '').then((nextProfile) => {
+        setProfile(nextProfile);
+        void loadCloudData(nextProfile);
+      });
     });
 
     return () => data.subscription.unsubscribe();
@@ -191,14 +219,14 @@ function App() {
   useEffect(() => {
     if (!profile) return undefined;
     return subscribeToSharedTables(() => {
-      void loadCloudData();
+      void loadCloudData(profile);
     });
   }, [profile]);
 
   useEffect(() => {
     if (!profile || activePage !== 'inventory') return undefined;
     const refreshInventory = () => {
-      if (document.visibilityState === 'visible') void loadCloudData();
+      if (document.visibilityState === 'visible') void loadCloudData(profile);
     };
     const timer = window.setInterval(refreshInventory, 10000);
     window.addEventListener('focus', refreshInventory);
@@ -301,6 +329,43 @@ function App() {
       await loadCloudData();
       throw error;
     }
+  }
+
+  async function persistLogisticsBatch(batch: LogisticsBatch) {
+    await upsertLogisticsBatch(batch);
+    setLogisticsBatches((current) => {
+      const exists = current.some((item) => item.id === batch.id);
+      return exists ? current.map((item) => (item.id === batch.id ? batch : item)) : [batch, ...current];
+    });
+    await loadCloudData(profile);
+  }
+
+  async function persistLogisticsSubmit(batch: LogisticsBatch) {
+    await submitLogisticsBatch(batch);
+    setLogisticsBatches((current) => current.map((item) => (item.id === batch.id ? { ...batch, status: 'submitted' } : item)));
+    await loadCloudData(profile);
+  }
+
+  async function approveLogisticsBatch(batch: LogisticsBatch) {
+    if (!profile) return;
+    const approvedBatch: LogisticsBatch = {
+      ...batch,
+      status: 'approved',
+      reviewedBy: profile.id,
+      reviewedAt: new Date().toISOString(),
+    };
+    const normalizedRecords = normalizePurchaseRecords(assignBuyerEmails(applyApprovedLogisticsBatch(purchaseRecords, approvedBatch))).records;
+    await replacePurchaseRecords(normalizedRecords);
+    await updateLogisticsBatchStatus(approvedBatch);
+    setPurchaseRecords(normalizedRecords);
+    setLogisticsBatches((current) => current.map((item) => (item.id === batch.id ? approvedBatch : item)));
+    await loadCloudData(profile);
+  }
+
+  async function rejectLogisticsBatch(batch: LogisticsBatch) {
+    await updateLogisticsBatchStatus(batch);
+    setLogisticsBatches((current) => current.map((item) => (item.id === batch.id ? batch : item)));
+    await loadCloudData(profile);
   }
 
   async function appendPurchaseRecords(records: PurchaseRecord[]) {
@@ -418,6 +483,10 @@ function App() {
   const pendingTaskCount = purchaseRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase').length;
   const poolSubmittedCount = purchasePools.reduce((sum, pool) => sum + pool.records.length, 0);
   const activeRepricingAlerts = repricingAlerts.filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'));
+  const visibleNavItems = profile.role === 'logistics'
+    ? navItems.filter((item) => item.key === 'logistics')
+    : navItems.filter((item) => item.key !== 'logistics' || profile.role === 'admin');
+  const currentPage = visibleNavItems.some((item) => item.key === activePage) ? activePage : visibleNavItems[0]?.key ?? 'logistics';
 
   return (
     <main className="app-shell">
@@ -427,11 +496,11 @@ function App() {
           <span>采购 · 库存 · 广告</span>
         </div>
         <nav>
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <button
               key={item.key}
               type="button"
-              className={activePage === item.key ? 'active' : ''}
+              className={currentPage === item.key ? 'active' : ''}
               onClick={() => openPage(item.key)}
             >
               {item.label}
@@ -478,7 +547,7 @@ function App() {
 
       {statusMessage && <div className="inline-notice">{statusMessage}</div>}
 
-      {activePage === 'sku' && (
+      {currentPage === 'sku' && (
         <SkuManager
           items={skuItems}
           onChange={persistSkuItems}
@@ -489,7 +558,7 @@ function App() {
         />
       )}
 
-      {activePage === 'calculator' && (
+      {currentPage === 'calculator' && (
         <ContainerCalculatorPage
           skuItems={skuItems}
           purchaseRows={purchaseRows}
@@ -501,7 +570,7 @@ function App() {
         />
       )}
 
-      {activePage === 'inventory' && (
+      {currentPage === 'inventory' && (
         <PurchaseInventoryPage
           records={purchaseRecords}
           skuItems={skuItems}
@@ -512,7 +581,7 @@ function App() {
         />
       )}
 
-      {activePage === 'purchase-pool' && (
+      {currentPage === 'purchase-pool' && (
         <PurchasePoolPage
           records={purchaseRecords}
           pools={purchasePools}
@@ -523,7 +592,7 @@ function App() {
         />
       )}
 
-      {activePage === 'my-orders' && (
+      {currentPage === 'my-orders' && (
         <>
           <ProfileBinding profile={profile} onSave={saveProfileBinding} />
           <MyPurchaseOrdersPage
@@ -538,7 +607,7 @@ function App() {
         </>
       )}
 
-      {activePage === 'suggestions' && (
+      {currentPage === 'suggestions' && (
         <SalesSuggestionPage
           skuItems={skuItems}
           purchaseRecords={purchaseRecords}
@@ -548,16 +617,29 @@ function App() {
         />
       )}
 
-      {activePage === 'repricing' && (
+      {currentPage === 'repricing' && (
         <RepricingAlertsPage alerts={repricingAlerts} skuItems={skuItems} onRefresh={loadCloudData} />
       )}
-      {activePage === 'ad-analysis' && (
+      {currentPage === 'ad-analysis' && (
         <AdAnalysisPage
           skuItems={skuItems}
           profile={profile}
           savedRuns={adAnalysisRuns}
           onSaveRun={saveAdAnalysisRun}
           onRefresh={loadCloudData}
+        />
+      )}
+      {currentPage === 'logistics' && (
+        <LogisticsLoadingPage
+          profile={profile}
+          profiles={profiles}
+          records={purchaseRecords}
+          skuItems={skuItems}
+          batches={logisticsBatches}
+          onSaveBatch={persistLogisticsBatch}
+          onSubmitBatch={persistLogisticsSubmit}
+          onApproveBatch={approveLogisticsBatch}
+          onRejectBatch={rejectLogisticsBatch}
         />
       )}
       </div>
