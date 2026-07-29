@@ -1,6 +1,7 @@
 import type { AdAnalysisRow, AdStrategyLabel, SkuItem } from '../types';
 import type { AdReportImportRow } from './fileParsers';
 import { round } from './number';
+import { canonicalShopName } from './shops';
 import type { TakealotInventoryRow } from './takealot';
 
 const PURCHASE_COST_EXCHANGE_RATE = 3;
@@ -22,7 +23,7 @@ function tsinKey(value: string): string {
 }
 
 function storeKey(value: string): string {
-  return value.trim().toLowerCase();
+  return canonicalShopName(value).trim().toLowerCase();
 }
 
 function strategy(label: AdStrategyLabel): { strategyName: string; actionSuggestion: string } {
@@ -74,7 +75,7 @@ function buildSkuRankMap(items: SkuItem[]): Map<string, number> {
 
 function productAgeStatus(shopName: string, rank: number | null): AdAnalysisRow['productAgeStatus'] {
   if (!rank) return 'unknown';
-  const limits = NEW_PRODUCT_LIMITS[shopName.trim()];
+  const limits = NEW_PRODUCT_LIMITS[canonicalShopName(shopName)];
   if (!limits) return 'old';
   if (rank <= limits.protection) return 'protection';
   if (rank <= limits.newProduct) return 'new';
@@ -104,7 +105,7 @@ export function analyzeAdRows(input: {
     const sku = skuKey(row.sku);
     const skuItem = skuItemsByTsin.get(tsinKey(row.sku)) ?? skuItemsBySku.get(sku);
     const inventory = inventoryByTsin.get(tsinKey(row.sku)) ?? inventoryBySku.get(sku);
-    const shopName = row.shopName || inventory?.shopName || skuItem?.shopName || '';
+    const shopName = canonicalShopName(row.shopName || inventory?.shopName || skuItem?.shopName || '');
     const salePrice = round(inventory?.salePrice ?? 0, 2);
     const purchaseCostRmb = round(skuItem?.purchasePrice ?? 0, 2);
     const purchaseCostZar = round(purchaseCostRmb * PURCHASE_COST_EXCHANGE_RATE, 2);
