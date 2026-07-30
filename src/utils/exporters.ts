@@ -77,6 +77,165 @@ function imageFormulaFor(url: string): string {
   return trimmed ? `IMAGE("${excelFormulaText(trimmed)}")` : '';
 }
 
+function isMyPurchaseOrdersExport(moduleName: string): boolean {
+  return moduleName.trim() === '我的采购订单';
+}
+
+function cellRef(row: number, column: number): string {
+  return XLSX.utils.encode_cell({ r: row - 1, c: column - 1 });
+}
+
+function setFormula(worksheet: XLSX.WorkSheet, row: number, column: number, formula: string, value: number | string = ''): void {
+  worksheet[cellRef(row, column)] = { t: typeof value === 'number' ? 'n' : 's', f: formula, v: value };
+}
+
+function applyMyPurchaseOrderStyles(worksheet: XLSX.WorkSheet, rowCount: number): void {
+  const thinBorder = { style: 'thin', color: { rgb: '000000' } };
+  const border = { top: thinBorder, right: thinBorder, bottom: thinBorder, left: thinBorder };
+  const center = { horizontal: 'center', vertical: 'center', wrapText: true };
+  const left = { horizontal: 'left', vertical: 'center', wrapText: true };
+
+  for (let row = 1; row <= rowCount; row += 1) {
+    for (let col = 1; col <= 17; col += 1) {
+      const address = cellRef(row, col);
+      if (!worksheet[address]) worksheet[address] = { t: 's', v: '' };
+      worksheet[address].s = {
+        border: row === 1 ? undefined : border,
+        alignment: col === 1 || col === 3 || col === 4 || col === 16 ? left : center,
+        font: row === 1 ? { bold: true } : undefined,
+        fill: row === 1 ? { patternType: 'solid', fgColor: { rgb: '92D050' } } : undefined,
+      };
+    }
+  }
+
+  worksheet['!cols'] = [
+    { wch: 18 },
+    { wch: 16 },
+    { wch: 34 },
+    { wch: 42 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 12 },
+    { wch: 30 },
+    { wch: 12 },
+  ];
+}
+
+function mixedWithText(names: string[]): string {
+  const uniqueNames = Array.from(new Set(names.map((name) => name.trim()).filter(Boolean)));
+  return uniqueNames.length > 0 ? `混${uniqueNames.join('、')}` : '';
+}
+
+function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[]): void {
+  const headers = [
+    '厂家名',
+    'SKU',
+    '产品名称',
+    '英文名称',
+    '店铺',
+    '采购人',
+    '实际采购数量',
+    '采购单价',
+    '运费',
+    '混装总金额',
+    '总CBM',
+    '装货方式',
+    '件数',
+    '是否混装',
+    '总重量kg',
+    '备注',
+    '混装总数',
+  ];
+  const rows: unknown[][] = [headers];
+  const merges: XLSX.Range[] = [];
+  const formulaSections: Array<{ start: number; end: number; totalCbm: number; totalWeightKg: number | null }> = [];
+
+  for (const record of records.map(withPurchaseTotals)) {
+    const startRow = rows.length + 1;
+    const buyerName = record.assignedBuyerName || record.buyerName;
+    const loadingType = record.loadingType || '整柜';
+    const mixedLines = record.mixedGroups.flatMap((group) => group.lines.map((line) => ({ ...line, groupName: group.groupName, cartonCount: group.cartonCount })));
+    const isMixed = mixedLines.length > 0;
+    const baseQuantity = purchaseQuantityForRecordSku(record);
+    const mixedProductNames = mixedLines.map((line) => line.productName || line.sku);
+
+    rows.push([
+      record.manufacturerName,
+      record.sku,
+      record.productName,
+      record.englishName,
+      record.shopName,
+      buyerName,
+      baseQuantity,
+      record.purchasePrice,
+      record.freightCost,
+      '',
+      record.totalCbm,
+      loadingType,
+      isMixed ? packageCountFor(record) : packageCountFor(record) || '',
+      isMixed ? '是' : '否',
+      record.totalWeightKg ?? '',
+      isMixed ? mixedWithText(mixedProductNames) : record.note,
+      baseQuantity,
+    ]);
+
+    for (const line of mixedLines) {
+      rows.push([
+        '',
+        line.sku,
+        line.productName,
+        '',
+        record.shopName,
+        buyerName,
+        line.quantity,
+        line.purchasePrice,
+        '',
+        '',
+        '',
+        loadingType,
+        0,
+        '是',
+        '',
+        mixedWithText([record.productName || record.sku]),
+        '',
+      ]);
+    }
+
+    const endRow = rows.length;
+    formulaSections.push({ start: startRow, end: endRow, totalCbm: record.totalCbm, totalWeightKg: record.totalWeightKg });
+    if (endRow > startRow) {
+      for (const column of [1, 10, 11, 15, 17]) {
+        merges.push({ s: { r: startRow - 1, c: column - 1 }, e: { r: endRow - 1, c: column - 1 } });
+      }
+    }
+  }
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  worksheet['!merges'] = merges;
+  for (const section of formulaSections) {
+    const rowRefs = Array.from({ length: section.end - section.start + 1 }, (_, index) => section.start + index);
+    const amountFormula = rowRefs.map((row) => `G${row}*H${row}`).join('+') + '+' + rowRefs.map((row) => `I${row}`).join('+');
+    const quantityFormulaText = rowRefs.map((row) => `G${row}`).join('+');
+    setFormula(worksheet, section.start, 10, amountFormula);
+    setFormula(worksheet, section.start, 17, quantityFormulaText);
+    worksheet[cellRef(section.start, 11)] = { t: 'n', v: section.totalCbm };
+    if (section.totalWeightKg !== null) worksheet[cellRef(section.start, 15)] = { t: 'n', v: section.totalWeightKg };
+  }
+  applyMyPurchaseOrderStyles(worksheet, rows.length);
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'SKU导入模板');
+  writeWorkbook(workbook, '我的采购订单', 'xlsx');
+}
+
 function applyInspectionStyles(worksheet: XLSX.WorkSheet, rowCount: number, colCount: number): void {
   const thinBorder = { style: 'thin', color: { rgb: '000000' } };
   const border = { top: thinBorder, right: thinBorder, bottom: thinBorder, left: thinBorder };
@@ -234,6 +393,11 @@ export function exportSkuImportTemplate(): void {
 }
 
 export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportFormat, moduleName = '采购在途库存'): void {
+  if (format === 'xlsx' && isMyPurchaseOrdersExport(moduleName)) {
+    exportMyPurchaseOrdersTemplate(records);
+    return;
+  }
+
   const includeBuyerEmail = moduleName !== '我的采购订单';
   const includePlanQuantity = moduleName === '我的采购订单';
   const hideMixedChildAmount = includePlanQuantity && !includeBuyerEmail;
