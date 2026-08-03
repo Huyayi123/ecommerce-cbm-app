@@ -276,7 +276,7 @@ export function LogisticsLoadingPage({
           <table className="logistics-table">
             <thead>
               <tr>
-                <th>内部编号</th><th>图片</th><th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>装柜日期</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>装货方式</th><th>混装组</th><th>装走整箱</th><th>装走尾数</th><th>留下整箱</th><th>留下尾数</th><th>物流备注</th><th>操作</th>
+                <th>内部编号</th>{isAdmin && <th>图片</th>}<th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>装柜日期</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>装货方式</th><th>混装组</th><th>装走整箱</th><th>装走尾数</th><th>留下整箱</th><th>留下尾数</th><th>物流备注</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -286,7 +286,7 @@ export function LogisticsLoadingPage({
                 return (
                   <tr key={item.id} className={normalized.isMixed ? 'mixed-child-row' : ''}>
                     <td><strong>{normalized.internalCode || '-'}</strong></td>
-                    <td>{normalized.imageUrl ? <img className="sku-thumb" src={normalized.imageUrl} alt={normalized.productName || normalized.sku} loading="lazy" /> : '-'}</td>
+                    {isAdmin && <td>{normalized.imageUrl ? <img className="sku-thumb" src={normalized.imageUrl} alt={normalized.productName || normalized.sku} loading="lazy" /> : '-'}</td>}
                     <td>{normalized.manufacturerName}</td>
                     <td>{normalized.sku}</td>
                     <td><span className="cell-ellipsis" title={normalized.productName}>{normalized.productName}</span></td>
@@ -310,7 +310,7 @@ export function LogisticsLoadingPage({
                   </tr>
                 );
               })}
-              {displayItems.length === 0 && <tr><td className="empty" colSpan={19}>{activeBatch.items.length === 0 ? '这个批次还没有物流明细。' : '没有匹配的物流明细。'}</td></tr>}
+              {displayItems.length === 0 && <tr><td className="empty" colSpan={isAdmin ? 19 : 18}>{activeBatch.items.length === 0 ? '这个批次还没有物流明细。' : '没有匹配的物流明细。'}</td></tr>}
             </tbody>
           </table>
         </div>
