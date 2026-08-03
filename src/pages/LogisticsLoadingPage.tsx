@@ -52,6 +52,17 @@ function setItemAllLeft(item: LogisticsBatchItem): LogisticsBatchItem {
   });
 }
 
+function isGuantongItem(item: LogisticsBatchItem): boolean {
+  return (item.loadingType || '').trim() === '冠通';
+}
+
+function matchesLogisticsSearch(item: LogisticsBatchItem, searchText: string): boolean {
+  const keyword = searchText.trim().toLowerCase();
+  if (!keyword) return true;
+  return [item.internalCode, item.manufacturerName, item.englishName]
+    .some((value) => String(value || '').toLowerCase().includes(keyword));
+}
+
 export function LogisticsLoadingPage({
   profile,
   profiles,
@@ -80,12 +91,19 @@ export function LogisticsLoadingPage({
   const [activeBatchId, setActiveBatchId] = useState(visibleBatches[0]?.id ?? '');
   const [draftBatch, setDraftBatch] = useState<LogisticsBatch | null>(null);
   const [message, setMessage] = useState('');
+  const [searchText, setSearchText] = useState('');
 
   const activeBatch = draftBatch
     ?? visibleBatches.find((batch) => batch.id === activeBatchId)
     ?? visibleBatches[0]
     ?? null;
   const canEditActive = Boolean(activeBatch && !isAdmin && (activeBatch.status === 'draft' || activeBatch.status === 'rejected'));
+  const displayItems = useMemo(() => {
+    if (!activeBatch) return [];
+    return activeBatch.items
+      .map(normalizeLogisticsItemInput)
+      .filter((item) => (isAdmin || !isGuantongItem(item)) && matchesLogisticsSearch(item, searchText));
+  }, [activeBatch, isAdmin, searchText]);
 
   function selectedLogisticsProfile(): AppProfile | null {
     return logisticsProfiles.find((item) => item.id === logisticsUserId) ?? null;
@@ -172,7 +190,7 @@ export function LogisticsLoadingPage({
     }
   }
 
-  const stats = activeBatch ? batchStats(activeBatch) : null;
+  const stats = activeBatch ? batchStats({ ...activeBatch, items: displayItems }) : null;
 
   return (
     <section className="panel logistics-panel">
@@ -229,6 +247,22 @@ export function LogisticsLoadingPage({
 
       {message && <div className="inline-notice">{message}</div>}
 
+      {activeBatch && (
+        <div className="logistics-search-bar">
+          <label>搜索
+            <input
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="搜索内部编号、厂家名、英文名称"
+            />
+          </label>
+          <span>
+            当前显示 {displayItems.length} / {activeBatch.items.length} 条
+            {!isAdmin && '，已隐藏冠通装货方式'}
+          </span>
+        </div>
+      )}
+
       {activeBatch && stats && (
         <div className="summary-grid logistics-summary">
           <div className="metric"><span>明细数</span><strong>{stats.items}</strong></div>
@@ -247,7 +281,7 @@ export function LogisticsLoadingPage({
               </tr>
             </thead>
             <tbody>
-              {activeBatch.items.map((item) => {
+              {displayItems.map((item) => {
                 const normalized = normalizeLogisticsItemInput(item);
                 const readOnly = !canEditActive;
                 return (
@@ -277,7 +311,7 @@ export function LogisticsLoadingPage({
                   </tr>
                 );
               })}
-              {activeBatch.items.length === 0 && <tr><td className="empty" colSpan={19}>这个批次还没有物流明细。</td></tr>}
+              {displayItems.length === 0 && <tr><td className="empty" colSpan={19}>{activeBatch.items.length === 0 ? '这个批次还没有物流明细。' : '没有匹配的物流明细。'}</td></tr>}
             </tbody>
           </table>
         </div>
