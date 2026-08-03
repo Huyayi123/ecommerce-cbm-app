@@ -756,6 +756,10 @@ button.danger,
   width: 84px;
 }
 
+.logistics-table .single-rejected-row td {
+  background: #fff7f5;
+}
+
 .logistics-table td:nth-child(18) input {
   width: 220px;
 }

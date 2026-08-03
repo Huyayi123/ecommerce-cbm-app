@@ -15,6 +15,8 @@ type Props = {
   onRejectBatch: (batch: LogisticsBatch) => Promise<void>;
 };
 
+const SINGLE_ITEM_REJECT_MARK = 'admin驳回';
+
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -61,6 +63,15 @@ function matchesLogisticsSearch(item: LogisticsBatchItem, searchText: string): b
   if (!keyword) return true;
   return [item.internalCode, item.manufacturerName, item.englishName]
     .some((value) => String(value || '').toLowerCase().includes(keyword));
+}
+
+function isSingleRejectedItem(item: LogisticsBatchItem): boolean {
+  return item.note.includes(SINGLE_ITEM_REJECT_MARK);
+}
+
+function withSingleRejectNote(note: string): string {
+  if (note.includes(SINGLE_ITEM_REJECT_MARK)) return note;
+  return note.trim() ? `${SINGLE_ITEM_REJECT_MARK}：请重新核对本条装柜数据；${note.trim()}` : `${SINGLE_ITEM_REJECT_MARK}：请重新核对本条装柜数据`;
 }
 
 export function LogisticsLoadingPage({
@@ -190,6 +201,28 @@ export function LogisticsLoadingPage({
     }
   }
 
+  async function handleRejectItem(itemId: string) {
+    if (!activeBatch) return;
+    const now = new Date().toISOString();
+    const nextBatch: LogisticsBatch = {
+      ...activeBatch,
+      status: 'rejected',
+      reviewedBy: profile.id,
+      reviewedAt: now,
+      items: activeBatch.items.map((item) => (item.id === itemId
+        ? normalizeLogisticsItemInput({ ...item, note: withSingleRejectNote(item.note), updatedAt: now })
+        : item)),
+    };
+    try {
+      await onSaveBatch(nextBatch);
+      setDraftBatch(null);
+      setActiveBatchId(nextBatch.id);
+      setMessage('已单条驳回给物流商，物流商只需要重新填写这一条。');
+    } catch (error) {
+      setMessage(`单条驳回失败：${formatErrorMessage(error)}`);
+    }
+  }
+
   const stats = activeBatch ? batchStats({ ...activeBatch, items: displayItems }) : null;
 
   return (
@@ -282,9 +315,10 @@ export function LogisticsLoadingPage({
             <tbody>
               {displayItems.map((item) => {
                 const normalized = normalizeLogisticsItemInput(item);
-                const readOnly = !canEditActive;
+                const isSingleRejected = isSingleRejectedItem(normalized);
+                const readOnly = isAdmin || !canEditActive || (activeBatch.status === 'rejected' && !isSingleRejected);
                 return (
-                  <tr key={item.id} className={normalized.isMixed ? 'mixed-child-row' : ''}>
+                  <tr key={item.id} className={[normalized.isMixed ? 'mixed-child-row' : '', isSingleRejected ? 'single-rejected-row' : ''].filter(Boolean).join(' ')}>
                     <td><strong>{normalized.internalCode || '-'}</strong></td>
                     {isAdmin && <td>{normalized.imageUrl ? <img className="sku-thumb" src={normalized.imageUrl} alt={normalized.productName || normalized.sku} loading="lazy" /> : '-'}</td>}
                     <td>{normalized.manufacturerName}</td>
@@ -302,10 +336,16 @@ export function LogisticsLoadingPage({
                     <td><input type="number" min="0" max={normalized.tailQuantity} value={normalized.loadedTailQuantity} disabled={readOnly || normalized.isMixed} onChange={(event) => patchItem(normalized.id, { loadedTailQuantity: clampNumber(Number(event.target.value), 0, normalized.tailQuantity) })} /></td>
                     <td>{normalized.leftCartonCount ?? 0}</td>
                     <td>{normalized.leftTailQuantity}</td>
-                    <td><input value={normalized.note} disabled={readOnly} onChange={(event) => patchItem(normalized.id, { note: event.target.value })} /></td>
+                    <td><input value={normalized.note} disabled={readOnly} onChange={(event) => patchItem(normalized.id, { note: isSingleRejected ? withSingleRejectNote(event.target.value) : event.target.value })} /></td>
                     <td className="row-actions">
-                      <button type="button" disabled={readOnly} onClick={() => patchItem(normalized.id, setItemAllLoaded(normalized))}>全装</button>
-                      <button type="button" disabled={readOnly} onClick={() => patchItem(normalized.id, setItemAllLeft(normalized))}>全留</button>
+                      {isAdmin && activeBatch.status === 'submitted' ? (
+                        <button type="button" className="danger" onClick={() => handleRejectItem(normalized.id)}>驳回此条</button>
+                      ) : (
+                        <>
+                          <button type="button" disabled={readOnly} onClick={() => patchItem(normalized.id, setItemAllLoaded(normalized))}>全装</button>
+                          <button type="button" disabled={readOnly} onClick={() => patchItem(normalized.id, setItemAllLeft(normalized))}>全留</button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 );
