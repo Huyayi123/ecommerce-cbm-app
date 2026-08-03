@@ -258,7 +258,6 @@ export function LogisticsLoadingPage({
           </label>
           <span>
             当前显示 {displayItems.length} / {activeBatch.items.length} 条
-            {!isAdmin && '，已隐藏冠通装货方式'}
           </span>
         </div>
       )}

@@ -21,6 +21,34 @@ function skuLookup(skuItems: SkuItem[]): Map<string, SkuItem> {
   return map;
 }
 
+function normalizedKey(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+function skuLookupByField(skuItems: SkuItem[], field: keyof Pick<SkuItem, 'internalCode' | 'sku' | 'productName' | 'englishName'>): Map<string, SkuItem> {
+  const map = new Map<string, SkuItem>();
+  for (const item of skuItems) {
+    const key = normalizedKey(String(item[field] ?? ''));
+    if (key && !map.has(key)) map.set(key, item);
+  }
+  return map;
+}
+
+function findSkuForRecord(
+  record: PurchaseRecord,
+  lookups: {
+    byInternalCode: Map<string, SkuItem>;
+    bySku: Map<string, SkuItem>;
+    byProductName: Map<string, SkuItem>;
+    byEnglishName: Map<string, SkuItem>;
+  },
+): SkuItem | undefined {
+  return lookups.byInternalCode.get(normalizedKey(record.internalCode))
+    ?? lookups.bySku.get(normalizedKey(record.sku))
+    ?? lookups.byProductName.get(normalizedKey(record.productName))
+    ?? lookups.byEnglishName.get(normalizedKey(record.englishName));
+}
+
 export function logisticsStatusLabel(status: LogisticsBatch['status']): string {
   if (status === 'submitted') return '待审核';
   if (status === 'approved') return '已审核';
@@ -37,7 +65,12 @@ export function buildLogisticsBatch(
   existingBatch?: LogisticsBatch,
 ): LogisticsBatch {
   const now = new Date().toISOString();
-  const skuBySku = skuLookup(skuItems);
+  const skuLookups = {
+    byInternalCode: skuLookupByField(skuItems, 'internalCode'),
+    bySku: skuLookup(skuItems),
+    byProductName: skuLookupByField(skuItems, 'productName'),
+    byEnglishName: skuLookupByField(skuItems, 'englishName'),
+  };
   const batchId = existingBatch?.id || safeBatchId(containerDate, logisticsProfile?.id || '', logisticsProfile?.email || '');
   const existingItems = new Map((existingBatch?.items ?? []).map((item) => [item.purchaseRecordId, item]));
   const sourceRecords = records
@@ -49,7 +82,7 @@ export function buildLogisticsBatch(
     ));
 
   const items: LogisticsBatchItem[] = sourceRecords.map((record) => {
-    const sku = skuBySku.get(record.sku.trim().toUpperCase());
+    const sku = findSkuForRecord(record, skuLookups);
     const existing = existingItems.get(record.id);
     const cartonCount = record.cartonCount ?? null;
     const tailQuantity = record.tailQuantity ?? 0;
