@@ -17,6 +17,14 @@ function unitSellingPrice(sellingPrice, quantity) {
   return Math.round((sellingPrice / quantity) * 100) / 100;
 }
 
+function chooseSale(sales) {
+  return sales.filter((sale) => sale.totalFees > 0 && sale.quantity > 0 && !excluded(sale.status))
+    .sort((left, right) => {
+      if ((left.quantity === 1) !== (right.quantity === 1)) return left.quantity === 1 ? -1 : 1;
+      return Date.parse(right.date) - Date.parse(left.date);
+    })[0];
+}
+
 assert.equal(warehouseFee(0), 0);
 assert.equal(warehouseFee(15), 10);
 assert.equal(warehouseFee(15.01), 20);
@@ -31,4 +39,16 @@ assert.equal(excluded('Returned'), true);
 assert.equal(excluded('Preparing for Customer'), false);
 assert.equal(unitSellingPrice(1158, 2), 579);
 assert.equal(unitSellingPrice(1000, 3), 333.33);
+assert.equal(chooseSale([
+  { date: '2026-08-04', quantity: 1, totalFees: 0, status: 'Preparing' },
+  { date: '2026-08-03', quantity: 1, totalFees: 25, status: 'Preparing' },
+]).date, '2026-08-03');
+assert.equal(chooseSale([
+  { date: '2026-08-04', quantity: 2, totalFees: 30, status: 'Preparing' },
+  { date: '2026-08-01', quantity: 1, totalFees: 20, status: 'Preparing' },
+]).date, '2026-08-01');
+assert.equal(chooseSale([
+  { date: '2026-08-04', quantity: 2, totalFees: 0, status: 'Preparing' },
+  { date: '2026-08-02', quantity: 3, totalFees: 40, status: 'Preparing' },
+]).date, '2026-08-02');
 console.log('profit calculation boundary tests passed');

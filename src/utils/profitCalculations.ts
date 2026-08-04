@@ -28,9 +28,20 @@ export function latestValidSalesBySku(sales: TakealotSale[]): Map<string, Takeal
   const result = new Map<string, TakealotSale>();
   for (const sale of sales) {
     const sku = key(sale.sku);
-    if (!sku || isExcludedSaleStatus(sale.saleStatus)) continue;
+    const hasUsableFees = sale.totalFees !== null && sale.totalFees > 0;
+    const hasUsableQuantity = Number.isFinite(sale.quantity) && sale.quantity > 0;
+    if (!sku || isExcludedSaleStatus(sale.saleStatus) || !hasUsableFees || !hasUsableQuantity) continue;
     const current = result.get(sku);
-    if (!current || Date.parse(sale.orderDate) > Date.parse(current.orderDate)) result.set(sku, sale);
+    if (!current) {
+      result.set(sku, sale);
+      continue;
+    }
+    const saleIsSingle = sale.quantity === 1;
+    const currentIsSingle = current.quantity === 1;
+    if ((saleIsSingle && !currentIsSingle)
+      || (saleIsSingle === currentIsSingle && Date.parse(sale.orderDate) > Date.parse(current.orderDate))) {
+      result.set(sku, sale);
+    }
   }
   return result;
 }
@@ -64,7 +75,7 @@ export function buildProfitAnalysisRows(input: {
     const totalFees = sale?.totalFees !== null && sale?.totalFees !== undefined && sale.totalFees >= 0 ? round(sale.totalFees, 2) : null;
     const messages: string[] = [];
     if (!skuItem) messages.push('未匹配 SKU 资料库');
-    if (!sale) messages.push('最近180天无有效成交');
+    if (!sale) messages.push('最近180天无 Total Fees 大于 0 的有效成交');
     if (sale && saleQuantity === null) messages.push('最近成交购买数量无效');
     if (sale && sellingPrice === null && saleQuantity !== null) messages.push('最近成交售价缺失');
     if (sale && totalFees === null) messages.push('Total Fees 缺失');
