@@ -1369,12 +1369,28 @@ export async function fetchProfitAnalysisRuns(): Promise<ProfitAnalysisRun[]> {
   for (const run of allRuns) if (!latestByShop.has(run.shop_name)) latestByShop.set(run.shop_name, run);
   const latestRuns = [...latestByShop.values()];
   if (!latestRuns.length) return [];
-  const { data: rowData, error: rowError } = await client.from('profit_analysis_rows').select('*').in('run_id', latestRuns.map((run) => run.id));
-  if (rowError) throwSupabaseError(rowError);
+  const pageSize = 500;
+  const rowGroups = await Promise.all(latestRuns.map(async (run) => {
+    const rows: ProfitAnalysisDetailRow[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await client.from('profit_analysis_rows')
+        .select('*')
+        .eq('run_id', run.id)
+        .order('id', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throwSupabaseError(error);
+      const page = (data ?? []) as ProfitAnalysisDetailRow[];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+    }
+    return rows;
+  }));
   const rowsByRun = new Map<string, ProfitAnalysisRow[]>();
-  for (const raw of (rowData ?? []) as ProfitAnalysisDetailRow[]) {
-    const row = mapProfitRow(raw);
-    rowsByRun.set(row.runId, [...(rowsByRun.get(row.runId) ?? []), row]);
+  for (const group of rowGroups) {
+    for (const raw of group) {
+      const row = mapProfitRow(raw);
+      rowsByRun.set(row.runId, [...(rowsByRun.get(row.runId) ?? []), row]);
+    }
   }
   return latestRuns.map((run) => ({ id: run.id, shopName: run.shop_name, createdAt: run.created_at, createdBy: run.created_by ?? '', rowCount: Number(run.row_count ?? 0), rows: rowsByRun.get(run.id) ?? [] }));
 }

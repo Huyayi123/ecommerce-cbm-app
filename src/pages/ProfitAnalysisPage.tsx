@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { AppProfile, ProfitAnalysisRun, ProfitAnalysisStatus, SkuItem } from '../types';
+import { exportProfitAnalysisRows } from '../utils/exporters';
 import { buildProfitAnalysisRows } from '../utils/profitCalculations';
 import { fetchTakealotInventory } from '../utils/takealot';
 import { fetchTakealotSales } from '../utils/takealotSales';
@@ -83,7 +84,10 @@ export function ProfitAnalysisPage({ skuItems, profile, runs, onSaveRun, onRefre
     <section className="panel profit-analysis-page">
       <div className="section-heading">
         <div><h2>利润分析</h2><p>使用每个 SKU 最近一笔有效成交，结合采购成本、海运费、Total Fees 和送仓费计算单件利润。</p></div>
-        <button className="primary" type="button" disabled={isSyncing} onClick={() => void sync()}>{isSyncing ? '同步中...' : '同步利润数据'}</button>
+        <div className="export-actions">
+          <button type="button" disabled={visibleRows.length === 0} onClick={() => exportProfitAnalysisRows(visibleRows, selectedStore)}>导出 Excel</button>
+          <button className="primary" type="button" disabled={isSyncing} onClick={() => void sync()}>{isSyncing ? '同步中...' : '同步利润数据'}</button>
+        </div>
       </div>
       <div className="profit-analysis-controls">
         <label>店铺<select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)}>{STORES.map((store) => <option key={store}>{store}</option>)}</select></label>

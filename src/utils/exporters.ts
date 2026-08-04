@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
-import type { AdAnalysisRow, AuditLog, CalculationRow, PurchaseRecord, SkuItem } from '../types';
+import type { AdAnalysisRow, AuditLog, CalculationRow, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
 import { mixedGroupsSummary, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
@@ -544,6 +544,62 @@ export function exportAdAnalysisRows(rows: AdAnalysisRow[], format: ExportFormat
   }
 
   writeWorkbook(workbook, '\u5e7f\u544a\u5206\u6790\u7ed3\u679c', format);
+}
+
+export function exportProfitAnalysisRows(rows: ProfitAnalysisRow[], shopName: string): void {
+  const statusLabels: Record<ProfitAnalysisRow['status'], string> = {
+    profit: '盈利',
+    loss: '亏损',
+    break_even: '持平',
+    missing_data: '无法计算',
+  };
+  const exportRows = rows.map((row) => ({
+    店铺: row.shopName,
+    SKU: row.sku,
+    产品名称: row.productName,
+    图片链接: row.imageUrl,
+    最近成交时间: row.latestOrderDate,
+    实际成交价: row.sellingPrice ?? '',
+    '采购价 RMB': row.purchaseCostRmb ?? '',
+    '采购成本 ZAR': row.purchaseCostZar ?? '',
+    '单品 CBM': row.unitCbm ?? '',
+    海运费: row.seaFreightCost ?? '',
+    送仓费: row.warehouseFee ?? '',
+    'Total Fees': row.totalFees ?? '',
+    单件利润: row.profit ?? '',
+    状态: statusLabels[row.status],
+    提示: row.messages.join('；'),
+    同步时间: row.syncedAt,
+  }));
+  const worksheet = XLSX.utils.json_to_sheet(exportRows);
+  const thin = { style: 'thin', color: { rgb: 'D1D5DB' } };
+  const border = { top: thin, right: thin, bottom: thin, left: thin };
+  const range = XLSX.utils.decode_range(worksheet['!ref'] ?? 'A1:A1');
+  for (let row = range.s.r; row <= range.e.r; row += 1) {
+    for (let col = range.s.c; col <= range.e.c; col += 1) {
+      const address = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = worksheet[address];
+      if (!cell) continue;
+      const status = rows[row - 1]?.status;
+      cell.s = {
+        border,
+        alignment: { vertical: 'center', wrapText: true },
+        font: row === 0 ? { bold: true, color: { rgb: 'FFFFFF' } } : undefined,
+        fill: row === 0
+          ? { patternType: 'solid', fgColor: { rgb: '167D70' } }
+          : status === 'loss'
+            ? { patternType: 'solid', fgColor: { rgb: 'FFF7ED' } }
+            : status === 'missing_data'
+              ? { patternType: 'solid', fgColor: { rgb: 'FFF1F2' } }
+              : undefined,
+      };
+    }
+  }
+  worksheet['!cols'] = [12, 18, 48, 42, 22, 14, 14, 16, 14, 12, 12, 14, 14, 12, 42, 22].map((wch) => ({ wch }));
+  worksheet['!autofilter'] = { ref: worksheet['!ref'] ?? 'A1:P1' };
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, '利润分析');
+  writeWorkbook(workbook, `${shopName || '全部店铺'}_利润分析`, 'xlsx');
 }
 export function exportBatchPurchaseOrder(records: PurchaseRecord[], format: ExportFormat): void {
   const exportRows = [...records]
