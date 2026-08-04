@@ -57,12 +57,16 @@ export function buildProfitAnalysisRows(input: {
     const purchaseCostRmb = skuItem && skuItem.purchasePrice > 0 ? round(skuItem.purchasePrice, 2) : null;
     const rawUnitCbm = skuItem ? (skuItem.unitCbm || skuItem.manualUnitCbm) : 0;
     const unitCbm = rawUnitCbm > 0 ? round(rawUnitCbm, 8) : null;
-    const sellingPrice = sale?.sellingPrice !== null && sale?.sellingPrice !== undefined && sale.sellingPrice > 0 ? round(sale.sellingPrice, 2) : null;
+    const saleQuantity = sale && Number.isFinite(sale.quantity) && sale.quantity > 0 ? sale.quantity : null;
+    const sellingPrice = sale?.sellingPrice !== null && sale?.sellingPrice !== undefined && sale.sellingPrice > 0 && saleQuantity !== null
+      ? round(sale.sellingPrice / saleQuantity, 2)
+      : null;
     const totalFees = sale?.totalFees !== null && sale?.totalFees !== undefined && sale.totalFees >= 0 ? round(sale.totalFees, 2) : null;
     const messages: string[] = [];
     if (!skuItem) messages.push('未匹配 SKU 资料库');
     if (!sale) messages.push('最近180天无有效成交');
-    if (sale && sellingPrice === null) messages.push('最近成交售价缺失');
+    if (sale && saleQuantity === null) messages.push('最近成交购买数量无效');
+    if (sale && sellingPrice === null && saleQuantity !== null) messages.push('最近成交售价缺失');
     if (sale && totalFees === null) messages.push('Total Fees 缺失');
     if (purchaseCostRmb === null) messages.push('采购单价缺失');
     if (unitCbm === null) messages.push('单品 CBM 缺失');

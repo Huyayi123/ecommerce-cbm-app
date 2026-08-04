@@ -13,6 +13,10 @@ function profit({ sellingPrice, purchaseCostRmb, unitCbm, totalFees }) {
   return Math.round((sellingPrice - purchaseCostRmb * 3 - seaFreight - totalFees - warehouseFee(seaFreight)) * 100) / 100;
 }
 
+function unitSellingPrice(sellingPrice, quantity) {
+  return Math.round((sellingPrice / quantity) * 100) / 100;
+}
+
 assert.equal(warehouseFee(0), 0);
 assert.equal(warehouseFee(15), 10);
 assert.equal(warehouseFee(15.01), 20);
@@ -25,4 +29,6 @@ assert.equal(profit({ sellingPrice: 166, purchaseCostRmb: 20, unitCbm: 0.01, tot
 assert.equal(excluded('Cancelled by customer'), true);
 assert.equal(excluded('Returned'), true);
 assert.equal(excluded('Preparing for Customer'), false);
+assert.equal(unitSellingPrice(1158, 2), 579);
+assert.equal(unitSellingPrice(1000, 3), 333.33);
 console.log('profit calculation boundary tests passed');
