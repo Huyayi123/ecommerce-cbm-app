@@ -62,7 +62,7 @@ export function ProfitAnalysisPage({ skuItems, profile, runs, onSaveRun, onRefre
       setMessage('正在同步商品与最近180天销售明细...');
       const [offers, sales] = await Promise.all([
         fetchTakealotInventory(selectedStore, []),
-        fetchTakealotSales(selectedStore),
+        fetchTakealotSales(selectedStore, (pages, rowCount) => setMessage(`正在同步销售明细：第 ${pages} 页，已读取 ${rowCount} 条...`)),
       ]);
       const runId = crypto.randomUUID();
       const createdAt = new Date().toISOString();
