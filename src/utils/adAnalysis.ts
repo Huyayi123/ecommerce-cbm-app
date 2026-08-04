@@ -3,9 +3,8 @@ import type { AdReportImportRow } from './fileParsers';
 import { round } from './number';
 import { canonicalShopName } from './shops';
 import type { TakealotInventoryRow } from './takealot';
+import { calculateBaseProductCosts } from './profitCalculations';
 
-const PURCHASE_COST_EXCHANGE_RATE = 3;
-const SEA_FREIGHT_RATE_PER_CBM = 3600;
 const PLATFORM_FEE_FALLBACK_RATE = 0.4;
 
 const NEW_PRODUCT_LIMITS: Record<string, { protection: number; newProduct: number }> = {
@@ -108,10 +107,8 @@ export function analyzeAdRows(input: {
     const shopName = canonicalShopName(row.shopName || inventory?.shopName || skuItem?.shopName || '');
     const salePrice = round(inventory?.salePrice ?? 0, 2);
     const purchaseCostRmb = round(skuItem?.purchasePrice ?? 0, 2);
-    const purchaseCostZar = round(purchaseCostRmb * PURCHASE_COST_EXCHANGE_RATE, 2);
     const unitCbm = round(skuItem?.unitCbm || skuItem?.manualUnitCbm || 0, 8);
-    const seaFreightCost = round(unitCbm * SEA_FREIGHT_RATE_PER_CBM, 2);
-    const warehouseFee = seaFreightCost > 0 ? round(Math.ceil(seaFreightCost / 15) * 10, 2) : 0;
+    const { purchaseCostZar, seaFreightCost, warehouseFee } = calculateBaseProductCosts(purchaseCostRmb, unitCbm);
     const platformFeeSource = inventory?.platformFee ? 'api' : salePrice > 0 ? 'fallback' : 'missing';
     const platformFee = round(inventory?.platformFee ?? (salePrice > 0 ? salePrice * PLATFORM_FEE_FALLBACK_RATE : 0), 2);
     const adCostPerSale = row.adSalesQuantity > 0 ? round(row.adSpend / row.adSalesQuantity, 2) : 0;

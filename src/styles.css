@@ -1566,3 +1566,22 @@ tbody tr:last-child td {
     min-width: 320px;
   }
 }
+.profit-analysis-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  margin: 14px 0;
+}
+
+.profit-analysis-controls label { display: grid; gap: 5px; min-width: 150px; }
+.profit-analysis-controls input, .profit-analysis-controls select { min-height: 36px; }
+.profit-analysis-table-wrap { max-height: calc(100vh - 330px); }
+.profit-analysis-table { min-width: 1700px; }
+.profit-analysis-table thead th { position: sticky; top: 0; z-index: 2; }
+.profit-row-missing_data { background: #fff1f2; }
+.profit-row-loss { background: #fff8ed; }
+.repricing-badge.profit { background: #dcfce7; color: #166534; }
+.repricing-badge.loss { background: #ffedd5; color: #9a3412; }
+.repricing-badge.break_even { background: #e2e8f0; color: #334155; }
+.repricing-badge.missing_data { background: #fee2e2; color: #991b1b; }

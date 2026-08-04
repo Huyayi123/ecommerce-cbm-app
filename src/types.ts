@@ -310,6 +310,47 @@ export type AdAnalysisRun = {
   rows: AdAnalysisRow[];
 };
 
+export type TakealotSale = {
+  sku: string;
+  orderDate: string;
+  saleStatus: string;
+  sellingPrice: number | null;
+  quantity: number;
+  totalFees: number | null;
+};
+
+export type ProfitAnalysisStatus = 'profit' | 'loss' | 'break_even' | 'missing_data';
+
+export type ProfitAnalysisRow = {
+  id: string;
+  runId: string;
+  shopName: string;
+  sku: string;
+  productName: string;
+  imageUrl: string;
+  latestOrderDate: string;
+  sellingPrice: number | null;
+  purchaseCostRmb: number | null;
+  purchaseCostZar: number | null;
+  unitCbm: number | null;
+  seaFreightCost: number | null;
+  warehouseFee: number | null;
+  totalFees: number | null;
+  profit: number | null;
+  status: ProfitAnalysisStatus;
+  messages: string[];
+  syncedAt: string;
+};
+
+export type ProfitAnalysisRun = {
+  id: string;
+  shopName: string;
+  createdAt: string;
+  createdBy: string;
+  rowCount: number;
+  rows: ProfitAnalysisRow[];
+};
+
 export type AuditLog = {
   id: string;
   actorId: string;

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, LogisticsBatch, LogisticsBatchItem, LogisticsBatchStatus, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
+import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, LogisticsBatch, LogisticsBatchItem, LogisticsBatchStatus, ProfitAnalysisRow, ProfitAnalysisRun, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { findMatchingSkuItem, getSkuMatchKey } from './calculations';
 import { ensureInternalCodes } from './internalCodes';
@@ -192,6 +192,14 @@ type AdAnalysisDetailRow = {
   strategy_name: string | null;
   action_suggestion: string | null;
   messages: string[] | null;
+};
+
+type ProfitAnalysisRunRow = { id: string; shop_name: string; created_at: string; created_by: string | null; row_count: number | null; is_complete: boolean | null };
+type ProfitAnalysisDetailRow = {
+  id: string; run_id: string; shop_name: string; sku: string; product_name: string | null; image_url: string | null;
+  latest_order_date: string | null; selling_price: number | null; purchase_cost_rmb: number | null; purchase_cost_zar: number | null;
+  unit_cbm: number | null; sea_freight_cost: number | null; warehouse_fee: number | null; total_fees: number | null;
+  profit: number | null; status: ProfitAnalysisRow['status']; messages: string[] | null; synced_at: string;
 };
 
 type LegacySkuRow = {
@@ -1327,6 +1335,73 @@ export async function saveAdAnalysisRun(run: AdAnalysisRun): Promise<void> {
   if (deleteRowsError) throwSupabaseError(deleteRowsError);
   const { error: deleteRunsError } = await client.from('ad_analysis_runs').delete().in('id', staleIds);
   if (deleteRunsError) throwSupabaseError(deleteRunsError);
+}
+
+function mapProfitRow(row: ProfitAnalysisDetailRow): ProfitAnalysisRow {
+  return {
+    id: row.id, runId: row.run_id, shopName: row.shop_name, sku: row.sku, productName: row.product_name ?? '', imageUrl: row.image_url ?? '',
+    latestOrderDate: row.latest_order_date ?? '', sellingPrice: row.selling_price === null ? null : Number(row.selling_price),
+    purchaseCostRmb: row.purchase_cost_rmb === null ? null : Number(row.purchase_cost_rmb), purchaseCostZar: row.purchase_cost_zar === null ? null : Number(row.purchase_cost_zar),
+    unitCbm: row.unit_cbm === null ? null : Number(row.unit_cbm), seaFreightCost: row.sea_freight_cost === null ? null : Number(row.sea_freight_cost),
+    warehouseFee: row.warehouse_fee === null ? null : Number(row.warehouse_fee), totalFees: row.total_fees === null ? null : Number(row.total_fees),
+    profit: row.profit === null ? null : Number(row.profit), status: row.status, messages: Array.isArray(row.messages) ? row.messages : [], syncedAt: row.synced_at,
+  };
+}
+
+function toProfitRow(row: ProfitAnalysisRow): ProfitAnalysisDetailRow {
+  return {
+    id: row.id, run_id: row.runId, shop_name: row.shopName, sku: row.sku, product_name: row.productName, image_url: row.imageUrl,
+    latest_order_date: row.latestOrderDate || null, selling_price: row.sellingPrice, purchase_cost_rmb: row.purchaseCostRmb, purchase_cost_zar: row.purchaseCostZar,
+    unit_cbm: row.unitCbm, sea_freight_cost: row.seaFreightCost, warehouse_fee: row.warehouseFee, total_fees: row.totalFees,
+    profit: row.profit, status: row.status, messages: row.messages, synced_at: row.syncedAt,
+  };
+}
+
+export async function fetchProfitAnalysisRuns(): Promise<ProfitAnalysisRun[]> {
+  const client = requireSupabase();
+  const { data: runData, error: runError } = await client.from('profit_analysis_runs').select('*').eq('is_complete', true).order('created_at', { ascending: false });
+  if (runError) {
+    if (/profit_analysis_runs|schema cache|does not exist/i.test(formatErrorMessage(runError))) return [];
+    throwSupabaseError(runError);
+  }
+  const allRuns = (runData ?? []) as ProfitAnalysisRunRow[];
+  const latestByShop = new Map<string, ProfitAnalysisRunRow>();
+  for (const run of allRuns) if (!latestByShop.has(run.shop_name)) latestByShop.set(run.shop_name, run);
+  const latestRuns = [...latestByShop.values()];
+  if (!latestRuns.length) return [];
+  const { data: rowData, error: rowError } = await client.from('profit_analysis_rows').select('*').in('run_id', latestRuns.map((run) => run.id));
+  if (rowError) throwSupabaseError(rowError);
+  const rowsByRun = new Map<string, ProfitAnalysisRow[]>();
+  for (const raw of (rowData ?? []) as ProfitAnalysisDetailRow[]) {
+    const row = mapProfitRow(raw);
+    rowsByRun.set(row.runId, [...(rowsByRun.get(row.runId) ?? []), row]);
+  }
+  return latestRuns.map((run) => ({ id: run.id, shopName: run.shop_name, createdAt: run.created_at, createdBy: run.created_by ?? '', rowCount: Number(run.row_count ?? 0), rows: rowsByRun.get(run.id) ?? [] }));
+}
+
+export async function saveProfitAnalysisRun(run: ProfitAnalysisRun): Promise<void> {
+  const client = requireSupabase();
+  const { error: runError } = await client.from('profit_analysis_runs').insert({ id: run.id, shop_name: run.shopName, created_at: run.createdAt, created_by: run.createdBy, row_count: run.rowCount, is_complete: false });
+  if (runError) throwSupabaseError(runError);
+  const { error: rowsError } = run.rows.length
+    ? await client.from('profit_analysis_rows').insert(run.rows.map(toProfitRow))
+    : { error: null };
+  if (rowsError) {
+    await client.from('profit_analysis_runs').delete().eq('id', run.id);
+    throwSupabaseError(rowsError);
+  }
+  const { error: completeError } = await client.from('profit_analysis_runs').update({ is_complete: true }).eq('id', run.id);
+  if (completeError) {
+    await client.from('profit_analysis_runs').delete().eq('id', run.id);
+    throwSupabaseError(completeError);
+  }
+  const { data: staleRuns, error: staleError } = await client.from('profit_analysis_runs').select('id').eq('shop_name', run.shopName).neq('id', run.id);
+  if (staleError) throwSupabaseError(staleError);
+  const staleIds = ((staleRuns ?? []) as Array<{ id: string }>).map((item) => item.id);
+  if (staleIds.length) {
+    const { error } = await client.from('profit_analysis_runs').delete().in('id', staleIds);
+    if (error) throwSupabaseError(error);
+  }
 }
 
 function mapAuditLog(row: AuditLogRow): AuditLog {

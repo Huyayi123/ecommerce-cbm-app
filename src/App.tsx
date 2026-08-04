@@ -8,11 +8,12 @@ import { AdAnalysisPage } from './pages/AdAnalysisPage';
 import { ContainerCalculatorPage } from './pages/ContainerCalculatorPage';
 import { LogisticsLoadingPage } from './pages/LogisticsLoadingPage';
 import { MyPurchaseOrdersPage } from './pages/MyPurchaseOrdersPage';
+import { ProfitAnalysisPage } from './pages/ProfitAnalysisPage';
 import { PurchasePoolPage } from './pages/PurchasePoolPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
 import { RepricingAlertsPage } from './pages/RepricingAlertsPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
-import type { AdAnalysisRun, AppProfile, LogisticsBatch, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
+import type { AdAnalysisRun, AppProfile, LogisticsBatch, ProfitAnalysisRun, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
 import {
   appendPurchaseRecordsToPool,
   deletePurchaseRecords,
@@ -22,6 +23,7 @@ import {
   fetchPurchasePools,
   fetchPurchaseRecords,
   fetchAdAnalysisRuns,
+  fetchProfitAnalysisRuns,
   fetchRepricingAlerts,
   fetchSalesSuggestions,
   fetchSkuItems,
@@ -33,6 +35,7 @@ import {
   subscribeToSharedTables,
   updateProfileBinding,
   saveAdAnalysisRun,
+  saveProfitAnalysisRun,
   submitLogisticsBatch,
   updateLogisticsBatchStatus,
   upsertLogisticsBatch,
@@ -44,12 +47,13 @@ import { applyApprovedLogisticsBatch } from './utils/logistics';
 import { canDelete, canEdit } from './utils/permissions';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'ad-analysis' | 'logistics';
+type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'ad-analysis' | 'logistics';
 
 const ACTIVE_PAGE_STORAGE_KEY = 'ecommerce-cbm-active-page';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'repricing', label: '价格预警' },
+  { key: 'profit-analysis', label: '利润分析' },
   { key: 'ad-analysis', label: '广告分析' },
   { key: 'logistics', label: '物流装柜确认' },
   { key: 'suggestions', label: '月销量采购建议' },
@@ -84,6 +88,7 @@ function App() {
   const [savedSalesSuggestions, setSavedSalesSuggestions] = useState<SalesSuggestionRow[]>([]);
   const [repricingAlerts, setRepricingAlerts] = useState<RepricingAlert[]>([]);
   const [adAnalysisRuns, setAdAnalysisRuns] = useState<AdAnalysisRun[]>([]);
+  const [profitAnalysisRuns, setProfitAnalysisRuns] = useState<ProfitAnalysisRun[]>([]);
   const [profiles, setProfiles] = useState<AppProfile[]>([]);
   const [fileName, setFileName] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
@@ -122,6 +127,7 @@ function App() {
       fetchPurchasePools(),
       fetchAdAnalysisRuns(),
       fetchLogisticsBatches(),
+      activeProfile?.role === 'admin' ? fetchProfitAnalysisRuns() : Promise.resolve([]),
     ]);
     const errors = results.flatMap((result, index) => {
       if (result.status !== 'rejected') return [];
@@ -143,6 +149,7 @@ function App() {
     if (results[6].status === 'fulfilled') setPurchasePools(results[6].value);
     if (results[7].status === 'fulfilled') setAdAnalysisRuns(results[7].value);
     if (results[8].status === 'fulfilled') setLogisticsBatches(results[8].value);
+    if (results[9].status === 'fulfilled') setProfitAnalysisRuns(results[9].value);
 
     if (errors.length > 0) {
       setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
@@ -205,6 +212,7 @@ function App() {
         setProfiles([]);
         setRepricingAlerts([]);
         setAdAnalysisRuns([]);
+        setProfitAnalysisRuns([]);
         return;
       }
       void fetchProfile(user.id, user.email ?? '').then((nextProfile) => {
@@ -485,7 +493,7 @@ function App() {
   const activeRepricingAlerts = repricingAlerts.filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'));
   const visibleNavItems = profile.role === 'logistics'
     ? navItems.filter((item) => item.key === 'logistics')
-    : navItems.filter((item) => item.key !== 'logistics' || profile.role === 'admin');
+    : navItems.filter((item) => (item.key !== 'logistics' || profile.role === 'admin') && (item.key !== 'profit-analysis' || profile.role === 'admin'));
   const currentPage = visibleNavItems.some((item) => item.key === activePage) ? activePage : visibleNavItems[0]?.key ?? 'logistics';
 
   return (
@@ -619,6 +627,15 @@ function App() {
 
       {currentPage === 'repricing' && (
         <RepricingAlertsPage alerts={repricingAlerts} skuItems={skuItems} onRefresh={loadCloudData} />
+      )}
+      {currentPage === 'profit-analysis' && profile.role === 'admin' && (
+        <ProfitAnalysisPage
+          skuItems={skuItems}
+          profile={profile}
+          runs={profitAnalysisRuns}
+          onSaveRun={saveProfitAnalysisRun}
+          onRefresh={loadCloudData}
+        />
       )}
       {currentPage === 'ad-analysis' && (
         <AdAnalysisPage

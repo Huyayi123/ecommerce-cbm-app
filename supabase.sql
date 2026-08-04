@@ -889,3 +889,57 @@ begin
     alter publication supabase_realtime add table public.ad_analysis_runs;
   end if;
 end $$;
+
+-- 2026-08-04 利润分析：每个店铺仅保留最近一次完整同步结果。
+create table if not exists public.profit_analysis_runs (
+  id text primary key,
+  shop_name text not null,
+  created_at timestamptz not null default now(),
+  created_by text,
+  row_count numeric default 0,
+  is_complete boolean not null default false
+);
+
+create table if not exists public.profit_analysis_rows (
+  id text primary key,
+  run_id text not null references public.profit_analysis_runs(id) on delete cascade,
+  shop_name text not null,
+  sku text not null,
+  product_name text,
+  image_url text,
+  latest_order_date timestamptz,
+  selling_price numeric,
+  purchase_cost_rmb numeric,
+  purchase_cost_zar numeric,
+  unit_cbm numeric,
+  sea_freight_cost numeric,
+  warehouse_fee numeric,
+  total_fees numeric,
+  profit numeric,
+  status text not null,
+  messages text[] default '{}',
+  synced_at timestamptz not null default now(),
+  unique (run_id, sku)
+);
+
+alter table public.profit_analysis_runs add column if not exists is_complete boolean not null default false;
+
+create index if not exists profit_analysis_runs_shop_created_idx on public.profit_analysis_runs (shop_name, created_at desc);
+create index if not exists profit_analysis_rows_run_idx on public.profit_analysis_rows (run_id);
+alter table public.profit_analysis_runs enable row level security;
+alter table public.profit_analysis_rows enable row level security;
+
+drop policy if exists "admin select profit runs" on public.profit_analysis_runs;
+create policy "admin select profit runs" on public.profit_analysis_runs for select to authenticated using (public.is_admin());
+drop policy if exists "admin insert profit runs" on public.profit_analysis_runs;
+create policy "admin insert profit runs" on public.profit_analysis_runs for insert to authenticated with check (public.is_admin());
+drop policy if exists "admin update profit runs" on public.profit_analysis_runs;
+create policy "admin update profit runs" on public.profit_analysis_runs for update to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "admin delete profit runs" on public.profit_analysis_runs;
+create policy "admin delete profit runs" on public.profit_analysis_runs for delete to authenticated using (public.is_admin());
+drop policy if exists "admin select profit rows" on public.profit_analysis_rows;
+create policy "admin select profit rows" on public.profit_analysis_rows for select to authenticated using (public.is_admin());
+drop policy if exists "admin insert profit rows" on public.profit_analysis_rows;
+create policy "admin insert profit rows" on public.profit_analysis_rows for insert to authenticated with check (public.is_admin());
+drop policy if exists "admin delete profit rows" on public.profit_analysis_rows;
+create policy "admin delete profit rows" on public.profit_analysis_rows for delete to authenticated using (public.is_admin());
