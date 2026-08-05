@@ -1586,6 +1586,11 @@ tbody tr:last-child td {
 .monthly-profit-section .profit-analysis-controls { margin-bottom: 12px; }
 .monthly-profit-section .inline-notice.warning { background: #fff7ed; border-color: #fb923c; color: #9a3412; }
 .monthly-profit-section .table-wrap { margin-top: 14px; max-height: 480px; }
+.monthly-sale-detail-row > td { padding: 0 !important; background: #f8fafc; }
+.monthly-sale-detail-table { padding: 12px; overflow-x: auto; }
+.monthly-sale-detail-table table { min-width: 1750px; background: white; }
+.monthly-sale-detail-table th { background: #eaf2f5; }
+.monthly-sale-detail-table tr.monthly-sale-loss td { background: #fff1f2; color: #9f1239; }
 .profit-analysis-table-wrap { max-height: calc(100vh - 330px); }
 .profit-analysis-table { min-width: 1700px; }
 .profit-analysis-table thead th { position: sticky; top: 0; z-index: 2; }

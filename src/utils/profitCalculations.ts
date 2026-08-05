@@ -30,7 +30,8 @@ function key(value: string): string {
 }
 
 export function isExcludedSaleStatus(status: string): boolean {
-  return /cancel(?:led)?|return(?:ed)?|refund(?:ed)?/i.test(status);
+  const normalized = status.trim().toLowerCase();
+  return normalized.includes('cancel') || normalized.includes('return') || normalized.includes('refund');
 }
 
 export function latestValidSalesBySku(sales: TakealotSale[]): Map<string, TakealotSale> {

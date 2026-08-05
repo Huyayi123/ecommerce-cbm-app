@@ -348,6 +348,25 @@ export type MonthlyProfitDetail = {
   messages: string[];
 };
 
+export type MonthlyProfitSaleDetail = {
+  id: string;
+  orderId: string;
+  sku: string;
+  orderDate: string;
+  saleStatus: string;
+  sellingPrice: number;
+  quantity: number;
+  purchaseCostRmb: number | null;
+  purchaseCostZar: number | null;
+  unitCbm: number | null;
+  seaFreightCost: number | null;
+  domesticFreightCost: number | null;
+  warehouseFee: number | null;
+  totalFees: number | null;
+  profit: number | null;
+  messages: string[];
+};
+
 export type MonthlyProfitSummary = {
   id: string;
   shopName: string;

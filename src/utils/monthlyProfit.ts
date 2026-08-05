@@ -1,4 +1,4 @@
-import type { MonthlyProfitDetail, MonthlyProfitSummary, SkuItem, TakealotReturn, TakealotSale } from '../types';
+import type { MonthlyProfitDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, SkuItem, TakealotReturn, TakealotSale } from '../types';
 import { round } from './number';
 import { calculateBaseProductCosts, isExcludedSaleStatus } from './profitCalculations';
 import { canonicalShopName } from './shops';
@@ -41,7 +41,7 @@ export function calculateMonthlyProfit(input: {
   shopName: string; month: string; dataCutoffDate: string; isCurrentMonth: boolean;
   sales: TakealotSale[]; returns: TakealotReturn[]; originalSales: TakealotSale[];
   skuItems: SkuItem[]; advertisingCost: number; note: string; createdBy: string; updatedAt?: string;
-}): { summary: MonthlyProfitSummary; details: MonthlyProfitDetail[] } {
+}): { summary: MonthlyProfitSummary; details: MonthlyProfitDetail[]; salesDetails: MonthlyProfitSaleDetail[] } {
   const store = canonicalShopName(input.shopName);
   const skuItems = new Map(input.skuItems.filter((item) => canonicalShopName(item.shopName) === store).map((item) => [skuKey(item.sku), item]));
   const details = new Map<string, MonthlyProfitDetail>();
@@ -60,6 +60,7 @@ export function calculateMonthlyProfit(input: {
     return item && item.purchasePrice > 0 && cbm > 0 ? calculateBaseProductCosts(item.purchasePrice, cbm) : null;
   };
 
+  const salesDetails: MonthlyProfitSaleDetail[] = [];
   let salesRevenue = 0, salesQuantity = 0, salesProfit = 0, missingSalesQuantity = 0, missingSalesRevenue = 0;
   for (const sale of input.sales) {
     if (isExcludedSaleStatus(sale.saleStatus) || sale.quantity <= 0) continue;
@@ -72,14 +73,26 @@ export function calculateMonthlyProfit(input: {
     if (!costs) errors.push('SKU 采购价或 CBM 缺失');
     if (!revenue) errors.push('成交金额缺失');
     if (sale.totalFees === null || sale.totalFees <= 0) errors.push('Total Fees 尚未结算');
+    let lineProfit: number | null = null;
     if (errors.length) {
       missingSalesQuantity += sale.quantity; missingSalesRevenue += revenue;
       detail.messages.push(...errors);
-      continue;
+    } else {
+      const unitBaseCost = costs!.purchaseCostZar + costs!.seaFreightCost + costs!.domesticFreightCost + costs!.warehouseFee;
+      lineProfit = revenue - sale.quantity * unitBaseCost - sale.totalFees!;
+      salesProfit += lineProfit; detail.salesProfit += lineProfit;
     }
-    const unitCost = costs!.purchaseCostZar + costs!.seaFreightCost + costs!.domesticFreightCost + costs!.warehouseFee + sale.totalFees!;
-    const profit = revenue - sale.quantity * unitCost;
-    salesProfit += profit; detail.salesProfit += profit;
+    const item = skuItems.get(skuKey(sale.sku));
+    const unitCbm = item ? item.unitCbm || item.manualUnitCbm : 0;
+    salesDetails.push({
+      id: sale.orderItemId || `${sale.orderId}-${sale.sku}-${sale.orderDate}`, orderId: sale.orderId, sku: sale.sku,
+      orderDate: sale.orderDate, saleStatus: sale.saleStatus, sellingPrice: round(revenue, 2), quantity: sale.quantity,
+      purchaseCostRmb: item && item.purchasePrice > 0 ? round(item.purchasePrice, 2) : null,
+      purchaseCostZar: costs?.purchaseCostZar ?? null, unitCbm: unitCbm > 0 ? round(unitCbm, 8) : null,
+      seaFreightCost: costs?.seaFreightCost ?? null, domesticFreightCost: costs?.domesticFreightCost ?? null,
+      warehouseFee: costs?.warehouseFee ?? null, totalFees: sale.totalFees === null ? null : round(sale.totalFees, 2),
+      profit: lineProfit === null ? null : round(lineProfit, 2), messages: errors,
+    });
   }
 
   const originalByOrderSku = new Map<string, TakealotSale>();
@@ -98,7 +111,7 @@ export function calculateMonthlyProfit(input: {
       detail.messages.push('无法匹配已结算的原销售记录');
       continue;
     }
-    const unitProfit = original.sellingPrice / original.quantity - costs.purchaseCostZar - costs.seaFreightCost - costs.domesticFreightCost - costs.warehouseFee - original.totalFees;
+    const unitProfit = original.sellingPrice / original.quantity - costs.purchaseCostZar - costs.seaFreightCost - costs.domesticFreightCost - costs.warehouseFee - original.totalFees / original.quantity;
     const reversal = unitProfit * returned.quantity;
     returnProfitReversal += reversal; detail.returnProfitReversal += reversal;
   }
@@ -113,5 +126,5 @@ export function calculateMonthlyProfit(input: {
     advertisingCost: round(input.advertisingCost, 2), finalProfit: round(salesProfit - returnProfitReversal - returnNetFees - input.advertisingCost, 2),
     missingSalesQuantity, missingSalesRevenue: round(missingSalesRevenue, 2), missingReturnQuantity, status, note: input.note.trim(), createdBy: input.createdBy, updatedAt: input.updatedAt ?? new Date().toISOString(),
   };
-  return { summary, details: normalizedDetails };
+  return { summary, details: normalizedDetails, salesDetails: salesDetails.sort((a, b) => Date.parse(b.orderDate) - Date.parse(a.orderDate)) };
 }

@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
-import type { AdAnalysisRow, AuditLog, CalculationRow, MonthlyProfitDetail, MonthlyProfitSummary, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
+import type { AdAnalysisRow, AuditLog, CalculationRow, MonthlyProfitDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
 import { mixedGroupsSummary, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
@@ -603,7 +603,7 @@ export function exportProfitAnalysisRows(rows: ProfitAnalysisRow[], shopName: st
   writeWorkbook(workbook, `${shopName || '全部店铺'}_利润分析`, 'xlsx');
 }
 
-export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: MonthlyProfitDetail[]): void {
+export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: MonthlyProfitDetail[], salesDetails: MonthlyProfitSaleDetail[] = []): void {
   const workbook = XLSX.utils.book_new();
   const summaryRows = [{
     店铺: summary.shopName, 月份: summary.month, 数据截止日: summary.dataCutoffDate,
@@ -626,6 +626,18 @@ export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: Mont
     const detailSheet = XLSX.utils.json_to_sheet(detailRows);
     detailSheet['!cols'] = [{ wch: 18 }, { wch: 48 }, ...Array(7).fill({ wch: 15 }), { wch: 36 }];
     XLSX.utils.book_append_sheet(workbook, detailSheet, 'SKU明细');
+  }
+  if (salesDetails.length) {
+    const saleRows = salesDetails.map((row) => ({
+      订单号: row.orderId, SKU: row.sku, 成交时间: row.orderDate, 'Sale Status': row.saleStatus,
+      实际成交价: row.sellingPrice, 数量: row.quantity, '采购价 RMB': row.purchaseCostRmb ?? '',
+      '采购成本 ZAR': row.purchaseCostZar ?? '', '单品 CBM': row.unitCbm ?? '', 海运费: row.seaFreightCost ?? '',
+      国内运费: row.domesticFreightCost ?? '', 送仓费: row.warehouseFee ?? '', 'Total Fees': row.totalFees ?? '',
+      该笔利润: row.profit ?? '', 异常原因: row.messages.join('；'),
+    }));
+    const saleSheet = XLSX.utils.json_to_sheet(saleRows);
+    saleSheet['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 24 }, ...Array(10).fill({ wch: 15 }), { wch: 36 }];
+    XLSX.utils.book_append_sheet(workbook, saleSheet, '销售逐笔明细');
   }
   XLSX.writeFile(workbook, `${summary.shopName}-${summary.month}-月度利润.xlsx`);
 }
