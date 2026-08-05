@@ -27,14 +27,17 @@ export function monthlyProfitRange(month: string, now = new Date()) {
   return { startDate, endDate, dataCutoffDate, isCurrentMonth: month === today.slice(0, 7), hasEligibleDates: endDate >= startDate };
 }
 
-export function returnNetFee(value: TakealotReturn): number {
-  return round(value.transactions.reduce((sum, transaction) => {
+export function returnExtraLoss(value: TakealotReturn): { amount: number; unknownTypes: string[] } {
+  const unknownTypes: string[] = [];
+  const netAmount = value.transactions.reduce((sum, transaction) => {
     const type = transaction.transactionType.toLowerCase();
     const amount = Math.abs(transaction.amountInclVat || 0);
     if (type.startsWith('charge-')) return sum + amount;
     if (type.startsWith('reversal-') || type.startsWith('payment-')) return sum - amount;
-    return sum + (transaction.amountInclVat || 0);
-  }, 0), 2);
+    if (type) unknownTypes.push(transaction.transactionType);
+    return sum;
+  }, 0);
+  return { amount: round(Math.max(0, netAmount), 2), unknownTypes: [...new Set(unknownTypes)] };
 }
 
 export function calculateMonthlyProfit(input: {
@@ -98,12 +101,17 @@ export function calculateMonthlyProfit(input: {
   const originalByOrderSku = new Map<string, TakealotSale>();
   for (const sale of [...input.sales, ...input.originalSales]) originalByOrderSku.set(`${sale.orderId}|${skuKey(sale.sku)}`, sale);
   let returnQuantity = 0, returnProfitReversal = 0, returnNetFees = 0, missingReturnQuantity = 0;
+  let hasUnknownReturnTransactions = false;
   for (const returned of input.returns) {
     if (returned.quantity <= 0) continue;
     const detail = detailFor(returned.sku);
-    const fee = returnNetFee(returned);
-    returnQuantity += returned.quantity; returnNetFees += fee;
-    detail.returnQuantity += returned.quantity; detail.returnNetFees += fee;
+    const extraLoss = returnExtraLoss(returned);
+    returnQuantity += returned.quantity; returnNetFees += extraLoss.amount;
+    detail.returnQuantity += returned.quantity; detail.returnNetFees += extraLoss.amount;
+    if (extraLoss.unknownTypes.length) {
+      hasUnknownReturnTransactions = true;
+      detail.messages.push(`未识别退货交易类型：${extraLoss.unknownTypes.join('、')}`);
+    }
     const original = originalByOrderSku.get(`${returned.orderId}|${skuKey(returned.sku)}`);
     const costs = costsFor(returned.sku);
     if (!original || original.quantity <= 0 || !original.sellingPrice || original.totalFees === null || original.totalFees <= 0 || !costs) {
@@ -111,15 +119,15 @@ export function calculateMonthlyProfit(input: {
       detail.messages.push('无法匹配已结算的原销售记录');
       continue;
     }
-    const unitProfit = original.sellingPrice / original.quantity - costs.purchaseCostZar - costs.seaFreightCost - costs.domesticFreightCost - costs.warehouseFee - original.totalFees / original.quantity;
-    const reversal = unitProfit * returned.quantity;
-    returnProfitReversal += reversal; detail.returnProfitReversal += reversal;
+    const unitReturnLoss = costs.purchaseCostZar + costs.seaFreightCost + costs.domesticFreightCost + costs.warehouseFee + original.totalFees / original.quantity;
+    const baseLoss = unitReturnLoss * returned.quantity;
+    returnProfitReversal += baseLoss; detail.returnProfitReversal += baseLoss;
   }
   const normalizedDetails = [...details.values()].map((detail) => ({ ...detail,
     salesRevenue: round(detail.salesRevenue, 2), salesProfit: round(detail.salesProfit, 2), returnProfitReversal: round(detail.returnProfitReversal, 2), returnNetFees: round(detail.returnNetFees, 2),
     netProfit: round(detail.salesProfit - detail.returnProfitReversal - detail.returnNetFees, 2), messages: [...new Set(detail.messages)],
   })).sort((a, b) => b.netProfit - a.netProfit);
-  const status = missingSalesQuantity > 0 || missingReturnQuantity > 0 ? 'incomplete' : 'complete';
+  const status = missingSalesQuantity > 0 || missingReturnQuantity > 0 || hasUnknownReturnTransactions ? 'incomplete' : 'complete';
   const summary: MonthlyProfitSummary = {
     id: `${store.toLowerCase()}-${input.month}`, shopName: store, month: input.month, dataCutoffDate: input.dataCutoffDate, isCurrentMonth: input.isCurrentMonth,
     salesRevenue: round(salesRevenue, 2), salesQuantity, salesProfit: round(salesProfit, 2), returnQuantity, returnProfitReversal: round(returnProfitReversal, 2), returnNetFees: round(returnNetFees, 2),

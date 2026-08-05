@@ -86,8 +86,8 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
       <div className={`inline-notice ${displayed.status === 'incomplete' ? 'warning' : ''}`}>{displayed.isCurrentMonth ? '月份未结束；' : ''}数据截止日：{displayed.dataCutoffDate}；状态：{displayed.status === 'complete' ? '完整' : '不完整（最终利润为已知数据结果）'}</div>
       <div className="repricing-summary">
         <div className="metric"><span>销售额 / 数量</span><strong>{money(displayed.salesRevenue)} / {displayed.salesQuantity}</strong></div><div className="metric"><span>销售利润</span><strong>{money(displayed.salesProfit)}</strong></div>
-        <div className="metric"><span>退货数量</span><strong>{displayed.returnQuantity}</strong></div><div className="metric"><span>退货利润冲回</span><strong>{money(displayed.returnProfitReversal)}</strong></div>
-        <div className="metric"><span>退货净费用</span><strong>{money(displayed.returnNetFees)}</strong></div><div className="metric"><span>广告费用</span><strong>{money(displayed.advertisingCost)}</strong></div><div className="metric"><span>最终利润</span><strong>{money(displayed.finalProfit)}</strong></div>
+        <div className="metric"><span>退货数量</span><strong>{displayed.returnQuantity}</strong></div><div className="metric"><span>退货基础损失</span><strong>{money(displayed.returnProfitReversal)}</strong></div>
+        <div className="metric"><span>退货额外损失</span><strong>{money(displayed.returnNetFees)}</strong></div><div className="metric"><span>广告费用</span><strong>{money(displayed.advertisingCost)}</strong></div><div className="metric"><span>最终利润</span><strong>{money(displayed.finalProfit)}</strong></div>
       </div>
     </>}
     {details.length > 0 && <div className="table-wrap"><table><thead><tr><th>SKU</th><th>产品名称</th><th>销售数量</th><th>退货数量</th><th>销售利润</th><th>退货影响</th><th>净利润</th><th>异常原因</th><th>操作</th></tr></thead><tbody>{details.map((row) => {

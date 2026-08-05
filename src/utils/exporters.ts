@@ -608,7 +608,7 @@ export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: Mont
   const summaryRows = [{
     店铺: summary.shopName, 月份: summary.month, 数据截止日: summary.dataCutoffDate,
     销售额: summary.salesRevenue, 销售数量: summary.salesQuantity, 销售利润: summary.salesProfit,
-    退货数量: summary.returnQuantity, 退货利润冲回: summary.returnProfitReversal, 退货净费用: summary.returnNetFees,
+    退货数量: summary.returnQuantity, 退货基础损失: summary.returnProfitReversal, 退货额外损失: summary.returnNetFees,
     广告费用: summary.advertisingCost, 最终利润: summary.finalProfit,
     缺失销售数量: summary.missingSalesQuantity, 缺失销售金额: summary.missingSalesRevenue,
     缺失退货数量: summary.missingReturnQuantity, 完整性: summary.status === 'complete' ? '完整' : '不完整',
@@ -620,8 +620,8 @@ export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: Mont
   if (details.length) {
     const detailRows = details.map((row) => ({
       SKU: row.sku, 产品名称: row.productName, 销售数量: row.salesQuantity, 退货数量: row.returnQuantity,
-      销售额: row.salesRevenue, 销售利润: row.salesProfit, 退货利润冲回: row.returnProfitReversal,
-      退货净费用: row.returnNetFees, 净利润: row.netProfit, 异常原因: row.messages.join('；'),
+      销售额: row.salesRevenue, 销售利润: row.salesProfit, 退货基础损失: row.returnProfitReversal,
+      退货额外损失: row.returnNetFees, 净利润: row.netProfit, 异常原因: row.messages.join('；'),
     }));
     const detailSheet = XLSX.utils.json_to_sheet(detailRows);
     detailSheet['!cols'] = [{ wch: 18 }, { wch: 48 }, ...Array(7).fill({ wch: 15 }), { wch: 36 }];
