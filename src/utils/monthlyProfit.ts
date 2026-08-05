@@ -40,9 +40,27 @@ export function returnExtraLoss(value: TakealotReturn): { amount: number; unknow
   return { amount: round(Math.max(0, netAmount), 2), unknownTypes: [...new Set(unknownTypes)] };
 }
 
+function hasSettledFees(sale: TakealotSale | undefined): sale is TakealotSale {
+  return Boolean(sale && sale.quantity > 0 && sale.totalFees !== null && sale.totalFees > 0);
+}
+
+export function latestSettledFeeSalesBySku(sales: TakealotSale[]): Map<string, TakealotSale> {
+  const result = new Map<string, TakealotSale>();
+  for (const sale of sales) {
+    if (!hasSettledFees(sale) || isExcludedSaleStatus(sale.saleStatus)) continue;
+    const key = skuKey(sale.sku);
+    const current = result.get(key);
+    const saleIsSingle = sale.quantity === 1;
+    const currentIsSingle = current?.quantity === 1;
+    if (!current || (saleIsSingle && !currentIsSingle)
+      || (saleIsSingle === currentIsSingle && Date.parse(sale.orderDate) > Date.parse(current.orderDate))) result.set(key, sale);
+  }
+  return result;
+}
+
 export function calculateMonthlyProfit(input: {
   shopName: string; month: string; dataCutoffDate: string; isCurrentMonth: boolean;
-  sales: TakealotSale[]; returns: TakealotReturn[]; originalSales: TakealotSale[];
+  sales: TakealotSale[]; returns: TakealotReturn[]; originalSales: TakealotSale[]; feeFallbackSales: TakealotSale[];
   skuItems: SkuItem[]; advertisingCost: number; salaryCost: number; note: string; createdBy: string; updatedAt?: string;
 }): { summary: MonthlyProfitSummary; details: MonthlyProfitDetail[]; salesDetails: MonthlyProfitSaleDetail[]; returnDetails: MonthlyProfitReturnDetail[] } {
   const store = canonicalShopName(input.shopName);
@@ -99,7 +117,12 @@ export function calculateMonthlyProfit(input: {
   }
 
   const originalByOrderSku = new Map<string, TakealotSale>();
-  for (const sale of [...input.sales, ...input.originalSales]) originalByOrderSku.set(`${sale.orderId}|${skuKey(sale.sku)}`, sale);
+  for (const sale of [...input.sales, ...input.originalSales]) {
+    const key = `${sale.orderId}|${skuKey(sale.sku)}`;
+    const current = originalByOrderSku.get(key);
+    if (!current || (!hasSettledFees(current) && hasSettledFees(sale))) originalByOrderSku.set(key, sale);
+  }
+  const fallbackFeesBySku = latestSettledFeeSalesBySku([...input.sales, ...input.originalSales, ...input.feeFallbackSales]);
   const returnDetails: MonthlyProfitReturnDetail[] = [];
   let returnQuantity = 0, returnProfitReversal = 0, returnNetFees = 0, missingReturnQuantity = 0;
   let hasUnknownReturnTransactions = false;
@@ -114,18 +137,24 @@ export function calculateMonthlyProfit(input: {
       detail.messages.push(`未识别退货交易类型：${extraLoss.unknownTypes.join('、')}`);
     }
     const original = originalByOrderSku.get(`${returned.orderId}|${skuKey(returned.sku)}`);
+    const feeSource = hasSettledFees(original) ? original : fallbackFeesBySku.get(skuKey(returned.sku));
+    const usedFallback = Boolean(feeSource && feeSource !== original);
     const costs = costsFor(returned.sku);
     const item = skuItems.get(skuKey(returned.sku));
-    if (!original || original.quantity <= 0 || !original.sellingPrice || original.totalFees === null || original.totalFees <= 0 || !costs) {
+    if (!costs) {
       missingReturnQuantity += returned.quantity;
-      detail.messages.push('无法匹配已结算的原销售记录');
+      detail.messages.push('SKU 采购价或 CBM 缺失');
       returnDetails.push({ id: returned.returnId || `${returned.orderId}-${returned.sku}-${returned.returnDate}`, returnId: returned.returnId, orderId: returned.orderId,
         sku: returned.sku, productName: item?.englishName || item?.productName || '', returnDate: returned.returnDate, quantity: returned.quantity,
-        purchaseCostZar: null, seaFreightCost: null, domesticFreightCost: null, warehouseFee: null, allocatedTotalFees: null, baseLoss: null,
-        extraLoss: extraLoss.amount, messages: ['无法匹配已结算的原销售记录', ...(extraLoss.unknownTypes.length ? [`未识别退货交易类型：${extraLoss.unknownTypes.join('、')}`] : [])] });
+        purchaseCostZar: null, seaFreightCost: null, domesticFreightCost: null, warehouseFee: null, allocatedTotalFees: null, totalFeesSourceOrderId: '', baseLoss: null,
+        extraLoss: extraLoss.amount, messages: ['SKU 采购价或 CBM 缺失', ...(extraLoss.unknownTypes.length ? [`未识别退货交易类型：${extraLoss.unknownTypes.join('、')}`] : [])] });
       continue;
     }
-    const allocatedTotalFees = original.totalFees / original.quantity * returned.quantity;
+    const messages: string[] = [];
+    if (usedFallback) messages.push('原订单超过 180 天或平台未返回，Total Fees 使用同 SKU 最近订单替代');
+    if (!feeSource) messages.push('未找到可用 Total Fees');
+    if (usedFallback || !feeSource) missingReturnQuantity += returned.quantity;
+    const allocatedTotalFees = feeSource ? feeSource.totalFees! / feeSource.quantity * returned.quantity : 0;
     const purchaseCostZar = costs.purchaseCostZar * returned.quantity;
     const seaFreightCost = costs.seaFreightCost * returned.quantity;
     const domesticFreightCost = costs.domesticFreightCost * returned.quantity;
@@ -136,8 +165,9 @@ export function calculateMonthlyProfit(input: {
     returnDetails.push({ id: returned.returnId || `${returned.orderId}-${returned.sku}-${returned.returnDate}`, returnId: returned.returnId, orderId: returned.orderId,
       sku: returned.sku, productName: item?.englishName || item?.productName || '', returnDate: returned.returnDate, quantity: returned.quantity,
       purchaseCostZar: round(purchaseCostZar, 2), seaFreightCost: round(seaFreightCost, 2), domesticFreightCost: round(domesticFreightCost, 2),
-      warehouseFee: round(warehouseFee, 2), allocatedTotalFees: round(allocatedTotalFees, 2), baseLoss: roundedBaseLoss, extraLoss: extraLoss.amount,
-      messages: extraLoss.unknownTypes.length ? [`未识别退货交易类型：${extraLoss.unknownTypes.join('、')}`] : [] });
+      warehouseFee: round(warehouseFee, 2), allocatedTotalFees: feeSource ? round(allocatedTotalFees, 2) : null, totalFeesSourceOrderId: feeSource?.orderId ?? '', baseLoss: roundedBaseLoss, extraLoss: extraLoss.amount,
+      messages: [...messages, ...(extraLoss.unknownTypes.length ? [`未识别退货交易类型：${extraLoss.unknownTypes.join('、')}`] : [])] });
+    detail.messages.push(...messages);
   }
   const normalizedDetails = [...details.values()].map((detail) => ({ ...detail,
     salesRevenue: round(detail.salesRevenue, 2), salesProfit: round(detail.salesProfit, 2), returnProfitReversal: round(detail.returnProfitReversal, 2), returnNetFees: round(detail.returnNetFees, 2),

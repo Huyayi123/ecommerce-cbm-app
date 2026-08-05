@@ -380,6 +380,7 @@ export type MonthlyProfitReturnDetail = {
   domesticFreightCost: number | null;
   warehouseFee: number | null;
   allocatedTotalFees: number | null;
+  totalFeesSourceOrderId: string;
   baseLoss: number | null;
   extraLoss: number;
   messages: string[];

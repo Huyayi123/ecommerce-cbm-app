@@ -644,7 +644,7 @@ export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: Mont
       退货编号: row.returnId, 原订单号: row.orderId, SKU: row.sku, 产品名称: row.productName, 退货日期: row.returnDate,
       退货数量: row.quantity, '采购成本 ZAR': row.purchaseCostZar ?? '', 海运费: row.seaFreightCost ?? '',
       国内运费: row.domesticFreightCost ?? '', 送仓费: row.warehouseFee ?? '', '分摊 Total Fees': row.allocatedTotalFees ?? '',
-      退货基础损失: row.baseLoss ?? '', 退货额外损失: row.extraLoss, 异常原因: row.messages.join('；'),
+      'Total Fees 来源订单号': row.totalFeesSourceOrderId, 退货基础损失: row.baseLoss ?? '', 退货额外损失: row.extraLoss, 异常原因: row.messages.join('；'),
     }));
     const returnSheet = XLSX.utils.json_to_sheet(returnRows);
     returnSheet['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 48 }, { wch: 16 }, ...Array(8).fill({ wch: 16 }), { wch: 36 }];

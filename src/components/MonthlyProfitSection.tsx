@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import type { AppProfile, MonthlyProfitDetail, MonthlyProfitReturnDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, SkuItem, TakealotSale } from '../types';
 import { exportMonthlyProfit } from '../utils/exporters';
-import { calculateMonthlyProfit, monthlyProfitRange, sastToday } from '../utils/monthlyProfit';
+import { calculateMonthlyProfit, latestSettledFeeSalesBySku, monthlyProfitRange, sastToday } from '../utils/monthlyProfit';
 import { fetchTakealotReturns } from '../utils/takealotReturns';
 import { fetchTakealotSales, fetchTakealotSalesByOrder } from '../utils/takealotSales';
 
@@ -63,11 +63,24 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
         fetchTakealotSales(shopName, (pages, rows) => setMessage(`销售明细：第 ${pages} 页，已读取 ${rows} 条`), { dateFrom: range.startDate, dateTo: range.endDate }),
         fetchTakealotReturns(shopName, range.startDate, range.endDate),
       ]);
-      const existingOrders = new Set(salesResult.rows.map((sale) => sale.orderId));
-      const orderIds = [...new Set(returns.map((row) => row.orderId).filter((id) => id && !existingOrders.has(id)))];
+      const pairKey = (orderId: string, sku: string) => `${orderId}|${sku.trim().toUpperCase()}`;
+      const existingPairs = new Set(salesResult.rows.map((sale) => pairKey(sale.orderId, sale.sku)));
+      const orderIds = [...new Set(returns.filter((row) => row.orderId && !existingPairs.has(pairKey(row.orderId, row.sku))).map((row) => row.orderId))];
       const originalSales = await fetchOriginalOrders(shopName, orderIds, (done, total) => setMessage(`正在关联退货原订单：${done}/${total}`));
+      const loadedSales = [...salesResult.rows, ...originalSales];
+      const settledExactPairs = new Set(loadedSales.filter((sale) => sale.quantity > 0 && sale.totalFees !== null && sale.totalFees > 0).map((sale) => pairKey(sale.orderId, sale.sku)));
+      const loadedFallbacks = latestSettledFeeSalesBySku(loadedSales);
+      const needsHistoricalFallback = returns.some((row) => !settledExactPairs.has(pairKey(row.orderId, row.sku)) && !loadedFallbacks.has(row.sku.trim().toUpperCase()));
+      let feeFallbackSales: TakealotSale[] = [];
+      if (needsHistoricalFallback) {
+        const historicalStart = new Date(`${range.endDate}T00:00:00Z`);
+        historicalStart.setUTCDate(historicalStart.getUTCDate() - 179);
+        const dateFrom = historicalStart.toISOString().slice(0, 10);
+        setMessage(`正在读取 ${dateFrom} 至 ${range.endDate} 的历史销售，用于匹配退货 Total Fees...`);
+        feeFallbackSales = (await fetchTakealotSales(shopName, (pages, rows) => setMessage(`历史销售费用：第 ${pages} 页，已读取 ${rows} 条`), { dateFrom, dateTo: range.endDate })).rows;
+      }
       const result = calculateMonthlyProfit({ shopName, month, dataCutoffDate: range.endDate, isCurrentMonth: range.isCurrentMonth,
-        sales: salesResult.rows, returns, originalSales, skuItems, advertisingCost: adCost, salaryCost: salary, note, createdBy: profile.email });
+        sales: salesResult.rows, returns, originalSales, feeFallbackSales, skuItems, advertisingCost: adCost, salaryCost: salary, note, createdBy: profile.email });
       await onSave(result.summary);
       setCurrentSummary(result.summary); setDetails(result.details); setSalesDetails(result.salesDetails); setReturnDetails(result.returnDetails);
       await onRefresh();
@@ -96,7 +109,7 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
         <div className="metric"><span>退货额外损失</span><strong>{money(displayed.returnNetFees)}</strong></div><div className="metric"><span>广告费用</span><strong>{money(displayed.advertisingCost)}</strong></div><div className="metric"><span>人员工资</span><strong>{money(displayed.salaryCost)}</strong></div><div className="metric"><span>最终利润</span><strong>{money(displayed.finalProfit)}</strong></div>
       </div>
     </>}
-    {showReturnDetails && returnDetails.length > 0 && <div className="table-wrap monthly-return-detail-table"><table><thead><tr><th>退货编号</th><th>原订单号</th><th>SKU</th><th>产品名称</th><th>退货日期</th><th>退货数量</th><th>采购成本 ZAR</th><th>海运费</th><th>国内运费</th><th>送仓费</th><th>分摊 Total Fees</th><th>退货基础损失</th><th>退货额外损失</th><th>异常原因</th></tr></thead><tbody>{returnDetails.map((row) => <tr key={row.id} className={row.baseLoss === null ? 'monthly-sale-loss' : ''}><td>{row.returnId || '-'}</td><td>{row.orderId || '-'}</td><td>{row.sku}</td><td>{row.productName || '-'}</td><td>{row.returnDate || '-'}</td><td>{row.quantity}</td><td>{row.purchaseCostZar === null ? '-' : money(row.purchaseCostZar)}</td><td>{row.seaFreightCost === null ? '-' : money(row.seaFreightCost)}</td><td>{row.domesticFreightCost === null ? '-' : money(row.domesticFreightCost)}</td><td>{row.warehouseFee === null ? '-' : money(row.warehouseFee)}</td><td>{row.allocatedTotalFees === null ? '-' : money(row.allocatedTotalFees)}</td><td><strong>{row.baseLoss === null ? '-' : money(row.baseLoss)}</strong></td><td>{money(row.extraLoss)}</td><td>{row.messages.join('；') || '正常'}</td></tr>)}</tbody></table></div>}
+    {showReturnDetails && returnDetails.length > 0 && <div className="table-wrap monthly-return-detail-table"><table><thead><tr><th>退货编号</th><th>原订单号</th><th>SKU</th><th>产品名称</th><th>退货日期</th><th>退货数量</th><th>采购成本 ZAR</th><th>海运费</th><th>国内运费</th><th>送仓费</th><th>分摊 Total Fees</th><th>Total Fees 来源订单号</th><th>退货基础损失</th><th>退货额外损失</th><th>异常原因</th></tr></thead><tbody>{returnDetails.map((row) => <tr key={row.id} className={row.messages.length ? 'monthly-sale-loss' : ''}><td>{row.returnId || '-'}</td><td>{row.orderId || '-'}</td><td>{row.sku}</td><td>{row.productName || '-'}</td><td>{row.returnDate || '-'}</td><td>{row.quantity}</td><td>{row.purchaseCostZar === null ? '-' : money(row.purchaseCostZar)}</td><td>{row.seaFreightCost === null ? '-' : money(row.seaFreightCost)}</td><td>{row.domesticFreightCost === null ? '-' : money(row.domesticFreightCost)}</td><td>{row.warehouseFee === null ? '-' : money(row.warehouseFee)}</td><td>{row.allocatedTotalFees === null ? '-' : money(row.allocatedTotalFees)}</td><td>{row.totalFeesSourceOrderId || '-'}</td><td><strong>{row.baseLoss === null ? '-' : money(row.baseLoss)}</strong></td><td>{money(row.extraLoss)}</td><td>{row.messages.join('；') || '正常'}</td></tr>)}</tbody></table></div>}
     {details.length > 0 && <div className="table-wrap"><table><thead><tr><th>SKU</th><th>产品名称</th><th>销售数量</th><th>退货数量</th><th>销售利润</th><th>退货影响</th><th>净利润</th><th>异常原因</th><th>操作</th></tr></thead><tbody>{details.map((row) => {
       const expanded = expandedSkus.has(row.sku);
       const rows = salesBySku.get(row.sku.trim().toUpperCase()) ?? [];
