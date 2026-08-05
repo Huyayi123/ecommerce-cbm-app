@@ -1576,6 +1576,16 @@ tbody tr:last-child td {
 
 .profit-analysis-controls label { display: grid; gap: 5px; min-width: 150px; }
 .profit-analysis-controls input, .profit-analysis-controls select { min-height: 36px; }
+
+.monthly-profit-section {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 2px solid #dbe7e5;
+}
+
+.monthly-profit-section .profit-analysis-controls { margin-bottom: 12px; }
+.monthly-profit-section .inline-notice.warning { background: #fff7ed; border-color: #fb923c; color: #9a3412; }
+.monthly-profit-section .table-wrap { margin-top: 14px; max-height: 480px; }
 .profit-analysis-table-wrap { max-height: calc(100vh - 330px); }
 .profit-analysis-table { min-width: 1700px; }
 .profit-analysis-table thead th { position: sticky; top: 0; z-index: 2; }

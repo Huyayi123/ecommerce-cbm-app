@@ -85,7 +85,7 @@ export function LogisticsLoadingPage({
   onApproveBatch,
   onRejectBatch,
 }: Props) {
-  const isAdmin = profile.role === 'admin';
+  const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics'), [profiles]);
   const containerDates = useMemo(() => Array.from(new Set(records
     .filter((record) => record.poolStatus === 'sent_to_inventory' && record.status !== 'cancelled' && record.containerDate)

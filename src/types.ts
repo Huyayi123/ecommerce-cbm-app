@@ -45,7 +45,7 @@ export type PurchaseRow = {
 export type PurchaseStatus = 'pending' | 'in_transit' | 'arrived' | 'cancelled';
 export type PurchasePoolStatus = 'open' | 'sent' | 'closed';
 export type PurchaseRecordPoolStatus = 'pending_purchase' | 'submitted_to_pool' | 'sent_to_inventory';
-export type UserRole = 'admin' | 'buyer' | 'viewer' | 'logistics';
+export type UserRole = 'owner' | 'admin' | 'buyer' | 'viewer' | 'logistics';
 export type LogisticsBatchStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 export type LogisticsConfirmationStatus = 'unassigned' | 'draft' | 'submitted' | 'approved' | 'rejected';
 export type AuditAction =
@@ -311,12 +311,64 @@ export type AdAnalysisRun = {
 };
 
 export type TakealotSale = {
+  orderId: string;
+  orderItemId: string;
   sku: string;
   orderDate: string;
   saleStatus: string;
   sellingPrice: number | null;
   quantity: number;
   totalFees: number | null;
+};
+
+export type TakealotReturnTransaction = {
+  transactionType: string;
+  amountInclVat: number;
+};
+
+export type TakealotReturn = {
+  returnId: string;
+  orderId: string;
+  sku: string;
+  returnDate: string;
+  quantity: number;
+  transactions: TakealotReturnTransaction[];
+};
+
+export type MonthlyProfitDetail = {
+  sku: string;
+  productName: string;
+  salesQuantity: number;
+  salesRevenue: number;
+  salesProfit: number;
+  returnQuantity: number;
+  returnProfitReversal: number;
+  returnNetFees: number;
+  netProfit: number;
+  messages: string[];
+};
+
+export type MonthlyProfitSummary = {
+  id: string;
+  shopName: string;
+  month: string;
+  dataCutoffDate: string;
+  isCurrentMonth: boolean;
+  salesRevenue: number;
+  salesQuantity: number;
+  salesProfit: number;
+  returnQuantity: number;
+  returnProfitReversal: number;
+  returnNetFees: number;
+  advertisingCost: number;
+  finalProfit: number;
+  missingSalesQuantity: number;
+  missingSalesRevenue: number;
+  missingReturnQuantity: number;
+  status: 'complete' | 'incomplete';
+  note: string;
+  createdBy: string;
+  updatedAt: string;
 };
 
 export type ProfitAnalysisStatus = 'profit' | 'loss' | 'break_even' | 'missing_data';

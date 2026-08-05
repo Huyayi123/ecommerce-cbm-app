@@ -1,0 +1,58 @@
+function envStoreConfig() {
+  try {
+    const parsed = JSON.parse(process.env.TAKEALOT_STORES_JSON || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+function apiKeyForStore(storeName) {
+  const config = envStoreConfig().find((item) => item && item.name === storeName);
+  if (config?.apiKeyEnv && process.env[config.apiKeyEnv]) return process.env[config.apiKeyEnv];
+  if (config?.apiKey) return config.apiKey;
+  const envName = `TAKEALOT_API_KEY_${storeName.replace(/[^a-z0-9]/gi, '_').toUpperCase()}`;
+  return process.env[envName] || process.env.TAKEALOT_API_KEY || '';
+}
+
+function nullableNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export default async function handler(request, response) {
+  if (request.method !== 'GET') return response.status(405).json({ error: 'Method not allowed' });
+  const store = String(request.query.store || '').trim();
+  const apiKey = apiKeyForStore(store);
+  if (!store) return response.status(400).json({ error: '缺少店铺参数' });
+  if (!apiKey) return response.status(400).json({ error: `店铺 ${store} 未配置 Takealot API Key` });
+  const continuationToken = String(request.query.continuation_token || '').trim();
+  const dateFrom = String(request.query.date_from || '').trim();
+  const dateTo = String(request.query.date_to || '').trim();
+  if (!continuationToken && (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo))) return response.status(400).json({ error: '退货日期参数无效' });
+  const baseUrl = process.env.TAKEALOT_MARKETPLACE_API_BASE_URL || 'https://marketplace-api.takealot.com/v1';
+  try {
+    const url = new URL(`${baseUrl.replace(/\/$/, '')}/returns`);
+    if (continuationToken) url.searchParams.set('continuation_token', continuationToken);
+    else {
+      url.searchParams.set('return_date__gte', dateFrom);
+      url.searchParams.set('return_date__lte', dateTo);
+      url.searchParams.set('limit', '100');
+      url.searchParams.set('order_by', '-return_date');
+      url.searchParams.append('expands', 'transactions');
+      ['seller_return_id', 'order_id', 'sku', 'return_date', 'quantity'].forEach((field) => url.searchParams.append('fields', field));
+    }
+    const upstream = await fetch(url, { headers: { Accept: 'application/json', 'X-API-Key': apiKey } });
+    const payload = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) return response.status(upstream.status).json({ error: payload.message || payload.error || 'Takealot 退货 API 请求失败' });
+    const rows = (Array.isArray(payload.items) ? payload.items : []).map((item) => ({
+      returnId: String(item.seller_return_id ?? ''), orderId: String(item.order_id ?? ''), sku: String(item.sku ?? '').trim(),
+      returnDate: String(item.return_date ?? ''), quantity: nullableNumber(item.quantity),
+      transactions: (Array.isArray(item.transactions) ? item.transactions : []).map((transaction) => ({
+        transactionType: String(transaction.transaction_type ?? ''), amountInclVat: nullableNumber(transaction.amount_incl_vat),
+      })),
+    }));
+    return response.status(200).json({ store, rows, continuationToken: String(payload.continuation_token ?? '') });
+  } catch (error) {
+    console.error(error);
+    return response.status(500).json({ error: error instanceof Error ? error.message : 'Takealot 退货 API 连接失败' });
+  }
+}

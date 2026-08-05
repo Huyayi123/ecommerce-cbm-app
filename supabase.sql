@@ -7,6 +7,7 @@ exception
 end $$;
 
 alter type public.app_role add value if not exists 'logistics';
+alter type public.app_role add value if not exists 'owner';
 
 create table if not exists public.repricing_products (
   id text primary key,
@@ -568,7 +569,7 @@ language sql
 security definer
 stable
 as $$
-  select public.current_role() in ('admin', 'buyer')
+  select public.current_role()::text in ('owner', 'admin', 'buyer')
 $$;
 
 create or replace function public.is_admin()
@@ -577,7 +578,16 @@ language sql
 security definer
 stable
 as $$
-  select public.current_role() = 'admin'
+  select public.current_role()::text in ('owner', 'admin')
+$$;
+
+create or replace function public.is_owner()
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select public.current_role()::text = 'owner'
 $$;
 
 alter table public.profiles enable row level security;
@@ -945,3 +955,37 @@ drop policy if exists "admin insert profit rows" on public.profit_analysis_rows;
 create policy "admin insert profit rows" on public.profit_analysis_rows for insert to authenticated with check (public.is_admin());
 drop policy if exists "admin delete profit rows" on public.profit_analysis_rows;
 create policy "admin delete profit rows" on public.profit_analysis_rows for delete to authenticated using (public.is_admin());
+
+create table if not exists public.monthly_profit_summaries (
+  id text primary key,
+  shop_name text not null,
+  month text not null,
+  data_cutoff_date date not null,
+  is_current_month boolean not null default false,
+  sales_revenue numeric not null default 0,
+  sales_quantity integer not null default 0,
+  sales_profit numeric not null default 0,
+  return_quantity integer not null default 0,
+  return_profit_reversal numeric not null default 0,
+  return_net_fees numeric not null default 0,
+  advertising_cost numeric not null default 0,
+  final_profit numeric not null default 0,
+  missing_sales_quantity integer not null default 0,
+  missing_sales_revenue numeric not null default 0,
+  missing_return_quantity integer not null default 0,
+  status text not null check (status in ('complete', 'incomplete')),
+  note text,
+  created_by text,
+  updated_at timestamptz not null default now(),
+  unique (shop_name, month)
+);
+
+alter table public.monthly_profit_summaries enable row level security;
+drop policy if exists "owner select monthly profit" on public.monthly_profit_summaries;
+create policy "owner select monthly profit" on public.monthly_profit_summaries for select to authenticated using (public.is_owner());
+drop policy if exists "owner insert monthly profit" on public.monthly_profit_summaries;
+create policy "owner insert monthly profit" on public.monthly_profit_summaries for insert to authenticated with check (public.is_owner());
+drop policy if exists "owner update monthly profit" on public.monthly_profit_summaries;
+create policy "owner update monthly profit" on public.monthly_profit_summaries for update to authenticated using (public.is_owner()) with check (public.is_owner());
+drop policy if exists "owner delete monthly profit" on public.monthly_profit_summaries;
+create policy "owner delete monthly profit" on public.monthly_profit_summaries for delete to authenticated using (public.is_owner());

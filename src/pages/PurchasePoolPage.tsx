@@ -132,7 +132,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const [message, setMessage] = useState('');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [poolDateDraft, setPoolDateDraft] = useState('');
-  const isAdmin = profile.role === 'admin';
+  const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const poolOptions = useMemo(() => buildPoolOptions(records, pools), [pools, records]);
   const options = useMemo(() => {
     const aggregatePool = buildAggregatePool(poolOptions);

@@ -13,7 +13,7 @@ import { PurchasePoolPage } from './pages/PurchasePoolPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
 import { RepricingAlertsPage } from './pages/RepricingAlertsPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
-import type { AdAnalysisRun, AppProfile, LogisticsBatch, ProfitAnalysisRun, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
+import type { AdAnalysisRun, AppProfile, LogisticsBatch, MonthlyProfitSummary, ProfitAnalysisRun, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
 import {
   appendPurchaseRecordsToPool,
   deletePurchaseRecords,
@@ -24,6 +24,7 @@ import {
   fetchPurchaseRecords,
   fetchAdAnalysisRuns,
   fetchProfitAnalysisRuns,
+  fetchMonthlyProfitSummaries,
   fetchRepricingAlerts,
   fetchSalesSuggestions,
   fetchSkuItems,
@@ -36,6 +37,7 @@ import {
   updateProfileBinding,
   saveAdAnalysisRun,
   saveProfitAnalysisRun,
+  upsertMonthlyProfitSummary,
   submitLogisticsBatch,
   updateLogisticsBatchStatus,
   upsertLogisticsBatch,
@@ -89,6 +91,7 @@ function App() {
   const [repricingAlerts, setRepricingAlerts] = useState<RepricingAlert[]>([]);
   const [adAnalysisRuns, setAdAnalysisRuns] = useState<AdAnalysisRun[]>([]);
   const [profitAnalysisRuns, setProfitAnalysisRuns] = useState<ProfitAnalysisRun[]>([]);
+  const [monthlyProfitSummaries, setMonthlyProfitSummaries] = useState<MonthlyProfitSummary[]>([]);
   const [profiles, setProfiles] = useState<AppProfile[]>([]);
   const [fileName, setFileName] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
@@ -127,7 +130,8 @@ function App() {
       fetchPurchasePools(),
       fetchAdAnalysisRuns(),
       fetchLogisticsBatches(),
-      activeProfile?.role === 'admin' ? fetchProfitAnalysisRuns() : Promise.resolve([]),
+      activeProfile?.role === 'admin' || activeProfile?.role === 'owner' ? fetchProfitAnalysisRuns() : Promise.resolve([]),
+      activeProfile?.role === 'owner' ? fetchMonthlyProfitSummaries() : Promise.resolve([]),
     ]);
     const errors = results.flatMap((result, index) => {
       if (result.status !== 'rejected') return [];
@@ -150,6 +154,7 @@ function App() {
     if (results[7].status === 'fulfilled') setAdAnalysisRuns(results[7].value);
     if (results[8].status === 'fulfilled') setLogisticsBatches(results[8].value);
     if (results[9].status === 'fulfilled') setProfitAnalysisRuns(results[9].value);
+    if (results[10].status === 'fulfilled') setMonthlyProfitSummaries(results[10].value);
 
     if (errors.length > 0) {
       setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
@@ -213,6 +218,7 @@ function App() {
         setRepricingAlerts([]);
         setAdAnalysisRuns([]);
         setProfitAnalysisRuns([]);
+        setMonthlyProfitSummaries([]);
         return;
       }
       void fetchProfile(user.id, user.email ?? '').then((nextProfile) => {
@@ -493,7 +499,7 @@ function App() {
   const activeRepricingAlerts = repricingAlerts.filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'));
   const visibleNavItems = profile.role === 'logistics'
     ? navItems.filter((item) => item.key === 'logistics')
-    : navItems.filter((item) => (item.key !== 'logistics' || profile.role === 'admin') && (item.key !== 'profit-analysis' || profile.role === 'admin'));
+    : navItems.filter((item) => (item.key !== 'logistics' || profile.role === 'admin' || profile.role === 'owner') && (item.key !== 'profit-analysis' || profile.role === 'admin' || profile.role === 'owner'));
   const currentPage = visibleNavItems.some((item) => item.key === activePage) ? activePage : visibleNavItems[0]?.key ?? 'logistics';
 
   return (
@@ -628,12 +634,14 @@ function App() {
       {currentPage === 'repricing' && (
         <RepricingAlertsPage alerts={repricingAlerts} skuItems={skuItems} onRefresh={loadCloudData} />
       )}
-      {currentPage === 'profit-analysis' && profile.role === 'admin' && (
+      {currentPage === 'profit-analysis' && (profile.role === 'admin' || profile.role === 'owner') && (
         <ProfitAnalysisPage
           skuItems={skuItems}
           profile={profile}
           runs={profitAnalysisRuns}
+          monthlySummaries={monthlyProfitSummaries}
           onSaveRun={saveProfitAnalysisRun}
+          onSaveMonthlySummary={upsertMonthlyProfitSummary}
           onRefresh={loadCloudData}
         />
       )}

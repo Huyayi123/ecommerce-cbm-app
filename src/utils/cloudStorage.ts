@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, LogisticsBatch, LogisticsBatchItem, LogisticsBatchStatus, ProfitAnalysisRow, ProfitAnalysisRun, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
+import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, LogisticsBatch, LogisticsBatchItem, LogisticsBatchStatus, MonthlyProfitSummary, ProfitAnalysisRow, ProfitAnalysisRun, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { findMatchingSkuItem, getSkuMatchKey } from './calculations';
 import { ensureInternalCodes } from './internalCodes';
@@ -195,6 +195,13 @@ type AdAnalysisDetailRow = {
 };
 
 type ProfitAnalysisRunRow = { id: string; shop_name: string; created_at: string; created_by: string | null; row_count: number | null; is_complete: boolean | null };
+type MonthlyProfitSummaryRow = {
+  id: string; shop_name: string; month: string; data_cutoff_date: string; is_current_month: boolean;
+  sales_revenue: number; sales_quantity: number; sales_profit: number; return_quantity: number;
+  return_profit_reversal: number; return_net_fees: number; advertising_cost: number; final_profit: number;
+  missing_sales_quantity: number; missing_sales_revenue: number; missing_return_quantity: number;
+  status: 'complete' | 'incomplete'; note: string | null; created_by: string | null; updated_at: string;
+};
 type ProfitAnalysisDetailRow = {
   id: string; run_id: string; shop_name: string; sku: string; product_name: string | null; image_url: string | null;
   latest_order_date: string | null; selling_price: number | null; purchase_cost_rmb: number | null; purchase_cost_zar: number | null;
@@ -1419,6 +1426,39 @@ export async function saveProfitAnalysisRun(run: ProfitAnalysisRun): Promise<voi
     const { error } = await client.from('profit_analysis_runs').delete().in('id', staleIds);
     if (error) throwSupabaseError(error);
   }
+}
+
+function mapMonthlyProfitSummary(row: MonthlyProfitSummaryRow): MonthlyProfitSummary {
+  return {
+    id: row.id, shopName: row.shop_name, month: row.month, dataCutoffDate: row.data_cutoff_date,
+    isCurrentMonth: row.is_current_month, salesRevenue: Number(row.sales_revenue), salesQuantity: Number(row.sales_quantity),
+    salesProfit: Number(row.sales_profit), returnQuantity: Number(row.return_quantity), returnProfitReversal: Number(row.return_profit_reversal),
+    returnNetFees: Number(row.return_net_fees), advertisingCost: Number(row.advertising_cost), finalProfit: Number(row.final_profit),
+    missingSalesQuantity: Number(row.missing_sales_quantity), missingSalesRevenue: Number(row.missing_sales_revenue),
+    missingReturnQuantity: Number(row.missing_return_quantity), status: row.status, note: row.note ?? '', createdBy: row.created_by ?? '', updatedAt: row.updated_at,
+  };
+}
+
+export async function fetchMonthlyProfitSummaries(): Promise<MonthlyProfitSummary[]> {
+  const { data, error } = await requireSupabase().from('monthly_profit_summaries').select('*').order('month', { ascending: false });
+  if (error) {
+    if (/monthly_profit_summaries|schema cache|does not exist/i.test(formatErrorMessage(error))) return [];
+    throwSupabaseError(error);
+  }
+  return ((data ?? []) as MonthlyProfitSummaryRow[]).map(mapMonthlyProfitSummary);
+}
+
+export async function upsertMonthlyProfitSummary(summary: MonthlyProfitSummary): Promise<void> {
+  const { error } = await requireSupabase().from('monthly_profit_summaries').upsert({
+    id: summary.id, shop_name: summary.shopName, month: summary.month, data_cutoff_date: summary.dataCutoffDate,
+    is_current_month: summary.isCurrentMonth, sales_revenue: summary.salesRevenue, sales_quantity: summary.salesQuantity,
+    sales_profit: summary.salesProfit, return_quantity: summary.returnQuantity, return_profit_reversal: summary.returnProfitReversal,
+    return_net_fees: summary.returnNetFees, advertising_cost: summary.advertisingCost, final_profit: summary.finalProfit,
+    missing_sales_quantity: summary.missingSalesQuantity, missing_sales_revenue: summary.missingSalesRevenue,
+    missing_return_quantity: summary.missingReturnQuantity, status: summary.status, note: summary.note,
+    created_by: summary.createdBy, updated_at: summary.updatedAt,
+  }, { onConflict: 'shop_name,month' });
+  if (error) throwSupabaseError(error);
 }
 
 function mapAuditLog(row: AuditLogRow): AuditLog {

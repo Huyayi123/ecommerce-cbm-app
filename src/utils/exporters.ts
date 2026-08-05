@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
-import type { AdAnalysisRow, AuditLog, CalculationRow, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
+import type { AdAnalysisRow, AuditLog, CalculationRow, MonthlyProfitDetail, MonthlyProfitSummary, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
 import { mixedGroupsSummary, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
@@ -601,6 +601,33 @@ export function exportProfitAnalysisRows(rows: ProfitAnalysisRow[], shopName: st
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, '利润分析');
   writeWorkbook(workbook, `${shopName || '全部店铺'}_利润分析`, 'xlsx');
+}
+
+export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: MonthlyProfitDetail[]): void {
+  const workbook = XLSX.utils.book_new();
+  const summaryRows = [{
+    店铺: summary.shopName, 月份: summary.month, 数据截止日: summary.dataCutoffDate,
+    销售额: summary.salesRevenue, 销售数量: summary.salesQuantity, 销售利润: summary.salesProfit,
+    退货数量: summary.returnQuantity, 退货利润冲回: summary.returnProfitReversal, 退货净费用: summary.returnNetFees,
+    广告费用: summary.advertisingCost, 最终利润: summary.finalProfit,
+    缺失销售数量: summary.missingSalesQuantity, 缺失销售金额: summary.missingSalesRevenue,
+    缺失退货数量: summary.missingReturnQuantity, 完整性: summary.status === 'complete' ? '完整' : '不完整',
+    备注: summary.note, 更新人: summary.createdBy, 更新时间: summary.updatedAt,
+  }];
+  const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
+  summarySheet['!cols'] = Object.keys(summaryRows[0]).map((key) => ({ wch: Math.max(12, key.length + 4) }));
+  XLSX.utils.book_append_sheet(workbook, summarySheet, '月度汇总');
+  if (details.length) {
+    const detailRows = details.map((row) => ({
+      SKU: row.sku, 产品名称: row.productName, 销售数量: row.salesQuantity, 退货数量: row.returnQuantity,
+      销售额: row.salesRevenue, 销售利润: row.salesProfit, 退货利润冲回: row.returnProfitReversal,
+      退货净费用: row.returnNetFees, 净利润: row.netProfit, 异常原因: row.messages.join('；'),
+    }));
+    const detailSheet = XLSX.utils.json_to_sheet(detailRows);
+    detailSheet['!cols'] = [{ wch: 18 }, { wch: 48 }, ...Array(7).fill({ wch: 15 }), { wch: 36 }];
+    XLSX.utils.book_append_sheet(workbook, detailSheet, 'SKU明细');
+  }
+  XLSX.writeFile(workbook, `${summary.shopName}-${summary.month}-月度利润.xlsx`);
 }
 export function exportBatchPurchaseOrder(records: PurchaseRecord[], format: ExportFormat): void {
   const exportRows = [...records]

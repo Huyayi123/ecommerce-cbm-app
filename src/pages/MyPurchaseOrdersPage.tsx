@@ -201,7 +201,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const mixedAutoSaveTimer = useRef<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<OrderFilterStatus>('pending');
   const [orderSearch, setOrderSearch] = useState('');
-  const isAdmin = profile.role === 'admin';
+  const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const isViewer = profile.role === 'viewer';
   const assignedRecords = useMemo(
     () => {
