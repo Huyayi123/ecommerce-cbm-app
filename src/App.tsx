@@ -8,6 +8,7 @@ import { AdAnalysisPage } from './pages/AdAnalysisPage';
 import { ContainerCalculatorPage } from './pages/ContainerCalculatorPage';
 import { LogisticsLoadingPage } from './pages/LogisticsLoadingPage';
 import { MyPurchaseOrdersPage } from './pages/MyPurchaseOrdersPage';
+import { MonthlyProfitPage } from './pages/MonthlyProfitPage';
 import { ProfitAnalysisPage } from './pages/ProfitAnalysisPage';
 import { PurchasePoolPage } from './pages/PurchasePoolPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
@@ -49,13 +50,14 @@ import { applyApprovedLogisticsBatch } from './utils/logistics';
 import { canDelete, canEdit } from './utils/permissions';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'ad-analysis' | 'logistics';
+type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'logistics';
 
 const ACTIVE_PAGE_STORAGE_KEY = 'ecommerce-cbm-active-page';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'repricing', label: '价格预警' },
   { key: 'profit-analysis', label: '利润分析' },
+  { key: 'monthly-profit', label: '月度利润' },
   { key: 'ad-analysis', label: '广告分析' },
   { key: 'logistics', label: '物流装柜确认' },
   { key: 'suggestions', label: '月销量采购建议' },
@@ -499,7 +501,9 @@ function App() {
   const activeRepricingAlerts = repricingAlerts.filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'));
   const visibleNavItems = profile.role === 'logistics'
     ? navItems.filter((item) => item.key === 'logistics')
-    : navItems.filter((item) => (item.key !== 'logistics' || profile.role === 'admin' || profile.role === 'owner') && (item.key !== 'profit-analysis' || profile.role === 'admin' || profile.role === 'owner'));
+    : navItems.filter((item) => (item.key !== 'logistics' || profile.role === 'admin' || profile.role === 'owner')
+      && (item.key !== 'profit-analysis' || profile.role === 'admin' || profile.role === 'owner')
+      && (item.key !== 'monthly-profit' || profile.role === 'owner'));
   const currentPage = visibleNavItems.some((item) => item.key === activePage) ? activePage : visibleNavItems[0]?.key ?? 'logistics';
 
   return (
@@ -639,11 +643,12 @@ function App() {
           skuItems={skuItems}
           profile={profile}
           runs={profitAnalysisRuns}
-          monthlySummaries={monthlyProfitSummaries}
           onSaveRun={saveProfitAnalysisRun}
-          onSaveMonthlySummary={upsertMonthlyProfitSummary}
           onRefresh={loadCloudData}
         />
+      )}
+      {currentPage === 'monthly-profit' && profile.role === 'owner' && (
+        <MonthlyProfitPage skuItems={skuItems} profile={profile} summaries={monthlyProfitSummaries} onSave={upsertMonthlyProfitSummary} onRefresh={loadCloudData} />
       )}
       {currentPage === 'ad-analysis' && (
         <AdAnalysisPage

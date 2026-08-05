@@ -367,6 +367,24 @@ export type MonthlyProfitSaleDetail = {
   messages: string[];
 };
 
+export type MonthlyProfitReturnDetail = {
+  id: string;
+  returnId: string;
+  orderId: string;
+  sku: string;
+  productName: string;
+  returnDate: string;
+  quantity: number;
+  purchaseCostZar: number | null;
+  seaFreightCost: number | null;
+  domesticFreightCost: number | null;
+  warehouseFee: number | null;
+  allocatedTotalFees: number | null;
+  baseLoss: number | null;
+  extraLoss: number;
+  messages: string[];
+};
+
 export type MonthlyProfitSummary = {
   id: string;
   shopName: string;
@@ -380,6 +398,7 @@ export type MonthlyProfitSummary = {
   returnProfitReversal: number;
   returnNetFees: number;
   advertisingCost: number;
+  salaryCost: number;
   finalProfit: number;
   missingSalesQuantity: number;
   missingSalesRevenue: number;

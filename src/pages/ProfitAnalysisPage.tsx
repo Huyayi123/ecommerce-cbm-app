@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { AppProfile, MonthlyProfitSummary, ProfitAnalysisRun, ProfitAnalysisStatus, SkuItem } from '../types';
-import { MonthlyProfitSection } from '../components/MonthlyProfitSection';
+import type { AppProfile, ProfitAnalysisRun, ProfitAnalysisStatus, SkuItem } from '../types';
 import { exportProfitAnalysisRows } from '../utils/exporters';
 import { buildProfitAnalysisRows } from '../utils/profitCalculations';
 import { fetchTakealotInventory } from '../utils/takealot';
@@ -10,9 +9,7 @@ type Props = {
   skuItems: SkuItem[];
   profile: AppProfile;
   runs: ProfitAnalysisRun[];
-  monthlySummaries: MonthlyProfitSummary[];
   onSaveRun: (run: ProfitAnalysisRun) => Promise<void>;
-  onSaveMonthlySummary: (summary: MonthlyProfitSummary) => Promise<void>;
   onRefresh: () => Promise<void>;
 };
 
@@ -32,7 +29,7 @@ function dateText(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN');
 }
 
-export function ProfitAnalysisPage({ skuItems, profile, runs, monthlySummaries, onSaveRun, onSaveMonthlySummary, onRefresh }: Props) {
+export function ProfitAnalysisPage({ skuItems, profile, runs, onSaveRun, onRefresh }: Props) {
   const [selectedStore, setSelectedStore] = useState(runs[0]?.shopName ?? STORES[0]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProfitAnalysisStatus | ''>('');
@@ -85,7 +82,6 @@ export function ProfitAnalysisPage({ skuItems, profile, runs, monthlySummaries, 
 
   return (
     <section className="panel profit-analysis-page">
-      {profile.role === 'owner' && <MonthlyProfitSection profile={profile} skuItems={skuItems} stores={STORES} summaries={monthlySummaries} onSave={onSaveMonthlySummary} onRefresh={onRefresh} />}
       <div className="section-heading">
         <div><h2>利润分析</h2><p>使用每个 SKU 最近一笔有效成交，结合采购成本、海运费、Total Fees 和送仓费计算单件利润。</p></div>
         <div className="export-actions">

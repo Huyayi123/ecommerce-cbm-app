@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
-import type { AdAnalysisRow, AuditLog, CalculationRow, MonthlyProfitDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
+import type { AdAnalysisRow, AuditLog, CalculationRow, MonthlyProfitDetail, MonthlyProfitReturnDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
 import { mixedGroupsSummary, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
@@ -603,13 +603,13 @@ export function exportProfitAnalysisRows(rows: ProfitAnalysisRow[], shopName: st
   writeWorkbook(workbook, `${shopName || '全部店铺'}_利润分析`, 'xlsx');
 }
 
-export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: MonthlyProfitDetail[], salesDetails: MonthlyProfitSaleDetail[] = []): void {
+export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: MonthlyProfitDetail[], salesDetails: MonthlyProfitSaleDetail[] = [], returnDetails: MonthlyProfitReturnDetail[] = []): void {
   const workbook = XLSX.utils.book_new();
   const summaryRows = [{
     店铺: summary.shopName, 月份: summary.month, 数据截止日: summary.dataCutoffDate,
     销售额: summary.salesRevenue, 销售数量: summary.salesQuantity, 销售利润: summary.salesProfit,
     退货数量: summary.returnQuantity, 退货基础损失: summary.returnProfitReversal, 退货额外损失: summary.returnNetFees,
-    广告费用: summary.advertisingCost, 最终利润: summary.finalProfit,
+    广告费用: summary.advertisingCost, 人员工资: summary.salaryCost, 最终利润: summary.finalProfit,
     缺失销售数量: summary.missingSalesQuantity, 缺失销售金额: summary.missingSalesRevenue,
     缺失退货数量: summary.missingReturnQuantity, 完整性: summary.status === 'complete' ? '完整' : '不完整',
     备注: summary.note, 更新人: summary.createdBy, 更新时间: summary.updatedAt,
@@ -638,6 +638,17 @@ export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: Mont
     const saleSheet = XLSX.utils.json_to_sheet(saleRows);
     saleSheet['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 24 }, ...Array(10).fill({ wch: 15 }), { wch: 36 }];
     XLSX.utils.book_append_sheet(workbook, saleSheet, '销售逐笔明细');
+  }
+  if (returnDetails.length) {
+    const returnRows = returnDetails.map((row) => ({
+      退货编号: row.returnId, 原订单号: row.orderId, SKU: row.sku, 产品名称: row.productName, 退货日期: row.returnDate,
+      退货数量: row.quantity, '采购成本 ZAR': row.purchaseCostZar ?? '', 海运费: row.seaFreightCost ?? '',
+      国内运费: row.domesticFreightCost ?? '', 送仓费: row.warehouseFee ?? '', '分摊 Total Fees': row.allocatedTotalFees ?? '',
+      退货基础损失: row.baseLoss ?? '', 退货额外损失: row.extraLoss, 异常原因: row.messages.join('；'),
+    }));
+    const returnSheet = XLSX.utils.json_to_sheet(returnRows);
+    returnSheet['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 48 }, { wch: 16 }, ...Array(8).fill({ wch: 16 }), { wch: 36 }];
+    XLSX.utils.book_append_sheet(workbook, returnSheet, '退货逐笔明细');
   }
   XLSX.writeFile(workbook, `${summary.shopName}-${summary.month}-月度利润.xlsx`);
 }

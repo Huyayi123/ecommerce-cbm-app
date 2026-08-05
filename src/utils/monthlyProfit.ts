@@ -1,4 +1,4 @@
-import type { MonthlyProfitDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, SkuItem, TakealotReturn, TakealotSale } from '../types';
+import type { MonthlyProfitDetail, MonthlyProfitReturnDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, SkuItem, TakealotReturn, TakealotSale } from '../types';
 import { round } from './number';
 import { calculateBaseProductCosts, isExcludedSaleStatus } from './profitCalculations';
 import { canonicalShopName } from './shops';
@@ -43,8 +43,8 @@ export function returnExtraLoss(value: TakealotReturn): { amount: number; unknow
 export function calculateMonthlyProfit(input: {
   shopName: string; month: string; dataCutoffDate: string; isCurrentMonth: boolean;
   sales: TakealotSale[]; returns: TakealotReturn[]; originalSales: TakealotSale[];
-  skuItems: SkuItem[]; advertisingCost: number; note: string; createdBy: string; updatedAt?: string;
-}): { summary: MonthlyProfitSummary; details: MonthlyProfitDetail[]; salesDetails: MonthlyProfitSaleDetail[] } {
+  skuItems: SkuItem[]; advertisingCost: number; salaryCost: number; note: string; createdBy: string; updatedAt?: string;
+}): { summary: MonthlyProfitSummary; details: MonthlyProfitDetail[]; salesDetails: MonthlyProfitSaleDetail[]; returnDetails: MonthlyProfitReturnDetail[] } {
   const store = canonicalShopName(input.shopName);
   const skuItems = new Map(input.skuItems.filter((item) => canonicalShopName(item.shopName) === store).map((item) => [skuKey(item.sku), item]));
   const details = new Map<string, MonthlyProfitDetail>();
@@ -100,6 +100,7 @@ export function calculateMonthlyProfit(input: {
 
   const originalByOrderSku = new Map<string, TakealotSale>();
   for (const sale of [...input.sales, ...input.originalSales]) originalByOrderSku.set(`${sale.orderId}|${skuKey(sale.sku)}`, sale);
+  const returnDetails: MonthlyProfitReturnDetail[] = [];
   let returnQuantity = 0, returnProfitReversal = 0, returnNetFees = 0, missingReturnQuantity = 0;
   let hasUnknownReturnTransactions = false;
   for (const returned of input.returns) {
@@ -114,14 +115,29 @@ export function calculateMonthlyProfit(input: {
     }
     const original = originalByOrderSku.get(`${returned.orderId}|${skuKey(returned.sku)}`);
     const costs = costsFor(returned.sku);
+    const item = skuItems.get(skuKey(returned.sku));
     if (!original || original.quantity <= 0 || !original.sellingPrice || original.totalFees === null || original.totalFees <= 0 || !costs) {
       missingReturnQuantity += returned.quantity;
       detail.messages.push('无法匹配已结算的原销售记录');
+      returnDetails.push({ id: returned.returnId || `${returned.orderId}-${returned.sku}-${returned.returnDate}`, returnId: returned.returnId, orderId: returned.orderId,
+        sku: returned.sku, productName: item?.englishName || item?.productName || '', returnDate: returned.returnDate, quantity: returned.quantity,
+        purchaseCostZar: null, seaFreightCost: null, domesticFreightCost: null, warehouseFee: null, allocatedTotalFees: null, baseLoss: null,
+        extraLoss: extraLoss.amount, messages: ['无法匹配已结算的原销售记录', ...(extraLoss.unknownTypes.length ? [`未识别退货交易类型：${extraLoss.unknownTypes.join('、')}`] : [])] });
       continue;
     }
-    const unitReturnLoss = costs.purchaseCostZar + costs.seaFreightCost + costs.domesticFreightCost + costs.warehouseFee + original.totalFees / original.quantity;
-    const baseLoss = unitReturnLoss * returned.quantity;
-    returnProfitReversal += baseLoss; detail.returnProfitReversal += baseLoss;
+    const allocatedTotalFees = original.totalFees / original.quantity * returned.quantity;
+    const purchaseCostZar = costs.purchaseCostZar * returned.quantity;
+    const seaFreightCost = costs.seaFreightCost * returned.quantity;
+    const domesticFreightCost = costs.domesticFreightCost * returned.quantity;
+    const warehouseFee = costs.warehouseFee * returned.quantity;
+    const baseLoss = purchaseCostZar + seaFreightCost + domesticFreightCost + warehouseFee + allocatedTotalFees;
+    const roundedBaseLoss = round(baseLoss, 2);
+    returnProfitReversal += roundedBaseLoss; detail.returnProfitReversal += roundedBaseLoss;
+    returnDetails.push({ id: returned.returnId || `${returned.orderId}-${returned.sku}-${returned.returnDate}`, returnId: returned.returnId, orderId: returned.orderId,
+      sku: returned.sku, productName: item?.englishName || item?.productName || '', returnDate: returned.returnDate, quantity: returned.quantity,
+      purchaseCostZar: round(purchaseCostZar, 2), seaFreightCost: round(seaFreightCost, 2), domesticFreightCost: round(domesticFreightCost, 2),
+      warehouseFee: round(warehouseFee, 2), allocatedTotalFees: round(allocatedTotalFees, 2), baseLoss: roundedBaseLoss, extraLoss: extraLoss.amount,
+      messages: extraLoss.unknownTypes.length ? [`未识别退货交易类型：${extraLoss.unknownTypes.join('、')}`] : [] });
   }
   const normalizedDetails = [...details.values()].map((detail) => ({ ...detail,
     salesRevenue: round(detail.salesRevenue, 2), salesProfit: round(detail.salesProfit, 2), returnProfitReversal: round(detail.returnProfitReversal, 2), returnNetFees: round(detail.returnNetFees, 2),
@@ -131,8 +147,8 @@ export function calculateMonthlyProfit(input: {
   const summary: MonthlyProfitSummary = {
     id: `${store.toLowerCase()}-${input.month}`, shopName: store, month: input.month, dataCutoffDate: input.dataCutoffDate, isCurrentMonth: input.isCurrentMonth,
     salesRevenue: round(salesRevenue, 2), salesQuantity, salesProfit: round(salesProfit, 2), returnQuantity, returnProfitReversal: round(returnProfitReversal, 2), returnNetFees: round(returnNetFees, 2),
-    advertisingCost: round(input.advertisingCost, 2), finalProfit: round(salesProfit - returnProfitReversal - returnNetFees - input.advertisingCost, 2),
+    advertisingCost: round(input.advertisingCost, 2), salaryCost: round(input.salaryCost, 2), finalProfit: round(salesProfit - returnProfitReversal - returnNetFees - input.advertisingCost - input.salaryCost, 2),
     missingSalesQuantity, missingSalesRevenue: round(missingSalesRevenue, 2), missingReturnQuantity, status, note: input.note.trim(), createdBy: input.createdBy, updatedAt: input.updatedAt ?? new Date().toISOString(),
   };
-  return { summary, details: normalizedDetails, salesDetails: salesDetails.sort((a, b) => Date.parse(b.orderDate) - Date.parse(a.orderDate)) };
+  return { summary, details: normalizedDetails, salesDetails: salesDetails.sort((a, b) => Date.parse(b.orderDate) - Date.parse(a.orderDate)), returnDetails: returnDetails.sort((a, b) => Date.parse(b.returnDate) - Date.parse(a.returnDate)) };
 }

@@ -969,6 +969,7 @@ create table if not exists public.monthly_profit_summaries (
   return_profit_reversal numeric not null default 0,
   return_net_fees numeric not null default 0,
   advertising_cost numeric not null default 0,
+  salary_cost numeric not null default 0,
   final_profit numeric not null default 0,
   missing_sales_quantity integer not null default 0,
   missing_sales_revenue numeric not null default 0,
@@ -979,6 +980,8 @@ create table if not exists public.monthly_profit_summaries (
   updated_at timestamptz not null default now(),
   unique (shop_name, month)
 );
+
+alter table public.monthly_profit_summaries add column if not exists salary_cost numeric not null default 0;
 
 alter table public.monthly_profit_summaries enable row level security;
 drop policy if exists "owner select monthly profit" on public.monthly_profit_summaries;

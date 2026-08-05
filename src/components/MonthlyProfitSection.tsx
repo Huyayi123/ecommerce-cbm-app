@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
-import type { AppProfile, MonthlyProfitDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, SkuItem, TakealotSale } from '../types';
+import type { AppProfile, MonthlyProfitDetail, MonthlyProfitReturnDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, SkuItem, TakealotSale } from '../types';
 import { exportMonthlyProfit } from '../utils/exporters';
 import { calculateMonthlyProfit, monthlyProfitRange, sastToday } from '../utils/monthlyProfit';
 import { fetchTakealotReturns } from '../utils/takealotReturns';
@@ -28,9 +28,12 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
   const [shopName, setShopName] = useState(stores[0]);
   const [month, setMonth] = useState(sastToday().slice(0, 7));
   const [advertisingCost, setAdvertisingCost] = useState('');
+  const [salaryCost, setSalaryCost] = useState('');
   const [note, setNote] = useState('');
   const [details, setDetails] = useState<MonthlyProfitDetail[]>([]);
   const [salesDetails, setSalesDetails] = useState<MonthlyProfitSaleDetail[]>([]);
+  const [returnDetails, setReturnDetails] = useState<MonthlyProfitReturnDetail[]>([]);
+  const [showReturnDetails, setShowReturnDetails] = useState(false);
   const [expandedSkus, setExpandedSkus] = useState<Set<string>>(new Set());
   const [currentSummary, setCurrentSummary] = useState<MonthlyProfitSummary | null>(null);
   const [message, setMessage] = useState('');
@@ -48,11 +51,13 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
 
   async function sync() {
     const adCost = Number(advertisingCost);
+    const salary = salaryCost.trim() === '' ? 0 : Number(salaryCost);
     if (advertisingCost.trim() === '' || !Number.isFinite(adCost) || adCost < 0) { setMessage('广告费用必须明确填写 0 或正数。'); return; }
+    if (!Number.isFinite(salary) || salary < 0) { setMessage('人员工资必须留空或填写 0 以上的数字。'); return; }
     const range = monthlyProfitRange(month);
     if (!range.hasEligibleDates) { setMessage(`该月暂无可统计数据；当前数据截止日为 ${range.dataCutoffDate}。`); return; }
     try {
-      setSyncing(true); setDetails([]); setSalesDetails([]); setExpandedSkus(new Set()); setCurrentSummary(null);
+      setSyncing(true); setDetails([]); setSalesDetails([]); setReturnDetails([]); setShowReturnDetails(false); setExpandedSkus(new Set()); setCurrentSummary(null);
       setMessage(`正在读取 ${range.startDate} 至 ${range.endDate} 的销售和退货数据...`);
       const [salesResult, returns] = await Promise.all([
         fetchTakealotSales(shopName, (pages, rows) => setMessage(`销售明细：第 ${pages} 页，已读取 ${rows} 条`), { dateFrom: range.startDate, dateTo: range.endDate }),
@@ -62,9 +67,9 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
       const orderIds = [...new Set(returns.map((row) => row.orderId).filter((id) => id && !existingOrders.has(id)))];
       const originalSales = await fetchOriginalOrders(shopName, orderIds, (done, total) => setMessage(`正在关联退货原订单：${done}/${total}`));
       const result = calculateMonthlyProfit({ shopName, month, dataCutoffDate: range.endDate, isCurrentMonth: range.isCurrentMonth,
-        sales: salesResult.rows, returns, originalSales, skuItems, advertisingCost: adCost, note, createdBy: profile.email });
+        sales: salesResult.rows, returns, originalSales, skuItems, advertisingCost: adCost, salaryCost: salary, note, createdBy: profile.email });
       await onSave(result.summary);
-      setCurrentSummary(result.summary); setDetails(result.details); setSalesDetails(result.salesDetails);
+      setCurrentSummary(result.summary); setDetails(result.details); setSalesDetails(result.salesDetails); setReturnDetails(result.returnDetails);
       await onRefresh();
       setMessage(`同步完成：销售 ${salesResult.rows.length} 条，退货 ${returns.length} 条。${result.summary.status === 'incomplete' ? '存在费用未结算或无法匹配的数据，最终利润为已知数据结果。' : ''}`);
     } catch (error) {
@@ -73,12 +78,13 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
   }
 
   return <section className="monthly-profit-section">
-    <div className="section-heading"><div><h2>老板月度利润</h2><p>按南非自然月统计销售、退货和广告费用；数据统一延迟 7 天结算。</p></div>
-      <div className="export-actions"><button type="button" disabled={!displayed} onClick={() => displayed && exportMonthlyProfit(displayed, currentSummary === displayed ? details : [], currentSummary === displayed ? salesDetails : [])}>导出 Excel</button><button className="primary" type="button" disabled={syncing} onClick={() => void sync()}>{syncing ? '同步中...' : '同步月度利润'}</button></div></div>
+    <div className="section-heading"><div><h2>月度利润</h2><p>按南非自然月统计销售、退货、广告费用和人员工资；数据统一延迟 7 天结算。</p></div>
+      <div className="export-actions"><button type="button" disabled={!displayed} onClick={() => displayed && exportMonthlyProfit(displayed, currentSummary === displayed ? details : [], currentSummary === displayed ? salesDetails : [], currentSummary === displayed ? returnDetails : [])}>导出 Excel</button><button className="primary" type="button" disabled={syncing} onClick={() => void sync()}>{syncing ? '同步中...' : '同步月度利润'}</button></div></div>
     <div className="profit-analysis-controls">
-      <label>店铺<select value={shopName} onChange={(event) => { setShopName(event.target.value); setCurrentSummary(null); setDetails([]); setSalesDetails([]); setExpandedSkus(new Set()); }}>{stores.map((store) => <option key={store}>{store}</option>)}</select></label>
-      <label>月份<input type="month" value={month} onChange={(event) => { setMonth(event.target.value); setCurrentSummary(null); setDetails([]); setSalesDetails([]); setExpandedSkus(new Set()); }} /></label>
+      <label>店铺<select value={shopName} onChange={(event) => { setShopName(event.target.value); setCurrentSummary(null); setDetails([]); setSalesDetails([]); setReturnDetails([]); setShowReturnDetails(false); setExpandedSkus(new Set()); }}>{stores.map((store) => <option key={store}>{store}</option>)}</select></label>
+      <label>月份<input type="month" value={month} onChange={(event) => { setMonth(event.target.value); setCurrentSummary(null); setDetails([]); setSalesDetails([]); setReturnDetails([]); setShowReturnDetails(false); setExpandedSkus(new Set()); }} /></label>
       <label>广告费用 (ZAR)<input type="number" min="0" step="0.01" value={advertisingCost} onChange={(event) => setAdvertisingCost(event.target.value)} placeholder="必须填写，0 也要填写" /></label>
+      <label>人员工资 (ZAR)<input type="number" min="0" step="0.01" value={salaryCost} onChange={(event) => setSalaryCost(event.target.value)} placeholder="选填，留空按 0" /></label>
       <label>备注<input value={note} onChange={(event) => setNote(event.target.value)} /></label>
     </div>
     {message && <div className="inline-notice">{message}</div>}
@@ -86,10 +92,11 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
       <div className={`inline-notice ${displayed.status === 'incomplete' ? 'warning' : ''}`}>{displayed.isCurrentMonth ? '月份未结束；' : ''}数据截止日：{displayed.dataCutoffDate}；状态：{displayed.status === 'complete' ? '完整' : '不完整（最终利润为已知数据结果）'}</div>
       <div className="repricing-summary">
         <div className="metric"><span>销售额 / 数量</span><strong>{money(displayed.salesRevenue)} / {displayed.salesQuantity}</strong></div><div className="metric"><span>销售利润</span><strong>{money(displayed.salesProfit)}</strong></div>
-        <div className="metric"><span>退货数量</span><strong>{displayed.returnQuantity}</strong></div><div className="metric"><span>退货基础损失</span><strong>{money(displayed.returnProfitReversal)}</strong></div>
-        <div className="metric"><span>退货额外损失</span><strong>{money(displayed.returnNetFees)}</strong></div><div className="metric"><span>广告费用</span><strong>{money(displayed.advertisingCost)}</strong></div><div className="metric"><span>最终利润</span><strong>{money(displayed.finalProfit)}</strong></div>
+        <div className="metric"><span>退货数量</span><strong>{displayed.returnQuantity}</strong></div><button type="button" className="metric monthly-profit-clickable-metric" disabled={!returnDetails.length} onClick={() => setShowReturnDetails((value) => !value)}><span>退货基础损失（点击查看明细）</span><strong>{money(displayed.returnProfitReversal)}</strong></button>
+        <div className="metric"><span>退货额外损失</span><strong>{money(displayed.returnNetFees)}</strong></div><div className="metric"><span>广告费用</span><strong>{money(displayed.advertisingCost)}</strong></div><div className="metric"><span>人员工资</span><strong>{money(displayed.salaryCost)}</strong></div><div className="metric"><span>最终利润</span><strong>{money(displayed.finalProfit)}</strong></div>
       </div>
     </>}
+    {showReturnDetails && returnDetails.length > 0 && <div className="table-wrap monthly-return-detail-table"><table><thead><tr><th>退货编号</th><th>原订单号</th><th>SKU</th><th>产品名称</th><th>退货日期</th><th>退货数量</th><th>采购成本 ZAR</th><th>海运费</th><th>国内运费</th><th>送仓费</th><th>分摊 Total Fees</th><th>退货基础损失</th><th>退货额外损失</th><th>异常原因</th></tr></thead><tbody>{returnDetails.map((row) => <tr key={row.id} className={row.baseLoss === null ? 'monthly-sale-loss' : ''}><td>{row.returnId || '-'}</td><td>{row.orderId || '-'}</td><td>{row.sku}</td><td>{row.productName || '-'}</td><td>{row.returnDate || '-'}</td><td>{row.quantity}</td><td>{row.purchaseCostZar === null ? '-' : money(row.purchaseCostZar)}</td><td>{row.seaFreightCost === null ? '-' : money(row.seaFreightCost)}</td><td>{row.domesticFreightCost === null ? '-' : money(row.domesticFreightCost)}</td><td>{row.warehouseFee === null ? '-' : money(row.warehouseFee)}</td><td>{row.allocatedTotalFees === null ? '-' : money(row.allocatedTotalFees)}</td><td><strong>{row.baseLoss === null ? '-' : money(row.baseLoss)}</strong></td><td>{money(row.extraLoss)}</td><td>{row.messages.join('；') || '正常'}</td></tr>)}</tbody></table></div>}
     {details.length > 0 && <div className="table-wrap"><table><thead><tr><th>SKU</th><th>产品名称</th><th>销售数量</th><th>退货数量</th><th>销售利润</th><th>退货影响</th><th>净利润</th><th>异常原因</th><th>操作</th></tr></thead><tbody>{details.map((row) => {
       const expanded = expandedSkus.has(row.sku);
       const rows = salesBySku.get(row.sku.trim().toUpperCase()) ?? [];
