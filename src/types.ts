@@ -334,6 +334,7 @@ export type ProfitAnalysisRow = {
   purchaseCostZar: number | null;
   unitCbm: number | null;
   seaFreightCost: number | null;
+  domesticFreightCost: number | null;
   warehouseFee: number | null;
   totalFees: number | null;
   profit: number | null;

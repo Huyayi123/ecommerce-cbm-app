@@ -10,10 +10,19 @@ export function calculateWarehouseFee(seaFreightCost: number): number {
   return seaFreightCost > 0 ? round(Math.ceil(seaFreightCost / 15) * 10, 2) : 0;
 }
 
+export function calculateDomesticFreightCost(seaFreightCost: number): number {
+  return seaFreightCost > 0 ? round(3 + (Math.ceil(seaFreightCost / 10) - 1) * 1.5, 2) : 0;
+}
+
 export function calculateBaseProductCosts(purchaseCostRmb: number, unitCbm: number) {
   const purchaseCostZar = round(purchaseCostRmb * PURCHASE_COST_EXCHANGE_RATE, 2);
   const seaFreightCost = round(unitCbm * SEA_FREIGHT_RATE_PER_CBM, 2);
-  return { purchaseCostZar, seaFreightCost, warehouseFee: calculateWarehouseFee(seaFreightCost) };
+  return {
+    purchaseCostZar,
+    seaFreightCost,
+    domesticFreightCost: calculateDomesticFreightCost(seaFreightCost),
+    warehouseFee: calculateWarehouseFee(seaFreightCost),
+  };
 }
 
 function key(value: string): string {
@@ -87,7 +96,7 @@ export function buildProfitAnalysisRows(input: {
       : null;
     const canCalculate = sellingPrice !== null && totalFees !== null && costs !== null;
     const profit = canCalculate
-      ? round(sellingPrice - costs.purchaseCostZar - costs.seaFreightCost - totalFees - costs.warehouseFee, 2)
+      ? round(sellingPrice - costs.purchaseCostZar - costs.seaFreightCost - costs.domesticFreightCost - totalFees - costs.warehouseFee, 2)
       : null;
     const status = profit === null ? 'missing_data' : profit > 0 ? 'profit' : profit < 0 ? 'loss' : 'break_even';
 
@@ -104,6 +113,7 @@ export function buildProfitAnalysisRows(input: {
       purchaseCostZar: costs?.purchaseCostZar ?? null,
       unitCbm,
       seaFreightCost: costs?.seaFreightCost ?? null,
+      domesticFreightCost: costs?.domesticFreightCost ?? null,
       warehouseFee: costs?.warehouseFee ?? null,
       totalFees,
       profit,

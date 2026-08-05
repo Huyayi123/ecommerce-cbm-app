@@ -106,12 +106,12 @@ export function ProfitAnalysisPage({ skuItems, profile, runs, onSaveRun, onRefre
       </div>
       <div className="table-wrap profit-analysis-table-wrap">
         <table className="profit-analysis-table">
-          <thead><tr><th>图片</th><th>店铺</th><th>SKU</th><th>产品名称</th><th>最近成交时间</th><th>实际成交价</th><th>采购价 RMB</th><th>采购成本 ZAR</th><th>单品 CBM</th><th>海运费</th><th>送仓费</th><th>Total Fees</th><th>单件利润</th><th>状态</th><th>提示</th></tr></thead>
+          <thead><tr><th>图片</th><th>店铺</th><th>SKU</th><th>产品名称</th><th>最近成交时间</th><th>实际成交价</th><th>采购价 RMB</th><th>采购成本 ZAR</th><th>单品 CBM</th><th>海运费</th><th>国内运费</th><th>送仓费</th><th>Total Fees</th><th>单件利润</th><th>状态</th><th>提示</th></tr></thead>
           <tbody>
             {visibleRows.map((row) => <tr key={row.id} className={`profit-row-${row.status}`}>
-              <td>{row.imageUrl ? <img className="sku-thumb" src={row.imageUrl} alt={row.productName || row.sku} loading="lazy" /> : '-'}</td><td>{row.shopName}</td><td>{row.sku}</td><td><span className="cell-ellipsis" title={row.productName}>{row.productName || '-'}</span></td><td>{dateText(row.latestOrderDate)}</td><td>{money(row.sellingPrice)}</td><td>{row.purchaseCostRmb === null ? '-' : `¥ ${row.purchaseCostRmb.toFixed(2)}`}</td><td>{money(row.purchaseCostZar)}</td><td>{row.unitCbm === null ? '-' : row.unitCbm.toFixed(8)}</td><td>{money(row.seaFreightCost)}</td><td>{money(row.warehouseFee)}</td><td>{money(row.totalFees)}</td><td><strong>{money(row.profit)}</strong></td><td><span className={`repricing-badge ${row.status}`}>{statusText(row.status)}</span></td><td>{row.messages.length ? row.messages.join('；') : '正常'}</td>
+              <td>{row.imageUrl ? <img className="sku-thumb" src={row.imageUrl} alt={row.productName || row.sku} loading="lazy" /> : '-'}</td><td>{row.shopName}</td><td>{row.sku}</td><td><span className="cell-ellipsis" title={row.productName}>{row.productName || '-'}</span></td><td>{dateText(row.latestOrderDate)}</td><td>{money(row.sellingPrice)}</td><td>{row.purchaseCostRmb === null ? '-' : `¥ ${row.purchaseCostRmb.toFixed(2)}`}</td><td>{money(row.purchaseCostZar)}</td><td>{row.unitCbm === null ? '-' : row.unitCbm.toFixed(8)}</td><td>{money(row.seaFreightCost)}</td><td>{money(row.domesticFreightCost)}</td><td>{money(row.warehouseFee)}</td><td>{money(row.totalFees)}</td><td><strong>{money(row.profit)}</strong></td><td><span className={`repricing-badge ${row.status}`}>{statusText(row.status)}</span></td><td>{row.messages.length ? row.messages.join('；') : '正常'}</td>
             </tr>)}
-            {visibleRows.length === 0 && <tr><td colSpan={15} className="empty">暂无利润数据，请选择店铺后同步。</td></tr>}
+            {visibleRows.length === 0 && <tr><td colSpan={16} className="empty">暂无利润数据，请选择店铺后同步。</td></tr>}
           </tbody>
         </table>
       </div>

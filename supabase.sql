@@ -913,6 +913,7 @@ create table if not exists public.profit_analysis_rows (
   purchase_cost_zar numeric,
   unit_cbm numeric,
   sea_freight_cost numeric,
+  domestic_freight_cost numeric,
   warehouse_fee numeric,
   total_fees numeric,
   profit numeric,
@@ -923,6 +924,7 @@ create table if not exists public.profit_analysis_rows (
 );
 
 alter table public.profit_analysis_runs add column if not exists is_complete boolean not null default false;
+alter table public.profit_analysis_rows add column if not exists domestic_freight_cost numeric;
 
 create index if not exists profit_analysis_runs_shop_created_idx on public.profit_analysis_runs (shop_name, created_at desc);
 create index if not exists profit_analysis_rows_run_idx on public.profit_analysis_rows (run_id);

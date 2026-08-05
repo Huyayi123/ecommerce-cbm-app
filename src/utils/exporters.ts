@@ -564,6 +564,7 @@ export function exportProfitAnalysisRows(rows: ProfitAnalysisRow[], shopName: st
     '采购成本 ZAR': row.purchaseCostZar ?? '',
     '单品 CBM': row.unitCbm ?? '',
     海运费: row.seaFreightCost ?? '',
+    国内运费: row.domesticFreightCost ?? '',
     送仓费: row.warehouseFee ?? '',
     'Total Fees': row.totalFees ?? '',
     单件利润: row.profit ?? '',
@@ -595,8 +596,8 @@ export function exportProfitAnalysisRows(rows: ProfitAnalysisRow[], shopName: st
       };
     }
   }
-  worksheet['!cols'] = [12, 18, 48, 42, 22, 14, 14, 16, 14, 12, 12, 14, 14, 12, 42, 22].map((wch) => ({ wch }));
-  worksheet['!autofilter'] = { ref: worksheet['!ref'] ?? 'A1:P1' };
+  worksheet['!cols'] = [12, 18, 48, 42, 22, 14, 14, 16, 14, 12, 12, 12, 14, 14, 12, 42, 22].map((wch) => ({ wch }));
+  worksheet['!autofilter'] = { ref: worksheet['!ref'] ?? 'A1:Q1' };
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, '利润分析');
   writeWorkbook(workbook, `${shopName || '全部店铺'}_利润分析`, 'xlsx');

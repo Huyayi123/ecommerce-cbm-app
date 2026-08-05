@@ -198,7 +198,7 @@ type ProfitAnalysisRunRow = { id: string; shop_name: string; created_at: string;
 type ProfitAnalysisDetailRow = {
   id: string; run_id: string; shop_name: string; sku: string; product_name: string | null; image_url: string | null;
   latest_order_date: string | null; selling_price: number | null; purchase_cost_rmb: number | null; purchase_cost_zar: number | null;
-  unit_cbm: number | null; sea_freight_cost: number | null; warehouse_fee: number | null; total_fees: number | null;
+  unit_cbm: number | null; sea_freight_cost: number | null; domestic_freight_cost?: number | null; warehouse_fee: number | null; total_fees: number | null;
   profit: number | null; status: ProfitAnalysisRow['status']; messages: string[] | null; synced_at: string;
 };
 
@@ -1343,6 +1343,7 @@ function mapProfitRow(row: ProfitAnalysisDetailRow): ProfitAnalysisRow {
     latestOrderDate: row.latest_order_date ?? '', sellingPrice: row.selling_price === null ? null : Number(row.selling_price),
     purchaseCostRmb: row.purchase_cost_rmb === null ? null : Number(row.purchase_cost_rmb), purchaseCostZar: row.purchase_cost_zar === null ? null : Number(row.purchase_cost_zar),
     unitCbm: row.unit_cbm === null ? null : Number(row.unit_cbm), seaFreightCost: row.sea_freight_cost === null ? null : Number(row.sea_freight_cost),
+    domesticFreightCost: row.domestic_freight_cost == null ? null : Number(row.domestic_freight_cost),
     warehouseFee: row.warehouse_fee === null ? null : Number(row.warehouse_fee), totalFees: row.total_fees === null ? null : Number(row.total_fees),
     profit: row.profit === null ? null : Number(row.profit), status: row.status, messages: Array.isArray(row.messages) ? row.messages : [], syncedAt: row.synced_at,
   };
@@ -1352,7 +1353,7 @@ function toProfitRow(row: ProfitAnalysisRow): ProfitAnalysisDetailRow {
   return {
     id: row.id, run_id: row.runId, shop_name: row.shopName, sku: row.sku, product_name: row.productName, image_url: row.imageUrl,
     latest_order_date: row.latestOrderDate || null, selling_price: row.sellingPrice, purchase_cost_rmb: row.purchaseCostRmb, purchase_cost_zar: row.purchaseCostZar,
-    unit_cbm: row.unitCbm, sea_freight_cost: row.seaFreightCost, warehouse_fee: row.warehouseFee, total_fees: row.totalFees,
+    unit_cbm: row.unitCbm, sea_freight_cost: row.seaFreightCost, domestic_freight_cost: row.domesticFreightCost, warehouse_fee: row.warehouseFee, total_fees: row.totalFees,
     profit: row.profit, status: row.status, messages: row.messages, synced_at: row.syncedAt,
   };
 }
