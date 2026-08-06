@@ -1595,6 +1595,20 @@ tbody tr:last-child td {
 .monthly-profit-clickable-metric:not(:disabled):hover { border-color: #167d70; background: #f0fdfa; }
 .monthly-return-detail-table { margin: 14px 0; max-height: 440px; }
 .monthly-return-detail-table table { min-width: 1750px; }
+.monthly-date-control { min-width: 265px !important; }
+.date-range-picker { position: relative; }
+.date-range-trigger { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 36px; background: #fff; border: 1px solid #aebbc5; color: #17212b; font-weight: 400; }
+.date-range-popover { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; width: 310px; padding: 14px; border: 1px solid #d5dde3; border-radius: 8px; background: #fff; box-shadow: 0 12px 30px rgb(15 23 42 / 18%); }
+.date-range-month-nav { display: grid; grid-template-columns: 36px 1fr 36px; align-items: center; margin-bottom: 10px; text-align: center; }
+.date-range-month-nav button { border: 0; background: transparent; font-size: 20px; }
+.date-range-weekdays, .date-range-days { display: grid; grid-template-columns: repeat(7, 1fr); }
+.date-range-weekdays span { padding: 7px 0; color: #6b7280; text-align: center; }
+.date-range-days button { min-width: 0; height: 34px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.date-range-days button.in-range { background: #e0f2fe; }
+.date-range-days button.selected { border-radius: 7px; background: #1683ff; color: #fff; }
+.date-range-days button:disabled { color: #c3c8ce; cursor: not-allowed; }
+.date-range-days button:not(:disabled):hover { background: #dbeafe; color: #17212b; }
+.date-range-days button.selected:hover { background: #1683ff; color: #fff; }
 .profit-analysis-table-wrap { max-height: calc(100vh - 330px); }
 .profit-analysis-table { min-width: 1700px; }
 .profit-analysis-table thead th { position: sticky; top: 0; z-index: 2; }

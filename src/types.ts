@@ -390,6 +390,8 @@ export type MonthlyProfitSummary = {
   id: string;
   shopName: string;
   month: string;
+  dateFrom: string;
+  dateTo: string;
   dataCutoffDate: string;
   isCurrentMonth: boolean;
   salesRevenue: number;

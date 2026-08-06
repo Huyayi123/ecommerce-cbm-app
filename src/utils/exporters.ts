@@ -606,7 +606,7 @@ export function exportProfitAnalysisRows(rows: ProfitAnalysisRow[], shopName: st
 export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: MonthlyProfitDetail[], salesDetails: MonthlyProfitSaleDetail[] = [], returnDetails: MonthlyProfitReturnDetail[] = []): void {
   const workbook = XLSX.utils.book_new();
   const summaryRows = [{
-    店铺: summary.shopName, 月份: summary.month, 数据截止日: summary.dataCutoffDate,
+    店铺: summary.shopName, 统计开始日期: summary.dateFrom, 统计结束日期: summary.dateTo,
     销售额: summary.salesRevenue, 销售数量: summary.salesQuantity, 销售利润: summary.salesProfit,
     退货数量: summary.returnQuantity, 退货基础损失: summary.returnProfitReversal, 退货额外损失: summary.returnNetFees,
     广告费用: summary.advertisingCost, 人员工资: summary.salaryCost, 最终利润: summary.finalProfit,
@@ -650,7 +650,7 @@ export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: Mont
     returnSheet['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 48 }, { wch: 16 }, ...Array(8).fill({ wch: 16 }), { wch: 36 }];
     XLSX.utils.book_append_sheet(workbook, returnSheet, '退货逐笔明细');
   }
-  XLSX.writeFile(workbook, `${summary.shopName}-${summary.month}-月度利润.xlsx`);
+  XLSX.writeFile(workbook, `${summary.shopName}-${summary.dateFrom}至${summary.dateTo}-月度利润.xlsx`);
 }
 export function exportBatchPurchaseOrder(records: PurchaseRecord[], format: ExportFormat): void {
   const exportRows = [...records]

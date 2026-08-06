@@ -960,6 +960,8 @@ create table if not exists public.monthly_profit_summaries (
   id text primary key,
   shop_name text not null,
   month text not null,
+  date_from date,
+  date_to date,
   data_cutoff_date date not null,
   is_current_month boolean not null default false,
   sales_revenue numeric not null default 0,
@@ -977,11 +979,23 @@ create table if not exists public.monthly_profit_summaries (
   status text not null check (status in ('complete', 'incomplete')),
   note text,
   created_by text,
-  updated_at timestamptz not null default now(),
-  unique (shop_name, month)
+  updated_at timestamptz not null default now()
 );
 
 alter table public.monthly_profit_summaries add column if not exists salary_cost numeric not null default 0;
+alter table public.monthly_profit_summaries add column if not exists date_from date;
+alter table public.monthly_profit_summaries add column if not exists date_to date;
+update public.monthly_profit_summaries
+set date_from = coalesce(date_from, (month || '-01')::date),
+    date_to = coalesce(date_to, case
+      when data_cutoff_date between (month || '-01')::date and ((month || '-01')::date + interval '1 month - 1 day')::date then data_cutoff_date
+      else ((month || '-01')::date + interval '1 month - 1 day')::date
+    end)
+where date_from is null or date_to is null;
+alter table public.monthly_profit_summaries alter column date_from set not null;
+alter table public.monthly_profit_summaries alter column date_to set not null;
+alter table public.monthly_profit_summaries drop constraint if exists monthly_profit_summaries_shop_name_month_key;
+create unique index if not exists monthly_profit_summaries_shop_range_idx on public.monthly_profit_summaries (shop_name, date_from, date_to);
 
 alter table public.monthly_profit_summaries enable row level security;
 drop policy if exists "owner select monthly profit" on public.monthly_profit_summaries;

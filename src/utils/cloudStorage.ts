@@ -196,7 +196,7 @@ type AdAnalysisDetailRow = {
 
 type ProfitAnalysisRunRow = { id: string; shop_name: string; created_at: string; created_by: string | null; row_count: number | null; is_complete: boolean | null };
 type MonthlyProfitSummaryRow = {
-  id: string; shop_name: string; month: string; data_cutoff_date: string; is_current_month: boolean;
+  id: string; shop_name: string; month: string; date_from?: string | null; date_to?: string | null; data_cutoff_date: string; is_current_month: boolean;
   sales_revenue: number; sales_quantity: number; sales_profit: number; return_quantity: number;
   return_profit_reversal: number; return_net_fees: number; advertising_cost: number; salary_cost?: number | null; final_profit: number;
   missing_sales_quantity: number; missing_sales_revenue: number; missing_return_quantity: number;
@@ -1430,7 +1430,7 @@ export async function saveProfitAnalysisRun(run: ProfitAnalysisRun): Promise<voi
 
 function mapMonthlyProfitSummary(row: MonthlyProfitSummaryRow): MonthlyProfitSummary {
   return {
-    id: row.id, shopName: row.shop_name, month: row.month, dataCutoffDate: row.data_cutoff_date,
+    id: row.id, shopName: row.shop_name, month: row.month, dateFrom: row.date_from ?? `${row.month}-01`, dateTo: row.date_to ?? row.data_cutoff_date, dataCutoffDate: row.data_cutoff_date,
     isCurrentMonth: row.is_current_month, salesRevenue: Number(row.sales_revenue), salesQuantity: Number(row.sales_quantity),
     salesProfit: Number(row.sales_profit), returnQuantity: Number(row.return_quantity), returnProfitReversal: Number(row.return_profit_reversal),
     returnNetFees: Number(row.return_net_fees), advertisingCost: Number(row.advertising_cost), salaryCost: Number(row.salary_cost ?? 0), finalProfit: Number(row.final_profit),
@@ -1450,14 +1450,14 @@ export async function fetchMonthlyProfitSummaries(): Promise<MonthlyProfitSummar
 
 export async function upsertMonthlyProfitSummary(summary: MonthlyProfitSummary): Promise<void> {
   const { error } = await requireSupabase().from('monthly_profit_summaries').upsert({
-    id: summary.id, shop_name: summary.shopName, month: summary.month, data_cutoff_date: summary.dataCutoffDate,
+    id: summary.id, shop_name: summary.shopName, month: summary.month, date_from: summary.dateFrom, date_to: summary.dateTo, data_cutoff_date: summary.dataCutoffDate,
     is_current_month: summary.isCurrentMonth, sales_revenue: summary.salesRevenue, sales_quantity: summary.salesQuantity,
     sales_profit: summary.salesProfit, return_quantity: summary.returnQuantity, return_profit_reversal: summary.returnProfitReversal,
     return_net_fees: summary.returnNetFees, advertising_cost: summary.advertisingCost, salary_cost: summary.salaryCost, final_profit: summary.finalProfit,
     missing_sales_quantity: summary.missingSalesQuantity, missing_sales_revenue: summary.missingSalesRevenue,
     missing_return_quantity: summary.missingReturnQuantity, status: summary.status, note: summary.note,
     created_by: summary.createdBy, updated_at: summary.updatedAt,
-  }, { onConflict: 'shop_name,month' });
+  }, { onConflict: 'shop_name,date_from,date_to' });
   if (error) throwSupabaseError(error);
 }
 

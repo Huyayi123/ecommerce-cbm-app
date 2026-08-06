@@ -27,6 +27,17 @@ export function monthlyProfitRange(month: string, now = new Date()) {
   return { startDate, endDate, dataCutoffDate, isCurrentMonth: month === today.slice(0, 7), hasEligibleDates: endDate >= startDate };
 }
 
+export function monthlyProfitMaxDate(now = new Date()): string {
+  const cutoffDate = utcDate(sastToday(now));
+  cutoffDate.setUTCDate(cutoffDate.getUTCDate() - 7);
+  return dateText(cutoffDate);
+}
+
+export function defaultMonthlyProfitDateRange(now = new Date()): { dateFrom: string; dateTo: string } {
+  const dateTo = monthlyProfitMaxDate(now);
+  return { dateFrom: `${dateTo.slice(0, 7)}-01`, dateTo };
+}
+
 export function returnExtraLoss(value: TakealotReturn): { amount: number; unknownTypes: string[] } {
   const unknownTypes: string[] = [];
   const netAmount = value.transactions.reduce((sum, transaction) => {
@@ -60,6 +71,7 @@ export function latestSettledFeeSalesBySku(sales: TakealotSale[]): Map<string, T
 
 export function calculateMonthlyProfit(input: {
   shopName: string; month: string; dataCutoffDate: string; isCurrentMonth: boolean;
+  dateFrom: string; dateTo: string;
   sales: TakealotSale[]; returns: TakealotReturn[]; originalSales: TakealotSale[]; feeFallbackSales: TakealotSale[];
   skuItems: SkuItem[]; advertisingCost: number; salaryCost: number; note: string; createdBy: string; updatedAt?: string;
 }): { summary: MonthlyProfitSummary; details: MonthlyProfitDetail[]; salesDetails: MonthlyProfitSaleDetail[]; returnDetails: MonthlyProfitReturnDetail[] } {
@@ -175,7 +187,7 @@ export function calculateMonthlyProfit(input: {
   })).sort((a, b) => b.netProfit - a.netProfit);
   const status = missingSalesQuantity > 0 || missingReturnQuantity > 0 || hasUnknownReturnTransactions ? 'incomplete' : 'complete';
   const summary: MonthlyProfitSummary = {
-    id: `${store.toLowerCase()}-${input.month}`, shopName: store, month: input.month, dataCutoffDate: input.dataCutoffDate, isCurrentMonth: input.isCurrentMonth,
+    id: `${store.toLowerCase()}-${input.dateFrom}-${input.dateTo}`, shopName: store, month: input.month, dateFrom: input.dateFrom, dateTo: input.dateTo, dataCutoffDate: input.dataCutoffDate, isCurrentMonth: input.isCurrentMonth,
     salesRevenue: round(salesRevenue, 2), salesQuantity, salesProfit: round(salesProfit, 2), returnQuantity, returnProfitReversal: round(returnProfitReversal, 2), returnNetFees: round(returnNetFees, 2),
     advertisingCost: round(input.advertisingCost, 2), salaryCost: round(input.salaryCost, 2), finalProfit: round(salesProfit - returnProfitReversal - returnNetFees - input.advertisingCost - input.salaryCost, 2),
     missingSalesQuantity, missingSalesRevenue: round(missingSalesRevenue, 2), missingReturnQuantity, status, note: input.note.trim(), createdBy: input.createdBy, updatedAt: input.updatedAt ?? new Date().toISOString(),

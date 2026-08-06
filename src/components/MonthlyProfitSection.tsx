@@ -1,7 +1,8 @@
 import { Fragment, useMemo, useState } from 'react';
 import type { AppProfile, MonthlyProfitDetail, MonthlyProfitReturnDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, SkuItem, TakealotSale } from '../types';
+import { DateRangePicker } from './DateRangePicker';
 import { exportMonthlyProfit } from '../utils/exporters';
-import { calculateMonthlyProfit, latestSettledFeeSalesBySku, monthlyProfitRange, sastToday } from '../utils/monthlyProfit';
+import { calculateMonthlyProfit, defaultMonthlyProfitDateRange, latestSettledFeeSalesBySku, monthlyProfitMaxDate, sastToday } from '../utils/monthlyProfit';
 import { fetchTakealotReturns } from '../utils/takealotReturns';
 import { fetchTakealotSales, fetchTakealotSalesByOrder } from '../utils/takealotSales';
 
@@ -25,8 +26,10 @@ async function fetchOriginalOrders(shopName: string, orderIds: string[], onProgr
 }
 
 export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onSave, onRefresh }: Props) {
+  const initialRange = useMemo(() => defaultMonthlyProfitDateRange(), []);
   const [shopName, setShopName] = useState(stores[0]);
-  const [month, setMonth] = useState(sastToday().slice(0, 7));
+  const [dateFrom, setDateFrom] = useState(initialRange.dateFrom);
+  const [dateTo, setDateTo] = useState(initialRange.dateTo);
   const [advertisingCost, setAdvertisingCost] = useState('');
   const [salaryCost, setSalaryCost] = useState('');
   const [note, setNote] = useState('');
@@ -38,8 +41,8 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
   const [currentSummary, setCurrentSummary] = useState<MonthlyProfitSummary | null>(null);
   const [message, setMessage] = useState('');
   const [syncing, setSyncing] = useState(false);
-  const savedSummary = useMemo(() => summaries.find((item) => item.shopName === shopName && item.month === month) ?? null, [month, shopName, summaries]);
-  const displayed = currentSummary?.shopName === shopName && currentSummary.month === month ? currentSummary : savedSummary;
+  const savedSummary = useMemo(() => summaries.find((item) => item.shopName === shopName && item.dateFrom === dateFrom && item.dateTo === dateTo) ?? null, [dateFrom, dateTo, shopName, summaries]);
+  const displayed = currentSummary?.shopName === shopName && currentSummary.dateFrom === dateFrom && currentSummary.dateTo === dateTo ? currentSummary : savedSummary;
   const salesBySku = useMemo(() => {
     const result = new Map<string, MonthlyProfitSaleDetail[]>();
     for (const row of salesDetails) {
@@ -54,14 +57,16 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
     const salary = salaryCost.trim() === '' ? 0 : Number(salaryCost);
     if (advertisingCost.trim() === '' || !Number.isFinite(adCost) || adCost < 0) { setMessage('广告费用必须明确填写 0 或正数。'); return; }
     if (!Number.isFinite(salary) || salary < 0) { setMessage('人员工资必须留空或填写 0 以上的数字。'); return; }
-    const range = monthlyProfitRange(month);
-    if (!range.hasEligibleDates) { setMessage(`该月暂无可统计数据；当前数据截止日为 ${range.dataCutoffDate}。`); return; }
+    const maxDate = monthlyProfitMaxDate();
+    if (!dateFrom || !dateTo) { setMessage('请选择完整的开始日期和结束日期。'); return; }
+    if (dateFrom.slice(0, 7) !== dateTo.slice(0, 7)) { setMessage('开始日期和结束日期必须在同一个自然月。'); return; }
+    if (dateFrom > dateTo || dateTo > maxDate) { setMessage('统计日期范围无效或尚未达到 7 天结算期。'); return; }
     try {
       setSyncing(true); setDetails([]); setSalesDetails([]); setReturnDetails([]); setShowReturnDetails(false); setExpandedSkus(new Set()); setCurrentSummary(null);
-      setMessage(`正在读取 ${range.startDate} 至 ${range.endDate} 的销售和退货数据...`);
+      setMessage(`正在读取 ${dateFrom} 至 ${dateTo} 的销售和退货数据...`);
       const [salesResult, returns] = await Promise.all([
-        fetchTakealotSales(shopName, (pages, rows) => setMessage(`销售明细：第 ${pages} 页，已读取 ${rows} 条`), { dateFrom: range.startDate, dateTo: range.endDate }),
-        fetchTakealotReturns(shopName, range.startDate, range.endDate),
+        fetchTakealotSales(shopName, (pages, rows) => setMessage(`销售明细：第 ${pages} 页，已读取 ${rows} 条`), { dateFrom, dateTo }),
+        fetchTakealotReturns(shopName, dateFrom, dateTo),
       ]);
       const pairKey = (orderId: string, sku: string) => `${orderId}|${sku.trim().toUpperCase()}`;
       const existingPairs = new Set(salesResult.rows.map((sale) => pairKey(sale.orderId, sale.sku)));
@@ -73,13 +78,12 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
       const needsHistoricalFallback = returns.some((row) => !settledExactPairs.has(pairKey(row.orderId, row.sku)) && !loadedFallbacks.has(row.sku.trim().toUpperCase()));
       let feeFallbackSales: TakealotSale[] = [];
       if (needsHistoricalFallback) {
-        const historicalStart = new Date(`${range.endDate}T00:00:00Z`);
+        const historicalStart = new Date(`${dateTo}T00:00:00Z`);
         historicalStart.setUTCDate(historicalStart.getUTCDate() - 179);
-        const dateFrom = historicalStart.toISOString().slice(0, 10);
-        setMessage(`正在读取 ${dateFrom} 至 ${range.endDate} 的历史销售，用于匹配退货 Total Fees...`);
-        feeFallbackSales = (await fetchTakealotSales(shopName, (pages, rows) => setMessage(`历史销售费用：第 ${pages} 页，已读取 ${rows} 条`), { dateFrom, dateTo: range.endDate })).rows;
+        setMessage(`正在读取 ${historicalStart.toISOString().slice(0, 10)} 至 ${dateTo} 的历史销售，用于匹配退货 Total Fees...`);
+        feeFallbackSales = (await fetchTakealotSales(shopName, (pages, rows) => setMessage(`历史销售费用：第 ${pages} 页，已读取 ${rows} 条`), { dateFrom: historicalStart.toISOString().slice(0, 10), dateTo })).rows;
       }
-      const result = calculateMonthlyProfit({ shopName, month, dataCutoffDate: range.endDate, isCurrentMonth: range.isCurrentMonth,
+      const result = calculateMonthlyProfit({ shopName, month: dateFrom.slice(0, 7), dateFrom, dateTo, dataCutoffDate: dateTo, isCurrentMonth: dateFrom.slice(0, 7) === sastToday().slice(0, 7),
         sales: salesResult.rows, returns, originalSales, feeFallbackSales, skuItems, advertisingCost: adCost, salaryCost: salary, note, createdBy: profile.email });
       await onSave(result.summary);
       setCurrentSummary(result.summary); setDetails(result.details); setSalesDetails(result.salesDetails); setReturnDetails(result.returnDetails);
@@ -92,17 +96,17 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
 
   return <section className="monthly-profit-section">
     <div className="section-heading"><div><h2>月度利润</h2><p>按南非自然月统计销售、退货、广告费用和人员工资；数据统一延迟 7 天结算。</p></div>
-      <div className="export-actions"><button type="button" disabled={!displayed} onClick={() => displayed && exportMonthlyProfit(displayed, currentSummary === displayed ? details : [], currentSummary === displayed ? salesDetails : [], currentSummary === displayed ? returnDetails : [])}>导出 Excel</button><button className="primary" type="button" disabled={syncing} onClick={() => void sync()}>{syncing ? '同步中...' : '同步月度利润'}</button></div></div>
+      <div className="export-actions"><button type="button" disabled={!displayed} onClick={() => displayed && exportMonthlyProfit(displayed, currentSummary === displayed ? details : [], currentSummary === displayed ? salesDetails : [], currentSummary === displayed ? returnDetails : [])}>导出 Excel</button><button className="primary" type="button" disabled={syncing || !dateFrom || !dateTo} onClick={() => void sync()}>{syncing ? '同步中...' : '同步月度利润'}</button></div></div>
     <div className="profit-analysis-controls">
       <label>店铺<select value={shopName} onChange={(event) => { setShopName(event.target.value); setCurrentSummary(null); setDetails([]); setSalesDetails([]); setReturnDetails([]); setShowReturnDetails(false); setExpandedSkus(new Set()); }}>{stores.map((store) => <option key={store}>{store}</option>)}</select></label>
-      <label>月份<input type="month" value={month} onChange={(event) => { setMonth(event.target.value); setCurrentSummary(null); setDetails([]); setSalesDetails([]); setReturnDetails([]); setShowReturnDetails(false); setExpandedSkus(new Set()); }} /></label>
+      <label className="monthly-date-control">统计日期<DateRangePicker startDate={dateFrom} endDate={dateTo} maxDate={monthlyProfitMaxDate()} onChange={(start, end) => { setDateFrom(start); setDateTo(end); setCurrentSummary(null); setDetails([]); setSalesDetails([]); setReturnDetails([]); setShowReturnDetails(false); setExpandedSkus(new Set()); }} /></label>
       <label>广告费用 (ZAR)<input type="number" min="0" step="0.01" value={advertisingCost} onChange={(event) => setAdvertisingCost(event.target.value)} placeholder="必须填写，0 也要填写" /></label>
       <label>人员工资 (ZAR)<input type="number" min="0" step="0.01" value={salaryCost} onChange={(event) => setSalaryCost(event.target.value)} placeholder="选填，留空按 0" /></label>
       <label>备注<input value={note} onChange={(event) => setNote(event.target.value)} /></label>
     </div>
     {message && <div className="inline-notice">{message}</div>}
     {displayed && <>
-      <div className={`inline-notice ${displayed.status === 'incomplete' ? 'warning' : ''}`}>{displayed.isCurrentMonth ? '月份未结束；' : ''}数据截止日：{displayed.dataCutoffDate}；状态：{displayed.status === 'complete' ? '完整' : '不完整（最终利润为已知数据结果）'}</div>
+      <div className={`inline-notice ${displayed.status === 'incomplete' ? 'warning' : ''}`}>状态：{displayed.status === 'complete' ? '完整' : '不完整（最终利润为已知数据结果）'}</div>
       <div className="repricing-summary">
         <div className="metric"><span>销售额 / 数量</span><strong>{money(displayed.salesRevenue)} / {displayed.salesQuantity}</strong></div><div className="metric"><span>销售利润</span><strong>{money(displayed.salesProfit)}</strong></div>
         <div className="metric"><span>退货数量</span><strong>{displayed.returnQuantity}</strong></div><button type="button" className="metric monthly-profit-clickable-metric" disabled={!returnDetails.length} onClick={() => setShowReturnDetails((value) => !value)}><span>退货基础损失（点击查看明细）</span><strong>{money(displayed.returnProfitReversal)}</strong></button>
