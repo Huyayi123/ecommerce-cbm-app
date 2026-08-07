@@ -83,7 +83,7 @@ export function calculateMonthlyProfit(input: {
     const existing = details.get(key);
     if (existing) return existing;
     const item = skuItems.get(key);
-    const next: MonthlyProfitDetail = { sku, productName: item?.englishName || item?.productName || '', salesQuantity: 0, salesRevenue: 0, salesProfit: 0, returnQuantity: 0, returnProfitReversal: 0, returnNetFees: 0, netProfit: 0, messages: [] };
+    const next: MonthlyProfitDetail = { sku, productName: item?.englishName || item?.productName || '', imageUrl: item?.imageUrl || '', salesQuantity: 0, salesRevenue: 0, salesProfit: 0, returnQuantity: 0, returnProfitReversal: 0, returnNetFees: 0, netProfit: 0, messages: [] };
     details.set(key, next);
     return next;
   };

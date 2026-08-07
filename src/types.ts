@@ -338,6 +338,7 @@ export type TakealotReturn = {
 export type MonthlyProfitDetail = {
   sku: string;
   productName: string;
+  imageUrl: string;
   salesQuantity: number;
   salesRevenue: number;
   salesProfit: number;
