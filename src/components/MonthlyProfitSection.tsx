@@ -142,6 +142,7 @@ export function MonthlyProfitSection({ profile, skuItems, stores, summaries, onS
       <label>人员工资 (ZAR)<input type="number" min="0" step="0.01" value={salaryCost} onChange={(event) => setSalaryCost(event.target.value)} placeholder="选填，留空按 0" /></label>
       <label>备注<input value={note} onChange={(event) => setNote(event.target.value)} /></label>
     </div>
+    <div className="inline-notice warning">为了保证数据尽可能完整，只能统计 7 天以前的数据。</div>
     {message && <div className="inline-notice">{message}</div>}
     {displayed && <>
       <div className={`inline-notice ${displayed.status === 'incomplete' ? 'warning' : ''}`}>状态：{displayed.status === 'complete' ? '完整' : '不完整（最终利润为已知数据结果）'}</div>
