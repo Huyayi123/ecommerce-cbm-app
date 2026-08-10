@@ -11,6 +11,7 @@ type Props = {
   onDeleteRecords?: (ids: string[]) => void | Promise<void>;
   canEditData?: boolean;
   canDeleteData?: boolean;
+  canSaveMissingSkuHistory?: boolean;
 };
 
 type DraftRecord = Omit<PurchaseRecord, 'totalAmount'>;
@@ -164,13 +165,14 @@ function skuKey(value: string): string {
   return value.trim().toUpperCase();
 }
 
-export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRecords, canEditData = true, canDeleteData = true }: Props) {
+export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRecords, canEditData = true, canDeleteData = true, canSaveMissingSkuHistory = false }: Props) {
   const [draft, setDraft] = useState<DraftRecord>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchDraft, setSearchDraft] = useState('');
   const [page, setPage] = useState(1);
   const [sortNowMs, setSortNowMs] = useState(() => Date.now());
+  const canSaveDraft = Boolean(draft.sku.trim()) || Boolean(editingId && canSaveMissingSkuHistory);
   const [filters, setFilters] = useState({
     manufacturerName: '',
     shopName: '',
@@ -338,7 +340,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
   }
 
   function saveRecord() {
-    if (!canEditData || !draft.sku.trim()) return;
+    if (!canEditData || !canSaveDraft) return;
     const record = withTotalAmount({ ...draft, id: editingId ?? crypto.randomUUID(), sku: draft.sku.trim() });
     if (editingId) {
       onChange(records.map((item) => (item.id === editingId ? record : item)));
@@ -520,7 +522,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
           <label>状态<select value={draft.status} onChange={(event) => patchDraft('status', event.target.value as PurchaseStatus)}><option value="pending">待采购</option><option value="in_transit">海运在途</option><option value="arrived">已到货</option></select></label>
           <label className="wide">备注<input value={draft.note} onChange={(event) => patchDraft('note', event.target.value)} /></label>
           <div className="form-actions">
-            <button className="primary" type="button" onClick={saveRecord} disabled={!draft.sku.trim()}>{editingId ? '保存修改' : '新增采购记录'}</button>
+            <button className="primary" type="button" onClick={saveRecord} disabled={!canSaveDraft}>{editingId ? '保存修改' : '新增采购记录'}</button>
             <button type="button" onClick={resetDraft}>清空</button>
           </div>
         </div>}
