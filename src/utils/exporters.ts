@@ -351,7 +351,7 @@ export function exportSkuItems(items: SkuItem[], format: ExportFormat): void {
     items.forEach((item, index) => {
       const formula = imageFormulaFor(item.imageUrl);
       if (!formula) return;
-      const address = XLSX.utils.encode_cell({ r: index + 1, c: 4 });
+      const address = XLSX.utils.encode_cell({ r: index + 1, c: 5 });
       worksheet[address] = { t: 's', f: formula, v: '' };
     });
     worksheet['!cols'] = [
