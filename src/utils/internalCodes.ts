@@ -24,24 +24,30 @@ function skuSortKey(item: SkuItem): string {
 }
 
 export function ensureInternalCodes(items: SkuItem[]): SkuItem[] {
-  const used = new Set<number>();
+  const reserved = new Set<number>();
   for (const item of items) {
     const code = parseInternalCode(item.internalCode);
-    if (code > 0) used.add(code);
+    if (code > 0) reserved.add(code);
   }
 
   let nextCode = 1;
   const nextAvailableCode = () => {
-    while (used.has(nextCode) && nextCode <= INTERNAL_CODE_LIMIT) nextCode += 1;
+    while (reserved.has(nextCode) && nextCode <= INTERNAL_CODE_LIMIT) nextCode += 1;
     if (nextCode > INTERNAL_CODE_LIMIT) throw new Error('内部编号已超过 10000，请先清理重复 SKU 或扩展编号规则。');
-    used.add(nextCode);
+    reserved.add(nextCode);
     return formatInternalCode(nextCode);
   };
 
+  const claimed = new Set<number>();
   const assignedById = new Map<string, string>();
   for (const item of [...items].sort((left, right) => skuSortKey(left).localeCompare(skuSortKey(right), 'zh-Hans-CN', { numeric: true }))) {
     const existing = parseInternalCode(item.internalCode);
-    assignedById.set(item.id, existing > 0 ? formatInternalCode(existing) : nextAvailableCode());
+    if (existing > 0 && !claimed.has(existing)) {
+      claimed.add(existing);
+      assignedById.set(item.id, formatInternalCode(existing));
+    } else {
+      assignedById.set(item.id, nextAvailableCode());
+    }
   }
 
   return items.map((item) => ({ ...item, internalCode: assignedById.get(item.id) ?? item.internalCode }));

@@ -311,7 +311,7 @@ function mergeSkuItemsForSave(items: SkuItem[], remote: SkuItem[]): SkuItem[] {
     merged.set(key, {
       ...item,
       id: baseItem?.id ?? item.id,
-      internalCode: item.internalCode.trim() || baseItem?.internalCode || '',
+      internalCode: remoteItem?.internalCode || item.internalCode.trim() || baseItem?.internalCode || '',
       manufacturerName: item.manufacturerName.trim() || baseItem?.manufacturerName || '',
       sku: item.sku.trim() || baseItem?.sku || '',
       tsin: item.tsin.trim() || baseItem?.tsin || '',
