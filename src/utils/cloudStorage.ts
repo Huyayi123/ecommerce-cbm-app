@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, LogisticsBatch, LogisticsBatchItem, LogisticsBatchStatus, MonthlyProfitSummary, ProfitAnalysisRow, ProfitAnalysisRun, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { findMatchingSkuItem, getSkuMatchKey } from './calculations';
-import { ensureInternalCodes } from './internalCodes';
+import { assignNewInternalCodes, ensureInternalCodes } from './internalCodes';
 import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
 import { frontendSkuToSupabase, supabaseSkuToFrontend, type SupabaseSkuRow } from './skuFieldMapping';
 
@@ -311,7 +311,7 @@ function mergeSkuItemsForSave(items: SkuItem[], remote: SkuItem[]): SkuItem[] {
     merged.set(key, {
       ...item,
       id: baseItem?.id ?? item.id,
-      internalCode: remoteItem?.internalCode || item.internalCode.trim() || baseItem?.internalCode || '',
+      internalCode: remoteItem ? remoteItem.internalCode : item.internalCode.trim() || baseItem?.internalCode || '',
       manufacturerName: item.manufacturerName.trim() || baseItem?.manufacturerName || '',
       sku: item.sku.trim() || baseItem?.sku || '',
       tsin: item.tsin.trim() || baseItem?.tsin || '',
@@ -769,6 +769,10 @@ export async function updateProfileBinding(profile: AppProfile): Promise<AppProf
 }
 
 export async function fetchSkuItems(): Promise<SkuItem[]> {
+  return ensureInternalCodes(await fetchRawSkuItems());
+}
+
+async function fetchRawSkuItems(): Promise<SkuItem[]> {
   const client = requireSupabase();
   const pageSize = 1000;
   const rows: SupabaseSkuRow[] = [];
@@ -784,13 +788,13 @@ export async function fetchSkuItems(): Promise<SkuItem[]> {
     if (!data || data.length < pageSize) break;
   }
 
-  return ensureInternalCodes(rows.map((row) => supabaseSkuToFrontend(row)));
+  return rows.map((row) => supabaseSkuToFrontend(row));
 }
 
 export async function replaceSkuItems(items: SkuItem[]): Promise<void> {
   const client = requireSupabase();
-  const remote = await fetchSkuItems();
-  const normalizedItems = ensureInternalCodes(mergeSkuItemsForSave(items, remote));
+  const remote = await fetchRawSkuItems();
+  const normalizedItems = assignNewInternalCodes(mergeSkuItemsForSave(items, remote), remote);
   const nextIds = new Set(normalizedItems.map((item) => item.id));
   const deleteIds = remote.map((item) => item.id).filter((id) => !nextIds.has(id));
 
