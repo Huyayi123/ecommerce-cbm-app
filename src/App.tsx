@@ -584,8 +584,6 @@ function App() {
           onRowsChange={(rows) => void persistPurchaseRows(rows)}
           onFileNameChange={setFileName}
           onRecordsCreate={appendPurchaseRecords}
-          purchaseRecords={purchaseRecords}
-          savedSuggestions={savedSalesSuggestions}
           canEditData={true}
         />
       )}

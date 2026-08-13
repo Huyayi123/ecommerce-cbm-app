@@ -205,9 +205,6 @@ export type CalculationRow = {
   imageUrl: string;
   shopName: string;
   buyerName: string;
-  monthlySales: number;
-  localStockQuantity: number;
-  inTransitQuantity: number;
   purchaseQuantity: number | null;
   purchasePrice: number | null;
   totalAmount: number | null;

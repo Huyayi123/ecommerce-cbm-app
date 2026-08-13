@@ -2,10 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { PurchaseUploader } from '../components/PurchaseUploader';
 import { ResultsTable } from '../components/ResultsTable';
 import { SummaryCards } from '../components/SummaryCards';
-import type { CalculationRow, PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from '../types';
+import type { CalculationRow, PurchaseRecord, PurchaseRow, SkuItem } from '../types';
 import { calculateRows, findMatchingSkuItem, getSkuMatchKey, summarize } from '../utils/calculations';
 import { round } from '../utils/number';
-import { effectivePurchaseQuantity, mixedQuantityForSku } from '../utils/purchaseRecords';
 
 type Props = {
   skuItems: SkuItem[];
@@ -14,14 +13,8 @@ type Props = {
   onRowsChange: (rows: PurchaseRow[]) => void;
   onFileNameChange: (fileName: string) => void;
   onRecordsCreate: (records: PurchaseRecord[]) => Promise<void>;
-  purchaseRecords: PurchaseRecord[];
-  savedSuggestions: SalesSuggestionRow[];
   canEditData?: boolean;
 };
-
-function observationKey(shopName: string, sku: string): string {
-  return `${shopName.trim().toLowerCase()}|${sku.trim().toUpperCase()}`;
-}
 
 function createPurchaseBatch() {
   const today = new Date();
@@ -96,8 +89,6 @@ export function ContainerCalculatorPage({
   onRowsChange,
   onFileNameChange,
   onRecordsCreate,
-  purchaseRecords,
-  savedSuggestions,
   canEditData = true,
 }: Props) {
   const [duplicateMessage, setDuplicateMessage] = useState('');
@@ -106,29 +97,7 @@ export function ContainerCalculatorPage({
   const [isCreatingTasks, setIsCreatingTasks] = useState(false);
   const isCreatingTasksRef = useRef(false);
   const [workingRows, setWorkingRows] = useState<PurchaseRow[]>(purchaseRows);
-  const calculationRows = useMemo(() => {
-    const suggestionByKey = new Map(savedSuggestions.map((row) => [observationKey(row.shopName, row.sku), row]));
-    const inTransitByKey = new Map<string, number>();
-    for (const record of purchaseRecords) {
-      if (record.status !== 'in_transit') continue;
-      if (record.sku.trim()) {
-        const key = observationKey(record.shopName, record.sku);
-        inTransitByKey.set(key, (inTransitByKey.get(key) ?? 0) + effectivePurchaseQuantity(record) + mixedQuantityForSku(record, record.sku));
-      }
-      for (const group of record.mixedGroups) {
-        for (const line of group.lines) {
-          if (!line.sku.trim() || line.sku.trim().toUpperCase() === record.sku.trim().toUpperCase()) continue;
-          const key = observationKey(record.shopName, line.sku);
-          inTransitByKey.set(key, (inTransitByKey.get(key) ?? 0) + line.quantity);
-        }
-      }
-    }
-    return calculateRows(workingRows, skuItems).map((row) => {
-      const key = observationKey(row.shopName, row.sku);
-      const suggestion = suggestionByKey.get(key);
-      return { ...row, monthlySales: suggestion?.monthlySales ?? 0, localStockQuantity: suggestion?.localStockQuantity ?? 0, inTransitQuantity: inTransitByKey.get(key) ?? 0 };
-    });
-  }, [purchaseRecords, savedSuggestions, workingRows, skuItems]);
+  const calculationRows = useMemo(() => calculateRows(workingRows, skuItems), [workingRows, skuItems]);
   const summary = useMemo(() => summarize(calculationRows), [calculationRows]);
   const errorCount = calculationRows.filter((row) => row.status === 'error').length;
   const savableCount = calculationRows.filter((row) => row.status !== 'error' && row.purchaseQuantity && row.purchaseQuantity > 0).length;
