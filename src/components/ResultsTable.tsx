@@ -99,7 +99,10 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
               <th>内部编号</th>
               <th>厂家名</th>
               <th>SKU</th>
-              <th>产品名称</th>
+              <th className="calculation-product-name">产品名称</th>
+              <th>月销量</th>
+              <th>南非本地库存</th>
+              <th>海运在途</th>
               <th>店铺</th>
               <th>采购人</th>
               <th>采购数量</th>
@@ -118,7 +121,10 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
                 <td><strong>{row.internalCode || '-'}</strong></td>
                 <td>{row.manufacturerName || '-'}</td>
                 <td>{row.sku || '-'}</td>
-                <td>{row.productName || '-'}</td>
+                <td className="calculation-product-name">{row.productName || '-'}</td>
+                <td>{row.monthlySales}</td>
+                <td>{row.localStockQuantity}</td>
+                <td>{row.inTransitQuantity}</td>
                 <td>{row.shopName || '-'}</td>
                 <td>{row.buyerName || '-'}</td>
                 <td>
