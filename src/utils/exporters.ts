@@ -96,12 +96,12 @@ function applyMyPurchaseOrderStyles(worksheet: XLSX.WorkSheet, rowCount: number)
   const left = { horizontal: 'left', vertical: 'center', wrapText: true };
 
   for (let row = 1; row <= rowCount; row += 1) {
-    for (let col = 1; col <= 17; col += 1) {
+    for (let col = 1; col <= 18; col += 1) {
       const address = cellRef(row, col);
       if (!worksheet[address]) worksheet[address] = { t: 's', v: '' };
       worksheet[address].s = {
         border: row === 1 ? undefined : border,
-        alignment: col === 1 || col === 3 || col === 4 || col === 16 ? left : center,
+        alignment: col === 1 || col === 4 || col === 5 || col === 17 ? left : center,
         font: row === 1 ? { bold: true } : undefined,
         fill: row === 1 ? { patternType: 'solid', fgColor: { rgb: '92D050' } } : undefined,
       };
@@ -110,6 +110,7 @@ function applyMyPurchaseOrderStyles(worksheet: XLSX.WorkSheet, rowCount: number)
 
   worksheet['!cols'] = [
     { wch: 18 },
+    { wch: 16 },
     { wch: 16 },
     { wch: 34 },
     { wch: 42 },
@@ -134,9 +135,11 @@ function mixedWithText(names: string[]): string {
   return uniqueNames.length > 0 ? `混${uniqueNames.join('、')}` : '';
 }
 
-function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[]): void {
+function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: SkuItem[]): void {
+  const itemsBySku = skuLookup(skuItems);
   const headers = [
     '厂家名',
+    '内部编号',
     'SKU',
     '产品名称',
     '英文名称',
@@ -169,6 +172,7 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[]): void {
 
     rows.push([
       record.manufacturerName,
+      record.internalCode,
       record.sku,
       record.productName,
       record.englishName,
@@ -190,6 +194,7 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[]): void {
     for (const line of mixedLines) {
       rows.push([
         '',
+        itemsBySku.get(skuKey(line.sku))?.internalCode || '',
         line.sku,
         line.productName,
         '',
@@ -212,7 +217,7 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[]): void {
     const endRow = rows.length;
     formulaSections.push({ start: startRow, end: endRow, totalCbm: record.totalCbm, totalWeightKg: record.totalWeightKg });
     if (endRow > startRow) {
-      for (const column of [1, 10, 11, 15, 17]) {
+      for (const column of [1, 11, 12, 16, 18]) {
         merges.push({ s: { r: startRow - 1, c: column - 1 }, e: { r: endRow - 1, c: column - 1 } });
       }
     }
@@ -222,12 +227,12 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[]): void {
   worksheet['!merges'] = merges;
   for (const section of formulaSections) {
     const rowRefs = Array.from({ length: section.end - section.start + 1 }, (_, index) => section.start + index);
-    const amountFormula = rowRefs.map((row) => `G${row}*H${row}`).join('+') + '+' + rowRefs.map((row) => `I${row}`).join('+');
-    const quantityFormulaText = rowRefs.map((row) => `G${row}`).join('+');
-    setFormula(worksheet, section.start, 10, amountFormula);
-    setFormula(worksheet, section.start, 17, quantityFormulaText);
-    worksheet[cellRef(section.start, 11)] = { t: 'n', v: section.totalCbm };
-    if (section.totalWeightKg !== null) worksheet[cellRef(section.start, 15)] = { t: 'n', v: section.totalWeightKg };
+    const amountFormula = rowRefs.map((row) => `H${row}*I${row}`).join('+') + '+' + rowRefs.map((row) => `J${row}`).join('+');
+    const quantityFormulaText = rowRefs.map((row) => `H${row}`).join('+');
+    setFormula(worksheet, section.start, 11, amountFormula);
+    setFormula(worksheet, section.start, 18, quantityFormulaText);
+    worksheet[cellRef(section.start, 12)] = { t: 'n', v: section.totalCbm };
+    if (section.totalWeightKg !== null) worksheet[cellRef(section.start, 16)] = { t: 'n', v: section.totalWeightKg };
   }
   applyMyPurchaseOrderStyles(worksheet, rows.length);
 
@@ -392,9 +397,9 @@ export function exportSkuImportTemplate(): void {
   writeWorkbook(workbook, 'SKU导入模板', 'xlsx');
 }
 
-export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportFormat, moduleName = '采购在途库存'): void {
+export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportFormat, moduleName = '采购在途库存', skuItems: SkuItem[] = []): void {
   if (format === 'xlsx' && isMyPurchaseOrdersExport(moduleName)) {
-    exportMyPurchaseOrdersTemplate(records);
+    exportMyPurchaseOrdersTemplate(records, skuItems);
     return;
   }
 
