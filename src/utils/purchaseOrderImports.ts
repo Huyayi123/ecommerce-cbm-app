@@ -1,4 +1,4 @@
-import type { PurchaseRecord } from '../types';
+import type { PurchaseRecord, PurchaseRecordImport } from '../types';
 import { withPurchaseTotals } from './purchaseRecords';
 
 type ImportMergeResult = {
@@ -36,40 +36,25 @@ function newestRecord(records: PurchaseRecord[]): PurchaseRecord | undefined {
   }, undefined);
 }
 
-function mergeImportedRecord(current: PurchaseRecord, imported: PurchaseRecord): PurchaseRecord {
-  return withPurchaseTotals({
-    ...current,
-    ...imported,
-    id: current.id,
-    buyerName: current.buyerName,
-    assignedBuyerName: current.assignedBuyerName,
-    assignedBuyerEmail: current.assignedBuyerEmail,
-    isConfirmed: current.isConfirmed,
-    purchasePoolId: current.purchasePoolId,
-    purchasePoolName: current.purchasePoolName,
-    purchasePoolDate: current.purchasePoolDate,
-    poolStatus: current.poolStatus,
-    purchaseBatchId: current.purchaseBatchId,
-    purchaseBatchName: current.purchaseBatchName,
-    purchaseBatchDate: current.purchaseBatchDate,
-    estimatedArrivalDate: current.estimatedArrivalDate,
-    status: current.status,
-    containerDate: current.containerDate,
-    logisticsBatchId: current.logisticsBatchId,
-    logisticsConfirmationStatus: current.logisticsConfirmationStatus,
-    logisticsLoadedCartonCount: current.logisticsLoadedCartonCount,
-    logisticsLoadedTailQuantity: current.logisticsLoadedTailQuantity,
-    logisticsLeftCartonCount: current.logisticsLeftCartonCount,
-    logisticsLeftTailQuantity: current.logisticsLeftTailQuantity,
-    logisticsSourceRecordId: current.logisticsSourceRecordId,
-    createdAt: current.createdAt,
-    updatedAt: current.updatedAt,
+function mergeImportedRecord(current: PurchaseRecord, imported: PurchaseRecordImport): PurchaseRecord {
+  const provided = new Set(imported.providedFields);
+  const next = { ...current };
+  for (const field of imported.providedFields) {
+    next[field] = imported.record[field] as never;
+  }
+  const amountInputsChanged = provided.has('purchaseQuantity')
+    || provided.has('confirmedPurchaseQuantity')
+    || provided.has('purchasePrice')
+    || provided.has('freightCost')
+    || provided.has('mixedGroups');
+  return withPurchaseTotals(next, {
+    recalculateAmount: amountInputsChanged && !provided.has('totalAmount'),
   });
 }
 
 export function mergeImportedPurchaseOrders(
   existingRecords: PurchaseRecord[],
-  importedRecords: PurchaseRecord[],
+  importedRecords: PurchaseRecordImport[],
   buyerEmail: string,
 ): ImportMergeResult {
   const normalizedEmail = buyerEmail.trim().toLowerCase();
@@ -90,7 +75,8 @@ export function mergeImportedPurchaseOrders(
     changedById.set(record.id, record);
   };
 
-  for (const imported of importedRecords) {
+  for (const importedEntry of importedRecords) {
+    const imported = importedEntry.record;
     if (!isMatchableSku(imported.sku)) {
       put(imported);
       createdIds.add(imported.id);
@@ -105,7 +91,7 @@ export function mergeImportedPurchaseOrders(
     )));
 
     if (matched) {
-      put(mergeImportedRecord(changedById.get(matched.id) ?? matched, imported));
+      put(mergeImportedRecord(changedById.get(matched.id) ?? matched, importedEntry));
       updatedIds.add(matched.id);
       continue;
     }
@@ -114,7 +100,7 @@ export function mergeImportedPurchaseOrders(
     const createdId = createdByKey.get(key);
     if (createdId) {
       const current = changedById.get(createdId);
-      if (current) put(mergeImportedRecord(current, imported));
+      if (current) put(mergeImportedRecord(current, importedEntry));
       continue;
     }
 

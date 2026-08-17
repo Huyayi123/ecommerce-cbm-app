@@ -556,15 +556,18 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   async function importOrders(file: File | undefined) {
     if (!file || isViewer) return;
     try {
-      const imported = (await parsePurchaseRecordsFile(file, profile)).map((record) => withPurchaseTotals({
-        ...record,
-        purchasePoolId: record.purchasePoolId || record.purchaseBatchId || '',
-        purchasePoolName: record.purchasePoolName || record.purchaseBatchName || '',
-        purchasePoolDate: record.purchasePoolDate || record.purchaseBatchDate || '',
-        poolStatus: record.poolStatus || 'pending_purchase',
-        purchaseBatchId: record.purchaseBatchId || '',
-        purchaseBatchName: record.purchaseBatchName || '',
-        purchaseBatchDate: record.purchaseBatchDate || '',
+      const imported = (await parsePurchaseRecordsFile(file, profile)).map((entry) => ({
+        ...entry,
+        record: withPurchaseTotals({
+          ...entry.record,
+          purchasePoolId: entry.record.purchasePoolId || entry.record.purchaseBatchId || '',
+          purchasePoolName: entry.record.purchasePoolName || entry.record.purchaseBatchName || '',
+          purchasePoolDate: entry.record.purchasePoolDate || entry.record.purchaseBatchDate || '',
+          poolStatus: entry.record.poolStatus || 'pending_purchase',
+          purchaseBatchId: entry.record.purchaseBatchId || '',
+          purchaseBatchName: entry.record.purchaseBatchName || '',
+          purchaseBatchDate: entry.record.purchaseBatchDate || '',
+        }),
       }));
       if (imported.length === 0) {
         setMessage('没有识别到可导入的采购订单。');

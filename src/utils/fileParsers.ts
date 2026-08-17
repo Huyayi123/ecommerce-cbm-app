@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { AppProfile, MixedCartonGroup, PurchaseRecord, PurchaseRow, PurchaseStatus, SkuImportPreview, SkuImportPreviewRow, SkuItem } from '../types';
+import type { AppProfile, MixedCartonGroup, PurchaseRecord, PurchaseRecordImport, PurchaseRow, PurchaseStatus, SkuImportPreview, SkuImportPreviewRow, SkuItem } from '../types';
 import { findMatchingSkuItem } from './calculations';
 import { toNumber } from './number';
 import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
@@ -341,7 +341,41 @@ export async function parseAdReportFile(file: File): Promise<AdReportImportRow[]
   });
 }
 
-export async function parsePurchaseRecordsFile(file: File, profile: AppProfile): Promise<PurchaseRecord[]> {
+const PURCHASE_RECORD_IMPORT_FIELDS: Array<[keyof PurchaseRecord, keyof typeof PURCHASE_RECORD_HEADERS]> = [
+  ['internalCode', 'internalCode'],
+  ['manufacturerName', 'manufacturerName'],
+  ['sku', 'sku'],
+  ['productName', 'productName'],
+  ['englishName', 'englishName'],
+  ['imageUrl', 'imageUrl'],
+  ['shopName', 'shopName'],
+  ['purchaseQuantity', 'purchaseQuantity'],
+  ['confirmedPurchaseQuantity', 'confirmedPurchaseQuantity'],
+  ['purchasePrice', 'purchasePrice'],
+  ['freightCost', 'freightCost'],
+  ['totalAmount', 'totalAmount'],
+  ['purchaseDate', 'purchaseDate'],
+  ['unitCbm', 'unitCbm'],
+  ['totalCbm', 'totalCbm'],
+  ['loadingType', 'loadingType'],
+  ['totalWeightKg', 'totalWeightKg'],
+  ['cartonCount', 'cartonCount'],
+  ['unitsPerCarton', 'unitsPerCarton'],
+  ['tailQuantity', 'tailQuantity'],
+  ['isMixed', 'isMixed'],
+  ['mixedGroups', 'mixedGroups'],
+  ['logisticsTotalCbm', 'logisticsTotalCbm'],
+  ['note', 'note'],
+];
+
+function providedPurchaseRecordFields(row: Record<string, unknown>, headers: string[]): Array<keyof PurchaseRecord> {
+  return PURCHASE_RECORD_IMPORT_FIELDS.flatMap(([recordField, parserField]) => {
+    const value = pickPurchaseRecordField(row, headers, parserField);
+    return value !== undefined && value !== null && String(value).trim() !== '' ? [recordField] : [];
+  });
+}
+
+export async function parsePurchaseRecordsFile(file: File, profile: AppProfile): Promise<PurchaseRecordImport[]> {
   const { headers, rows } = readRows(await file.arrayBuffer(), file.name);
 
   return rows.flatMap((row, index) => {
@@ -361,7 +395,7 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
     const effectiveQuantity = confirmedPurchaseQuantity ?? purchaseQuantity;
     const buyerName = String(pickPurchaseRecordField(row, headers, 'buyerName') ?? profile.buyerName).trim() || profile.buyerName;
 
-    return [withPurchaseTotals({
+    const record = withPurchaseTotals({
       id: crypto.randomUUID(),
       internalCode: String(pickPurchaseRecordField(row, headers, 'internalCode') ?? '').trim(),
       manufacturerName: String(pickPurchaseRecordField(row, headers, 'manufacturerName') ?? '').trim(),
@@ -408,7 +442,8 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
       logisticsLeftTailQuantity: 0,
       logisticsSourceRecordId: '',
       note: String(pickPurchaseRecordField(row, headers, 'note') ?? `导入行 ${index + 2}`).trim(),
-    })];
+    });
+    return [{ record, providedFields: providedPurchaseRecordFields(row, headers) }];
   });
 }
 

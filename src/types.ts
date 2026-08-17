@@ -139,6 +139,11 @@ export type PurchaseRecord = {
   updatedAt?: string;
 };
 
+export type PurchaseRecordImport = {
+  record: PurchaseRecord;
+  providedFields: Array<keyof PurchaseRecord>;
+};
+
 export type LogisticsBatchItem = {
   id: string;
   batchId: string;
