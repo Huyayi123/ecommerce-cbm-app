@@ -5,6 +5,7 @@ import { exportPurchaseRecords } from '../utils/exporters';
 import { parsePurchaseRecordsFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
 import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
+import { mergeImportedPurchaseOrders } from '../utils/purchaseOrderImports';
 import { calculatedPurchaseTotalAmount, effectivePurchaseQuantity, mixedQuantityForOtherSkus, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
 
 type Props = {
@@ -569,9 +570,16 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         setMessage('没有识别到可导入的采购订单。');
         return;
       }
-      if (onSaveRecords) await onSaveRecords(imported);
-      else await onChange([...imported, ...records]);
-      setMessage(`已导入 ${imported.length} 条采购订单。`);
+      const result = mergeImportedPurchaseOrders(records, imported, profile.email);
+      if (onSaveRecords) {
+        await onSaveRecords(result.records);
+      } else {
+        const changedById = new Map(result.records.map((record) => [record.id, record]));
+        const existingIds = new Set(records.map((record) => record.id));
+        const created = result.records.filter((record) => !existingIds.has(record.id));
+        await onChange([...created, ...records.map((record) => changedById.get(record.id) ?? record)]);
+      }
+      setMessage(`导入完成：更新 ${result.updatedCount} 条，新增 ${result.createdCount} 条。`);
     } catch (error) {
       console.error(error);
       setMessage(`导入失败：${formatErrorMessage(error)}`);
