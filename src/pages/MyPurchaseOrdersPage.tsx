@@ -200,6 +200,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollRef = useRef<ScrollSnapshot | null>(null);
   const mixedAutoSaveTimer = useRef<number | null>(null);
+  const internalCodeRepairSignatureRef = useRef('');
   const [statusFilter, setStatusFilter] = useState<OrderFilterStatus>('pending');
   const [orderSearch, setOrderSearch] = useState('');
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
@@ -226,6 +227,15 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       .map((item) => [skuLookupKey(item.sku), item])),
     [skuItems],
   );
+  const skuItemsBySku = useMemo(() => {
+    const result = new Map<string, SkuItem[]>();
+    for (const item of skuItems) {
+      if (!item.sku.trim() || isNewSkuValue(item.sku)) continue;
+      const key = skuLookupKey(item.sku);
+      result.set(key, [...(result.get(key) ?? []), item]);
+    }
+    return result;
+  }, [skuItems]);
   const visibleRecords = useMemo(
     () => {
       let statusRecords = assignedRecords;
@@ -258,6 +268,36 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   );
   const unconfirmedVisibleCount = visibleRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase').length;
 
+  useEffect(() => {
+    if (isViewer || !onSaveRecords) return;
+    const repairs = assignedRecords.flatMap((record) => {
+      if (record.internalCode.trim() || isNewSkuValue(record.sku)) return [];
+      const candidates = skuItemsBySku.get(skuLookupKey(record.sku)) ?? [];
+      const shopName = record.shopName.trim().toLowerCase();
+      const matched = (shopName
+        ? candidates.find((item) => item.shopName.trim().toLowerCase() === shopName)
+        : undefined) ?? candidates[0];
+      const internalCode = matched?.internalCode.trim() ?? '';
+      return internalCode ? [{ ...record, internalCode }] : [];
+    });
+    if (repairs.length === 0) return;
+
+    const signature = repairs.map((record) => `${record.id}:${record.internalCode}`).sort().join('|');
+    if (signature === internalCodeRepairSignatureRef.current) return;
+    internalCodeRepairSignatureRef.current = signature;
+
+    void (async () => {
+      try {
+        await onSaveRecords(repairs);
+        setMessage(`已自动补全 ${repairs.length} 条历史采购订单内部编号。`);
+      } catch (error) {
+        internalCodeRepairSignatureRef.current = '';
+        console.error(error);
+        setMessage(`内部编号自动补全失败：${formatErrorMessage(error)}`);
+      }
+    })();
+  }, [assignedRecords, isViewer, onSaveRecords, skuItemsBySku]);
+
   const newCartonCount = parseNumber(newOrder.cartonCount);
   const newUnitsPerCarton = parseNumber(newOrder.unitsPerCarton);
   const newTailQuantity = parseNumber(newOrder.tailQuantity);
@@ -278,7 +318,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   }
 
   function recordWithSkuDefaults(record: PurchaseRecord): PurchaseRecord {
-    const skuItem = skuBySku.get(skuLookupKey(record.sku));
+    const candidates = skuItemsBySku.get(skuLookupKey(record.sku)) ?? [];
+    const shopName = record.shopName.trim().toLowerCase();
+    const skuItem = (shopName
+      ? candidates.find((item) => item.shopName.trim().toLowerCase() === shopName)
+      : undefined) ?? candidates[0];
     const withPoolStatus = {
       ...record,
       poolStatus: record.poolStatus || 'pending_purchase',
@@ -286,6 +330,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     if (!skuItem) return withPoolStatus;
     return {
       ...withPoolStatus,
+      internalCode: record.internalCode || skuItem.internalCode,
       purchasePrice: record.purchasePrice || skuItem.purchasePrice,
       unitCbm: record.unitCbm || skuItem.unitCbm,
       imageUrl: record.imageUrl || skuItem.imageUrl,
