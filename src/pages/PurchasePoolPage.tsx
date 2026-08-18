@@ -133,6 +133,52 @@ function buildAggregatePool(options: PoolOption[]): PoolOption | null {
   };
 }
 
+function dateGroupId(containerDate: string): string {
+  return `__container_date__:${containerDate || 'missing'}`;
+}
+
+function buildContainerDateOptions(options: PoolOption[]): PoolOption[] {
+  const groups = new Map<string, PoolOption>();
+  const seenRecordIdsByGroup = new Map<string, Set<string>>();
+  for (const pool of options) {
+    for (const record of pool.records) {
+      if (!isPoolPendingRecord(record)) continue;
+      const containerDate = record.containerDate || pool.containerDate || '';
+      const id = dateGroupId(containerDate);
+      const existing = groups.get(id) ?? {
+        id,
+        name: containerDate || '未填装柜日期',
+        containerDate,
+        status: 'open' as const,
+        createdBy: '',
+        createdAt: '',
+        sentBy: '',
+        sentAt: '',
+        note: '',
+        records: [],
+        recordCount: 0,
+        submittedCount: 0,
+        isAggregate: true,
+      };
+      const seenRecordIds = seenRecordIdsByGroup.get(id) ?? new Set<string>();
+      if (!seenRecordIds.has(record.id)) {
+        existing.records.push(record);
+        seenRecordIds.add(record.id);
+      }
+      existing.recordCount = existing.records.length;
+      existing.submittedCount = existing.records.filter(isPoolPendingRecord).length;
+      groups.set(id, existing);
+      seenRecordIdsByGroup.set(id, seenRecordIds);
+    }
+  }
+  return Array.from(groups.values())
+    .filter((pool) => pool.submittedCount > 0)
+    .sort((left, right) => (
+      (right.containerDate || '').localeCompare(left.containerDate || '')
+      || right.name.localeCompare(left.name, 'zh-Hans-CN')
+    ));
+}
+
 export function PurchasePoolPage({
   records,
   pools,
@@ -152,11 +198,12 @@ export function PurchasePoolPage({
   const [logisticsUserId, setLogisticsUserId] = useState('');
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics'), [profiles]);
-  const poolOptions = useMemo(() => buildPoolOptions(records, pools), [pools, records]);
+  const sourcePoolOptions = useMemo(() => buildPoolOptions(records, pools), [pools, records]);
   const options = useMemo(() => {
-    const aggregatePool = buildAggregatePool(poolOptions);
-    return aggregatePool ? [aggregatePool, ...poolOptions] : poolOptions;
-  }, [poolOptions]);
+    const aggregatePool = buildAggregatePool(sourcePoolOptions);
+    const dateOptions = buildContainerDateOptions(sourcePoolOptions);
+    return aggregatePool ? [aggregatePool, ...dateOptions] : dateOptions;
+  }, [sourcePoolOptions]);
   const activePoolId = selectedPoolId && options.some((pool) => pool.id === selectedPoolId) ? selectedPoolId : options[0]?.id || '';
   const activePool = options.find((pool) => pool.id === activePoolId);
   const poolRecords = activePool?.records.map(withPurchaseTotals) ?? [];
@@ -208,7 +255,7 @@ export function PurchasePoolPage({
     }));
     const nextRecordsById = new Map(nextRecords.map((record) => [record.id, record]));
     const nextPools: PurchasePool[] = activePool.isAggregate
-      ? poolOptions.flatMap((pool): PurchasePool[] => {
+      ? sourcePoolOptions.flatMap((pool): PurchasePool[] => {
         const hasUpdatedRecord = pool.records.some((record) => nextRecordsById.has(record.id));
         if (!hasUpdatedRecord) return [];
         return [{
@@ -333,7 +380,7 @@ export function PurchasePoolPage({
     if (!(key in drafts) || !canEditField(field) || !activePool) return;
     const nextRecord = patchRecord(record, field, drafts[key]);
     const sourcePool = activePool.isAggregate
-      ? poolOptions.find((pool) => pool.records.some((item) => item.id === record.id))
+      ? sourcePoolOptions.find((pool) => pool.records.some((item) => item.id === record.id))
       : activePool;
     if (!sourcePool) return;
     const nextPool: PurchasePool = {
@@ -360,7 +407,7 @@ export function PurchasePoolPage({
       return;
     }
     const sourcePool = activePool.isAggregate
-      ? poolOptions.find((pool) => pool.records.some((item) => item.id === record.id))
+      ? sourcePoolOptions.find((pool) => pool.records.some((item) => item.id === record.id))
       : activePool;
     const nextRecord = withPurchaseTotals({
       ...record,
@@ -443,9 +490,14 @@ export function PurchasePoolPage({
       {message && <div className="inline-notice">{message}</div>}
 
       <div className="filter-grid">
-        <label>采购订单池<select value={activePoolId} onChange={(event) => setSelectedPoolId(event.target.value)} disabled={options.length === 0}>
-          {options.length === 0 && <option value="">暂无待发送采购池</option>}
-          {options.map((pool) => <option key={pool.id} value={pool.id}>{pool.containerDate || '未填装柜日期'} {pool.name}（池中 {pool.submittedCount}）</option>)}
+        <label>装柜日期<select value={activePoolId} onChange={(event) => setSelectedPoolId(event.target.value)} disabled={options.length === 0}>
+          {options.length === 0 && <option value="">暂无待发送装柜日期</option>}
+          {options.map((pool) => {
+            const label = pool.id === '__all_pending_purchase_pools__'
+              ? '全部装柜日期'
+              : pool.containerDate || '未填装柜日期';
+            return <option key={pool.id} value={pool.id}>{label}（池中 {pool.submittedCount}）</option>;
+          })}
         </select></label>
         <label>本池装柜日期<input type="date" value={poolDateDraft} onChange={(event) => setPoolDateDraft(event.target.value)} disabled={!canApplyPoolDate} /></label>
         {isAdmin && (
