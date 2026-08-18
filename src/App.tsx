@@ -371,9 +371,28 @@ function App() {
       reviewedAt: new Date().toISOString(),
     };
     const normalizedRecords = normalizePurchaseRecords(assignBuyerEmails(applyApprovedLogisticsBatch(purchaseRecords, approvedBatch))).records;
+    const pendingRecordsByPool = new Map<string, PurchaseRecord[]>();
+    for (const record of normalizedRecords) {
+      if (record.status === 'cancelled' || record.poolStatus !== 'submitted_to_pool') continue;
+      const poolId = record.purchasePoolId || record.purchaseBatchId;
+      if (!poolId) continue;
+      pendingRecordsByPool.set(poolId, [...(pendingRecordsByPool.get(poolId) ?? []), record]);
+    }
+    const nextPools = purchasePools.map((pool) => {
+      const pendingRecords = pendingRecordsByPool.get(pool.id) ?? [];
+      return {
+        ...pool,
+        status: pendingRecords.length > 0 ? 'open' as const : 'sent' as const,
+        sentBy: pendingRecords.length > 0 ? pool.sentBy : profile.id,
+        sentAt: pendingRecords.length > 0 ? pool.sentAt : new Date().toISOString(),
+        records: pendingRecords,
+      };
+    });
     await replacePurchaseRecords(normalizedRecords);
+    await persistPurchasePools(nextPools);
     await updateLogisticsBatchStatus(approvedBatch);
     setPurchaseRecords(normalizedRecords);
+    setPurchasePools(nextPools);
     setLogisticsBatches((current) => current.map((item) => (item.id === batch.id ? approvedBatch : item)));
     await loadCloudData(profile);
   }

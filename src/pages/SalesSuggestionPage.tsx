@@ -241,8 +241,19 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     const inventoryMap = new Map(inventoryRows.map((item) => [item.sku.trim().toUpperCase(), item]));
     const newProductRankMap = buildNewProductRankMap(selectedStore, inventoryRows);
     const inTransitBySku = new Map<string, number>();
+    const pendingPoolBySku = new Map<string, number>();
 
     for (const record of purchaseRecords) {
+      if (record.status === 'cancelled') continue;
+      if (record.poolStatus === 'submitted_to_pool') {
+        const normalized = withPurchaseTotals(record);
+        const key = skuKey(normalized.sku);
+        pendingPoolBySku.set(key, (pendingPoolBySku.get(key) ?? 0) + effectivePurchaseQuantity(normalized));
+        for (const line of normalized.mixedGroups.flatMap((group) => group.lines).filter((mixedLine) => skuKey(mixedLine.sku))) {
+          const mixedKey = skuKey(line.sku);
+          pendingPoolBySku.set(mixedKey, (pendingPoolBySku.get(mixedKey) ?? 0) + line.quantity);
+        }
+      }
       if (!isInventoryRecord(record)) continue;
       if (!isInTransitStatus(record.status)) continue;
       const normalized = withPurchaseTotals(record);
@@ -256,12 +267,14 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
 
     const applySavedOverride = (row: SalesSuggestionRow): SalesSuggestionRow => {
       const inTransitQuantity = inTransitBySku.get(skuKey(row.sku)) ?? row.inTransitQuantity;
+      const pendingPoolQuantity = pendingPoolBySku.get(skuKey(row.sku)) ?? row.pendingPoolQuantity ?? 0;
       const rawAutoSuggestedQuantity = Math.max(round(
         row.targetQuantity
         - row.localStockQuantity
         - row.takealotStockQuantity
         - row.stockOnWayQuantity
-        - inTransitQuantity,
+        - inTransitQuantity
+        - pendingPoolQuantity,
         2,
       ), 0);
       const autoSuggestedQuantity = applySuggestedQuantityMinimum(row.monthlySales, rawAutoSuggestedQuantity);
@@ -271,6 +284,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       return {
         ...row,
         inTransitQuantity,
+        pendingPoolQuantity,
         suggestedQuantity,
         estimatedCartons: row.estimatedCartons !== null && row.estimatedCartons !== undefined && ratio > 0 ? round(row.estimatedCartons * ratio, 2) : row.estimatedCartons,
         estimatedCbm: row.estimatedCbm !== null && row.estimatedCbm !== undefined && ratio > 0 ? round(row.estimatedCbm * ratio, 4) : row.estimatedCbm,
@@ -318,10 +332,16 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       const takealotStockQuantity = inventory?.takealotStockQuantity ?? 0;
       const stockOnWayQuantity = inventory?.stockOnWayQuantity ?? 0;
       const inTransitQuantity = inTransitBySku.get(key) ?? 0;
+      const pendingPoolQuantity = pendingPoolBySku.get(key) ?? 0;
       const directTarget = selectedStore === 'Aicom' ? aicomDirectTargetQuantity(newProductRank, rawMonthlySales) : null;
       const targetQuantity = directTarget?.targetQuantity ?? calculatedTargetQuantity;
       const rawAutoSuggestedQuantity = Math.max(round(
-        targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity,
+        targetQuantity
+        - localStockQuantity
+        - takealotStockQuantity
+        - stockOnWayQuantity
+        - inTransitQuantity
+        - pendingPoolQuantity,
         2,
       ), 0);
       const autoSuggestedQuantity = applySuggestedQuantityMinimum(monthlySales, rawAutoSuggestedQuantity);
@@ -338,7 +358,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       if (!skuItem && row.sku.trim()) messages.push('未录入 SKU 资料');
       if (skuItem?.isSeasonal) messages.push('季节性产品，请结合旺季/淡季人工确认采购量');
       if (directTarget?.message) {
-        messages.push(`${directTarget.message}，扣减库存和海运在途后建议 ${autoSuggestedQuantity} 个`);
+        messages.push(`${directTarget.message}，扣减库存、海运在途和装柜池待装柜后建议 ${autoSuggestedQuantity} 个`);
       } else if (forecast.message) {
         messages.push(forecast.message);
       }
@@ -358,6 +378,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         takealotStockQuantity,
         stockOnWayQuantity,
         inTransitQuantity,
+        pendingPoolQuantity,
         suggestedQuantity,
         unitsPerCarton: skuItem?.unitsPerCarton ?? null,
         estimatedCartons,
@@ -567,7 +588,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         <table className="suggestion-table">
           <thead>
             <tr>
-              <th className="suggestion-sticky suggestion-sticky-1">图片</th><th className="suggestion-sticky suggestion-sticky-2">SKU</th><th className="suggestion-sticky suggestion-sticky-3">产品名称</th><th>月销量</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>建议采购数量</th><th>采购人</th><th>预计 CBM</th><th>状态/备注</th><th>店铺</th>
+              <th className="suggestion-sticky suggestion-sticky-1">图片</th><th className="suggestion-sticky suggestion-sticky-2">SKU</th><th className="suggestion-sticky suggestion-sticky-3">产品名称</th><th>月销量</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>装柜池待装柜</th><th>建议采购数量</th><th>采购人</th><th>预计 CBM</th><th>状态/备注</th><th>店铺</th>
             </tr>
           </thead>
           <tbody>
@@ -581,6 +602,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.takealotStockQuantity}</td>
                 <td>{row.stockOnWayQuantity}</td>
                 <td>{row.inTransitQuantity}</td>
+                <td>{row.pendingPoolQuantity ?? 0}</td>
                 <td>
                   <input
                     className="quantity-input compact-input"
@@ -602,7 +624,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.shopName || '-'}</td>
               </tr>
             ))}
-            {suggestions.length === 0 && <tr><td colSpan={13} className="empty">上传月销量或手动同步 Takealot 库存后生成采购建议。</td></tr>}
+            {suggestions.length === 0 && <tr><td colSpan={14} className="empty">上传月销量或手动同步 Takealot 库存后生成采购建议。</td></tr>}
           </tbody>
         </table>
       </div>

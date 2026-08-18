@@ -74,7 +74,7 @@ export function buildLogisticsBatch(
   const batchId = existingBatch?.id || safeBatchId(containerDate, logisticsProfile?.id || '', logisticsProfile?.email || '');
   const existingItems = new Map((existingBatch?.items ?? []).map((item) => [item.purchaseRecordId, item]));
   const sourceRecords = records
-    .filter((record) => record.poolStatus === 'sent_to_inventory' && record.status !== 'cancelled' && record.containerDate === containerDate)
+    .filter((record) => record.poolStatus === 'submitted_to_pool' && record.status !== 'cancelled' && record.containerDate === containerDate)
     .sort((left, right) => (
       (left.internalCode || '').localeCompare(right.internalCode || '', 'zh-Hans-CN', { numeric: true })
       || left.manufacturerName.localeCompare(right.manufacturerName, 'zh-Hans-CN')
@@ -200,6 +200,11 @@ export function applyApprovedLogisticsBatch(
       changed.set(record.id, withPurchaseTotals({
         ...record,
         ...common,
+        isConfirmed: true,
+        poolStatus: 'sent_to_inventory',
+        status: 'in_transit',
+        containerDate: batch.containerDate || record.containerDate,
+        purchaseBatchDate: batch.containerDate || record.purchaseBatchDate,
         note: noteWithLogistics(record, item.note, '物流已确认整票装柜'),
       }));
       continue;
@@ -209,6 +214,9 @@ export function applyApprovedLogisticsBatch(
       changed.set(record.id, withPurchaseTotals({
         ...record,
         ...common,
+        isConfirmed: true,
+        poolStatus: 'submitted_to_pool',
+        status: 'pending',
         containerDate: '',
         logisticsLoadedCartonCount: 0,
         logisticsLoadedTailQuantity: 0,
@@ -222,6 +230,11 @@ export function applyApprovedLogisticsBatch(
     const loadedRecord = setPacking({
       ...record,
       ...common,
+      isConfirmed: true,
+      poolStatus: 'sent_to_inventory',
+      status: 'in_transit',
+      containerDate: batch.containerDate || record.containerDate,
+      purchaseBatchDate: batch.containerDate || record.purchaseBatchDate,
       cartonCount: loadedCartons,
       tailQuantity: loadedTail,
       note: noteWithLogistics(record, item.note, '物流确认部分装柜'),
@@ -237,6 +250,9 @@ export function applyApprovedLogisticsBatch(
       logisticsLoadedTailQuantity: 0,
       logisticsLeftCartonCount: leftCartons,
       logisticsLeftTailQuantity: leftTail,
+      isConfirmed: true,
+      poolStatus: 'submitted_to_pool',
+      status: 'pending',
       containerDate: '',
       cartonCount: leftCartons,
       tailQuantity: leftTail,

@@ -88,7 +88,7 @@ export function LogisticsLoadingPage({
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics'), [profiles]);
   const containerDates = useMemo(() => Array.from(new Set(records
-    .filter((record) => record.poolStatus === 'sent_to_inventory' && record.status !== 'cancelled' && record.containerDate)
+    .filter((record) => record.poolStatus === 'submitted_to_pool' && record.status !== 'cancelled' && record.containerDate)
     .map((record) => record.containerDate)))
     .sort((left, right) => right.localeCompare(left)), [records]);
   const visibleBatches = useMemo(() => {
@@ -134,7 +134,7 @@ export function LogisticsLoadingPage({
     const existing = batches.find((batch) => batch.containerDate === containerDate && batch.logisticsUserId === logisticsProfile.id);
     const batch = buildLogisticsBatch(records, skuItems, profile, containerDate, logisticsProfile, existing);
     if (batch.items.length === 0) {
-      setMessage('这个装柜日期下面没有可分配给物流商的在途记录。');
+      setMessage('这个装柜日期下面没有可分配给物流商的装柜池记录。');
       return;
     }
 

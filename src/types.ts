@@ -244,6 +244,7 @@ export type SalesSuggestionRow = {
   takealotStockQuantity: number;
   stockOnWayQuantity: number;
   inTransitQuantity: number;
+  pendingPoolQuantity?: number;
   suggestedQuantity: number;
   unitsPerCarton: number | null;
   estimatedCartons: number | null;

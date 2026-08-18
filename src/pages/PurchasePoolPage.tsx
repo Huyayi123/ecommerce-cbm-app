@@ -38,6 +38,7 @@ type EditablePoolField =
   | 'totalCbm'
   | 'status'
   | 'loadingType'
+  | 'containerDate'
   | 'note';
 
 function poolKey(record: PurchaseRecord): string {
@@ -144,8 +145,6 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   const submittedRecords = poolRecords.filter((record) => record.status !== 'cancelled');
   const canEditActivePool = isAdmin && !activePool?.isAggregate;
   const canApplyPoolDate = isAdmin && Boolean(activePool);
-  const canSendActivePool = isAdmin && Boolean(activePool);
-  const activeContainerDate = poolDateDraft.trim() || activePool?.containerDate || '';
   const imageUrlBySku = useMemo(
     () => new Map(skuItems
       .filter((item) => item.sku.trim())
@@ -216,64 +215,6 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
     } catch (error) {
       console.error(error);
       setMessage(`统一装柜日期失败：${formatErrorMessage(error)}`);
-    }
-  }
-
-  async function sendPoolToInventory() {
-    if (!canSendActivePool || !activePool || submittedRecords.length === 0) {
-      if (activePool?.isAggregate) setMessage('请先选择一个具体采购池，再发送到采购 / 在途库存。');
-      return;
-    }
-    const nextContainerDate = poolDateDraft.trim() || activePool.containerDate;
-    const now = new Date().toISOString();
-    const nextRecords = submittedRecords.map((record) => withPurchaseTotals({
-      ...record,
-      isConfirmed: true,
-      poolStatus: 'sent_to_inventory',
-      status: 'in_transit',
-      purchasePoolId: activePool.isAggregate ? record.purchasePoolId : activePool.id,
-      purchasePoolName: activePool.isAggregate ? record.purchasePoolName : activePool.name,
-      purchasePoolDate: nextContainerDate || record.containerDate || record.purchasePoolDate || record.purchaseBatchDate || record.purchaseDate,
-      purchaseBatchId: activePool.isAggregate ? record.purchaseBatchId : record.purchaseBatchId || activePool.id,
-      purchaseBatchName: activePool.isAggregate ? record.purchaseBatchName : activePool.name,
-      purchaseBatchDate: nextContainerDate || record.containerDate || record.purchasePoolDate || record.purchaseBatchDate || record.purchaseDate,
-      containerDate: nextContainerDate || record.containerDate || record.purchasePoolDate || record.purchaseBatchDate || record.purchaseDate,
-    }));
-    const sentRecordsById = new Set(nextRecords.map((record) => record.id));
-    const existingPoolIds = new Set(pools.map((pool) => pool.id));
-    const nextPools: PurchasePool[] = activePool.isAggregate
-      ? poolOptions.flatMap((pool): PurchasePool[] => {
-        const hasSentRecord = pool.records.some((record) => sentRecordsById.has(record.id));
-        if (!hasSentRecord || !existingPoolIds.has(pool.id)) return [];
-        const remainingRecords = pool.records.filter((record) => !sentRecordsById.has(record.id));
-        return [{
-          id: pool.id,
-          name: pool.name,
-          containerDate: nextContainerDate || pool.containerDate,
-          status: remainingRecords.length > 0 ? pool.status : 'sent',
-          createdBy: pool.createdBy,
-          createdAt: pool.createdAt,
-          sentBy: remainingRecords.length > 0 ? pool.sentBy : profile.id,
-          sentAt: remainingRecords.length > 0 ? pool.sentAt : now,
-          note: pool.note,
-          records: remainingRecords,
-        }];
-      })
-      : [{
-        ...activePool,
-        containerDate: nextContainerDate,
-        status: 'sent',
-        sentBy: profile.id,
-        sentAt: now,
-        records: [],
-      }];
-    try {
-      await onSaveRecords(nextRecords);
-      if (nextPools.length > 0) await onSavePools(nextPools);
-      setMessage(`已发送 ${nextRecords.length} 条采购订单到采购 / 在途库存。`);
-    } catch (error) {
-      console.error(error);
-      setMessage(`发送失败：${formatErrorMessage(error)}`);
     }
   }
 
@@ -423,12 +364,11 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
       <div className="section-heading">
         <div>
           <h2>采购订单池</h2>
-          <p>buyer 提交后的订单先进入这里；admin 统一发送后，才进入采购 / 在途库存。</p>
+          <p>buyer 提交后的订单先进入这里；分配物流商确认装柜，admin 审核通过后才进入采购 / 在途库存。</p>
         </div>
         <div className="export-actions">
           <button type="button" onClick={() => exportPurchaseRecords(submittedRecords, 'xlsx', '采购订单池')} disabled={submittedRecords.length === 0}>导出池中订单</button>
           <button type="button" onClick={() => exportBatchPurchaseOrder(submittedRecords, 'xlsx')} disabled={submittedRecords.length === 0}>导出本池订货表</button>
-          {isAdmin && <button className="primary" type="button" onClick={() => void sendPoolToInventory()} disabled={submittedRecords.length === 0}>发送到采购 / 在途库存</button>}
         </div>
       </div>
       {message && <div className="inline-notice">{message}</div>}
@@ -477,7 +417,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
                     <td>{editableCell(record, 'englishName')}</td>
                     <td>{editableCell(record, 'shopName')}</td>
                     <td>{editableCell(record, 'assignedBuyerName')}</td>
-                    <td>{activeContainerDate || record.purchaseBatchDate || '-'}</td>
+                    <td>{editableCell(record, 'containerDate', 'date')}</td>
                     <td>{record.purchaseQuantity}</td>
                     <td>{editableCell(record, 'cartonCount', 'number')}</td>
                     <td>{editableCell(record, 'unitsPerCarton', 'number')}</td>
@@ -514,7 +454,7 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
                         <td />
                         <td>{record.shopName}</td>
                         <td>{record.assignedBuyerName}</td>
-                        <td>{activeContainerDate || record.purchaseBatchDate || '-'}</td>
+                        <td>{record.containerDate || record.purchaseBatchDate || '-'}</td>
                         <td />
                         <td />
                         <td />
