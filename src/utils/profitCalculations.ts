@@ -25,6 +25,25 @@ export function calculateBaseProductCosts(purchaseCostRmb: number, unitCbm: numb
   };
 }
 
+export function calculateProfitTotalCost(input: {
+  purchaseCostZar: number | null;
+  seaFreightCost: number | null;
+  domesticFreightCost: number | null;
+  totalFees: number | null;
+  warehouseFee: number | null;
+}): number | null {
+  if (
+    input.purchaseCostZar === null
+    || input.seaFreightCost === null
+    || input.domesticFreightCost === null
+    || input.totalFees === null
+    || input.warehouseFee === null
+  ) {
+    return null;
+  }
+  return round(input.purchaseCostZar + input.seaFreightCost + input.domesticFreightCost + input.totalFees + input.warehouseFee, 2);
+}
+
 function key(value: string): string {
   return value.trim().toUpperCase();
 }
@@ -95,9 +114,12 @@ export function buildProfitAnalysisRows(input: {
     const costs = purchaseCostRmb !== null && unitCbm !== null
       ? calculateBaseProductCosts(purchaseCostRmb, unitCbm)
       : null;
+    const totalCost = costs
+      ? calculateProfitTotalCost({ ...costs, totalFees })
+      : null;
     const canCalculate = sellingPrice !== null && totalFees !== null && costs !== null;
     const profit = canCalculate
-      ? round(sellingPrice - costs.purchaseCostZar - costs.seaFreightCost - costs.domesticFreightCost - totalFees - costs.warehouseFee, 2)
+      ? round(sellingPrice - (totalCost ?? 0), 2)
       : null;
     const status = profit === null ? 'missing_data' : profit > 0 ? 'profit' : profit < 0 ? 'loss' : 'break_even';
 
@@ -117,6 +139,7 @@ export function buildProfitAnalysisRows(input: {
       domesticFreightCost: costs?.domesticFreightCost ?? null,
       warehouseFee: costs?.warehouseFee ?? null,
       totalFees,
+      totalCost,
       profit,
       status,
       messages,

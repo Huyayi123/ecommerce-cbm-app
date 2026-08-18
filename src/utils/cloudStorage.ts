@@ -3,6 +3,7 @@ import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, L
 import { formatErrorMessage } from './errors';
 import { findMatchingSkuItem, getSkuMatchKey } from './calculations';
 import { assignNewInternalCodes, ensureInternalCodes } from './internalCodes';
+import { calculateProfitTotalCost } from './profitCalculations';
 import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
 import { frontendSkuToSupabase, supabaseSkuToFrontend, type SupabaseSkuRow } from './skuFieldMapping';
 
@@ -1349,13 +1350,19 @@ export async function saveAdAnalysisRun(run: AdAnalysisRun): Promise<void> {
 }
 
 function mapProfitRow(row: ProfitAnalysisDetailRow): ProfitAnalysisRow {
+  const purchaseCostZar = row.purchase_cost_zar === null ? null : Number(row.purchase_cost_zar);
+  const seaFreightCost = row.sea_freight_cost === null ? null : Number(row.sea_freight_cost);
+  const domesticFreightCost = row.domestic_freight_cost == null ? null : Number(row.domestic_freight_cost);
+  const warehouseFee = row.warehouse_fee === null ? null : Number(row.warehouse_fee);
+  const totalFees = row.total_fees === null ? null : Number(row.total_fees);
   return {
     id: row.id, runId: row.run_id, shopName: row.shop_name, sku: row.sku, productName: row.product_name ?? '', imageUrl: row.image_url ?? '',
     latestOrderDate: row.latest_order_date ?? '', sellingPrice: row.selling_price === null ? null : Number(row.selling_price),
-    purchaseCostRmb: row.purchase_cost_rmb === null ? null : Number(row.purchase_cost_rmb), purchaseCostZar: row.purchase_cost_zar === null ? null : Number(row.purchase_cost_zar),
-    unitCbm: row.unit_cbm === null ? null : Number(row.unit_cbm), seaFreightCost: row.sea_freight_cost === null ? null : Number(row.sea_freight_cost),
-    domesticFreightCost: row.domestic_freight_cost == null ? null : Number(row.domestic_freight_cost),
-    warehouseFee: row.warehouse_fee === null ? null : Number(row.warehouse_fee), totalFees: row.total_fees === null ? null : Number(row.total_fees),
+    purchaseCostRmb: row.purchase_cost_rmb === null ? null : Number(row.purchase_cost_rmb), purchaseCostZar,
+    unitCbm: row.unit_cbm === null ? null : Number(row.unit_cbm), seaFreightCost,
+    domesticFreightCost,
+    warehouseFee, totalFees,
+    totalCost: calculateProfitTotalCost({ purchaseCostZar, seaFreightCost, domesticFreightCost, totalFees, warehouseFee }),
     profit: row.profit === null ? null : Number(row.profit), status: row.status, messages: Array.isArray(row.messages) ? row.messages : [], syncedAt: row.synced_at,
   };
 }

@@ -437,6 +437,7 @@ export type ProfitAnalysisRow = {
   domesticFreightCost: number | null;
   warehouseFee: number | null;
   totalFees: number | null;
+  totalCost: number | null;
   profit: number | null;
   status: ProfitAnalysisStatus;
   messages: string[];
