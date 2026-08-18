@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import type { AppProfile, PurchasePool, PurchaseRecord, SkuItem } from '../types';
+import type { AppProfile, LogisticsBatch, PurchasePool, PurchaseRecord, SkuItem } from '../types';
 import { exportBatchPurchaseOrder, exportPurchaseRecords } from '../utils/exporters';
 import { formatErrorMessage } from '../utils/errors';
+import { buildLogisticsBatch } from '../utils/logistics';
 import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
 import { calculatedPurchaseTotalAmount, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
 
@@ -9,9 +10,13 @@ type Props = {
   records: PurchaseRecord[];
   pools: PurchasePool[];
   profile: AppProfile;
+  profiles: AppProfile[];
   skuItems: SkuItem[];
+  logisticsBatches: LogisticsBatch[];
   onSaveRecords: (records: PurchaseRecord[]) => void | Promise<void>;
   onSavePools: (pools: PurchasePool[]) => void | Promise<void>;
+  onSaveLogisticsBatch: (batch: LogisticsBatch) => void | Promise<void>;
+  onOpenLogistics?: () => void;
 };
 
 type PoolOption = PurchasePool & {
@@ -128,12 +133,25 @@ function buildAggregatePool(options: PoolOption[]): PoolOption | null {
   };
 }
 
-export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveRecords, onSavePools }: Props) {
+export function PurchasePoolPage({
+  records,
+  pools,
+  profile,
+  profiles,
+  skuItems,
+  logisticsBatches,
+  onSaveRecords,
+  onSavePools,
+  onSaveLogisticsBatch,
+  onOpenLogistics,
+}: Props) {
   const [selectedPoolId, setSelectedPoolId] = useState('');
   const [message, setMessage] = useState('');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [poolDateDraft, setPoolDateDraft] = useState('');
+  const [logisticsUserId, setLogisticsUserId] = useState('');
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
+  const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics'), [profiles]);
   const poolOptions = useMemo(() => buildPoolOptions(records, pools), [pools, records]);
   const options = useMemo(() => {
     const aggregatePool = buildAggregatePool(poolOptions);
@@ -165,6 +183,10 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
   useEffect(() => {
     setPoolDateDraft(activePool?.containerDate || '');
   }, [activePool?.containerDate, activePool?.id]);
+
+  useEffect(() => {
+    setLogisticsUserId((current) => current || logisticsProfiles[0]?.id || '');
+  }, [logisticsProfiles]);
 
   async function applyPoolContainerDate() {
     if (!canApplyPoolDate || !activePool) {
@@ -215,6 +237,45 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
     } catch (error) {
       console.error(error);
       setMessage(`统一装柜日期失败：${formatErrorMessage(error)}`);
+    }
+  }
+
+  async function assignLogisticsBatch() {
+    if (!isAdmin || !activePool) return;
+    if (activePool.isAggregate) {
+      setMessage('请先选择一个具体采购池，再分配物流商。');
+      return;
+    }
+    const logisticsProfile = logisticsProfiles.find((item) => item.id === logisticsUserId);
+    if (!logisticsProfile) {
+      setMessage('请先选择物流商账号。');
+      return;
+    }
+    const dates = Array.from(new Set(submittedRecords.map((record) => record.containerDate || poolDateDraft.trim() || activePool.containerDate).filter(Boolean)));
+    if (dates.length === 0) {
+      setMessage('请先填写本池装柜日期，或逐行填写装柜日期。');
+      return;
+    }
+    try {
+      let totalItems = 0;
+      let batchCount = 0;
+      for (const batchDate of dates) {
+        const existing = logisticsBatches.find((batch) => batch.containerDate === batchDate && batch.logisticsUserId === logisticsProfile.id);
+        const batch = buildLogisticsBatch(records, skuItems, profile, batchDate, logisticsProfile, existing);
+        if (batch.items.length === 0) continue;
+        await onSaveLogisticsBatch(batch);
+        totalItems += batch.items.length;
+        batchCount += 1;
+      }
+      if (totalItems === 0) {
+        setMessage('当前采购池没有可分配给物流商的装柜记录。');
+        return;
+      }
+      setMessage(`已生成/刷新 ${batchCount} 个物流批次、${totalItems} 条物流装柜确认明细，并分配给 ${logisticsProfile.displayName || logisticsProfile.email}。`);
+      onOpenLogistics?.();
+    } catch (error) {
+      console.error(error);
+      setMessage(`分配物流商失败：${formatErrorMessage(error)}`);
     }
   }
 
@@ -380,8 +441,17 @@ export function PurchasePoolPage({ records, pools, profile, skuItems, onSaveReco
         </select></label>
         <label>本池装柜日期<input type="date" value={poolDateDraft} onChange={(event) => setPoolDateDraft(event.target.value)} disabled={!canApplyPoolDate} /></label>
         {isAdmin && (
+          <label>物流商账号
+            <select value={logisticsUserId} onChange={(event) => setLogisticsUserId(event.target.value)} disabled={logisticsProfiles.length === 0}>
+              {logisticsProfiles.length === 0 && <option value="">暂无物流商账号</option>}
+              {logisticsProfiles.map((item) => <option key={item.id} value={item.id}>{item.displayName || item.email}</option>)}
+            </select>
+          </label>
+        )}
+        {isAdmin && (
           <div className="form-actions">
             <button type="button" onClick={() => void applyPoolContainerDate()} disabled={!canApplyPoolDate || !poolDateDraft}>统一本池装柜日期</button>
+            <button type="button" className="primary" onClick={() => void assignLogisticsBatch()} disabled={!activePool || activePool.isAggregate || submittedRecords.length === 0 || logisticsProfiles.length === 0}>生成/刷新物流批次</button>
           </div>
         )}
       </div>

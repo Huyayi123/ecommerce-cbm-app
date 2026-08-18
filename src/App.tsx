@@ -624,9 +624,13 @@ function App() {
           records={purchaseRecords}
           pools={purchasePools}
           profile={profile}
+          profiles={profiles}
           skuItems={skuItems}
+          logisticsBatches={logisticsBatches}
           onSaveRecords={persistPurchaseRecordUpdates}
           onSavePools={persistPurchasePools}
+          onSaveLogisticsBatch={persistLogisticsBatch}
+          onOpenLogistics={() => openPage('logistics')}
         />
       )}
 
