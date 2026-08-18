@@ -161,7 +161,6 @@ export function PurchasePoolPage({
   const activePool = options.find((pool) => pool.id === activePoolId);
   const poolRecords = activePool?.records.map(withPurchaseTotals) ?? [];
   const submittedRecords = poolRecords.filter((record) => record.status !== 'cancelled');
-  const canEditActivePool = isAdmin && !activePool?.isAggregate;
   const canApplyPoolDate = isAdmin && Boolean(activePool);
   const imageUrlBySku = useMemo(
     () => new Map(skuItems
@@ -242,16 +241,16 @@ export function PurchasePoolPage({
 
   async function assignLogisticsBatch() {
     if (!isAdmin || !activePool) return;
-    if (activePool.isAggregate) {
-      setMessage('请先选择一个具体采购池，再分配物流商。');
-      return;
-    }
     const logisticsProfile = logisticsProfiles.find((item) => item.id === logisticsUserId);
     if (!logisticsProfile) {
       setMessage('请先选择物流商账号。');
       return;
     }
-    const dates = Array.from(new Set(submittedRecords.map((record) => record.containerDate || poolDateDraft.trim() || activePool.containerDate).filter(Boolean)));
+    const assignableRecords = submittedRecords.map((record) => withPurchaseTotals({
+      ...record,
+      containerDate: record.containerDate || poolDateDraft.trim() || activePool.containerDate,
+    }));
+    const dates = Array.from(new Set(assignableRecords.map((record) => record.containerDate).filter(Boolean)));
     if (dates.length === 0) {
       setMessage('请先填写本池装柜日期，或逐行填写装柜日期。');
       return;
@@ -261,7 +260,7 @@ export function PurchasePoolPage({
       let batchCount = 0;
       for (const batchDate of dates) {
         const existing = logisticsBatches.find((batch) => batch.containerDate === batchDate && batch.logisticsUserId === logisticsProfile.id);
-        const batch = buildLogisticsBatch(records, skuItems, profile, batchDate, logisticsProfile, existing);
+        const batch = buildLogisticsBatch(assignableRecords, skuItems, profile, batchDate, logisticsProfile, existing);
         if (batch.items.length === 0) continue;
         await onSaveLogisticsBatch(batch);
         totalItems += batch.items.length;
@@ -293,6 +292,10 @@ export function PurchasePoolPage({
     if (key in drafts) return drafts[key];
     const value = record[field];
     return value === null || value === undefined ? '' : String(value);
+  }
+
+  function canEditField(field: EditablePoolField): boolean {
+    return isAdmin && Boolean(activePool) && (!activePool?.isAggregate || field === 'containerDate');
   }
 
   function patchRecord(record: PurchaseRecord, field: EditablePoolField, value: string): PurchaseRecord {
@@ -327,11 +330,15 @@ export function PurchasePoolPage({
 
   async function savePoolRecord(record: PurchaseRecord, field: EditablePoolField) {
     const key = draftKey(record.id, field);
-    if (!(key in drafts) || !canEditActivePool || !activePool) return;
+    if (!(key in drafts) || !canEditField(field) || !activePool) return;
     const nextRecord = patchRecord(record, field, drafts[key]);
+    const sourcePool = activePool.isAggregate
+      ? poolOptions.find((pool) => pool.records.some((item) => item.id === record.id))
+      : activePool;
+    if (!sourcePool) return;
     const nextPool: PurchasePool = {
-      ...activePool,
-      records: activePool.records.map((item) => (item.id === nextRecord.id ? nextRecord : item)),
+      ...sourcePool,
+      records: sourcePool.records.map((item) => (item.id === nextRecord.id ? nextRecord : item)),
     };
     setDrafts((current) => {
       const next = { ...current };
@@ -340,6 +347,7 @@ export function PurchasePoolPage({
     });
     try {
       await onSavePools([nextPool]);
+      await onSaveRecords([nextRecord]);
       setMessage('已保存采购池订单修改。');
     } catch (error) {
       console.error(error);
@@ -377,7 +385,7 @@ export function PurchasePoolPage({
   }
 
   function editableCell(record: PurchaseRecord, field: EditablePoolField, type = 'text') {
-    if (!canEditActivePool) return <span>{valueFor(record, field)}</span>;
+    if (!canEditField(field)) return <span>{valueFor(record, field)}</span>;
     if (field === 'status') {
       return (
         <select
@@ -451,7 +459,7 @@ export function PurchasePoolPage({
         {isAdmin && (
           <div className="form-actions">
             <button type="button" onClick={() => void applyPoolContainerDate()} disabled={!canApplyPoolDate || !poolDateDraft}>统一本池装柜日期</button>
-            <button type="button" className="primary" onClick={() => void assignLogisticsBatch()} disabled={!activePool || activePool.isAggregate || submittedRecords.length === 0 || logisticsProfiles.length === 0}>生成/刷新物流批次</button>
+            <button type="button" className="primary" onClick={() => void assignLogisticsBatch()} disabled={!activePool || submittedRecords.length === 0 || logisticsProfiles.length === 0}>生成/刷新物流批次</button>
           </div>
         )}
       </div>
