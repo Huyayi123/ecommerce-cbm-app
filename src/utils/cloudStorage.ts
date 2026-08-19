@@ -911,6 +911,29 @@ export async function submitLogisticsBatch(batch: LogisticsBatch): Promise<void>
   if (batchError) throwSupabaseError(batchError);
 }
 
+export async function clearLogisticsConfirmations(): Promise<void> {
+  const client = requireSupabase();
+  const { error: deleteError } = await client
+    .from('logistics_batches')
+    .delete()
+    .neq('id', '');
+  if (deleteError) throwSupabaseError(deleteError);
+
+  const { error: resetError } = await client
+    .from('purchase_records')
+    .update({
+      logistics_batch_id: null,
+      logistics_confirmation_status: 'unassigned',
+      logistics_loaded_carton_count: null,
+      logistics_loaded_tail_quantity: 0,
+      logistics_left_carton_count: null,
+      logistics_left_tail_quantity: 0,
+      logistics_source_record_id: null,
+    })
+    .neq('id', '');
+  if (resetError) throwSupabaseError(resetError);
+}
+
 export async function fetchPurchasePools(): Promise<PurchasePool[]> {
   const { data, error } = await requireSupabase()
     .from('purchase_pools')

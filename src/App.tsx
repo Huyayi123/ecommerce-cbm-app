@@ -31,6 +31,7 @@ import {
   fetchSkuItems,
   fetchSkuItemsForImport,
   fetchLogisticsBatches,
+  clearLogisticsConfirmations,
   replaceContainerRows,
   replacePurchaseRecords,
   replaceSkuItems,
@@ -403,6 +404,12 @@ function App() {
     await loadCloudData(profile);
   }
 
+  async function clearLogisticsData() {
+    await clearLogisticsConfirmations();
+    setLogisticsBatches([]);
+    await loadCloudData(profile);
+  }
+
   async function appendPurchaseRecords(records: PurchaseRecord[]) {
     try {
       const assignedRecords = assignBuyerEmails(records).map((record) => ({
@@ -694,6 +701,7 @@ function App() {
           onSubmitBatch={persistLogisticsSubmit}
           onApproveBatch={approveLogisticsBatch}
           onRejectBatch={rejectLogisticsBatch}
+          onClearLogistics={clearLogisticsData}
         />
       )}
       </div>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { AppProfile, LogisticsBatch, LogisticsBatchItem, PurchaseRecord, SkuItem } from '../types';
+import { exportSubmittedLogisticsBatches } from '../utils/exporters';
 import { buildLogisticsBatch, logisticsStatusLabel, normalizeLogisticsItemInput } from '../utils/logistics';
 import { formatErrorMessage } from '../utils/errors';
 
@@ -13,6 +14,7 @@ type Props = {
   onSubmitBatch: (batch: LogisticsBatch) => Promise<void>;
   onApproveBatch: (batch: LogisticsBatch) => Promise<void>;
   onRejectBatch: (batch: LogisticsBatch) => Promise<void>;
+  onClearLogistics: () => Promise<void>;
 };
 
 const SINGLE_ITEM_REJECT_MARK = 'admin驳回';
@@ -84,6 +86,7 @@ export function LogisticsLoadingPage({
   onSubmitBatch,
   onApproveBatch,
   onRejectBatch,
+  onClearLogistics,
 }: Props) {
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics'), [profiles]);
@@ -109,6 +112,7 @@ export function LogisticsLoadingPage({
     ?? visibleBatches[0]
     ?? null;
   const canEditActive = Boolean(activeBatch && !isAdmin && (activeBatch.status === 'draft' || activeBatch.status === 'rejected'));
+  const submittedBatches = useMemo(() => visibleBatches.filter((batch) => batch.status === 'submitted'), [visibleBatches]);
   const displayItems = useMemo(() => {
     if (!activeBatch) return [];
     return activeBatch.items
@@ -223,6 +227,19 @@ export function LogisticsLoadingPage({
     }
   }
 
+  async function handleClearLogistics() {
+    if (!isAdmin) return;
+    if (!window.confirm('确定清空全部物流装柜确认批次和测试物流状态吗？这个操作不可恢复。')) return;
+    try {
+      await onClearLogistics();
+      setDraftBatch(null);
+      setActiveBatchId('');
+      setMessage('已清空全部物流装柜确认批次，并重置采购记录物流状态。');
+    } catch (error) {
+      setMessage(`清空失败：${formatErrorMessage(error)}`);
+    }
+  }
+
   const stats = activeBatch ? batchStats({ ...activeBatch, items: displayItems }) : null;
 
   return (
@@ -234,6 +251,8 @@ export function LogisticsLoadingPage({
         </div>
         {activeBatch && (
           <div className="export-actions">
+            {isAdmin && <button type="button" disabled={submittedBatches.length === 0} onClick={() => exportSubmittedLogisticsBatches(submittedBatches)}>导出待审核表格</button>}
+            {isAdmin && <button type="button" className="danger" disabled={batches.length === 0} onClick={() => void handleClearLogistics()}>清空物流确认</button>}
             <strong className={`logistics-status ${activeBatch.status}`}>{logisticsStatusLabel(activeBatch.status)}</strong>
             {isAdmin && activeBatch.status === 'submitted' && <button type="button" className="primary" onClick={handleApprove}>审核通过并写回</button>}
             {isAdmin && activeBatch.status === 'submitted' && <button type="button" onClick={handleReject}>驳回</button>}

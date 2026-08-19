@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
-import type { AdAnalysisRow, AuditLog, CalculationRow, MonthlyProfitDetail, MonthlyProfitReturnDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
+import type { AdAnalysisRow, AuditLog, CalculationRow, LogisticsBatch, MonthlyProfitDetail, MonthlyProfitReturnDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
 import { mixedGroupsSummary, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
@@ -549,6 +549,41 @@ export function exportAdAnalysisRows(rows: AdAnalysisRow[], format: ExportFormat
   }
 
   writeWorkbook(workbook, '\u5e7f\u544a\u5206\u6790\u7ed3\u679c', format);
+}
+
+export function exportSubmittedLogisticsBatches(batches: LogisticsBatch[]): void {
+  const exportRows = batches
+    .filter((batch) => batch.status === 'submitted')
+    .flatMap((batch) => batch.items.map((item) => ({
+      批次日期: batch.containerDate,
+      物流商账号: batch.logisticsEmail,
+      提交时间: batch.submittedAt,
+      内部编号: item.internalCode,
+      图片: imageFormulaFor(item.imageUrl),
+      图片链接: item.imageUrl,
+      厂家名: item.manufacturerName,
+      SKU: item.sku,
+      产品名称: item.productName,
+      英文名称: item.englishName,
+      装柜日期: item.containerDate,
+      整箱件数: item.cartonCount ?? '',
+      每箱数量: item.unitsPerCarton ?? '',
+      尾箱数量: item.tailQuantity,
+      总件数: (item.cartonCount ?? 0) * (item.unitsPerCarton ?? 0) + item.tailQuantity,
+      装货方式: item.loadingType || '整柜',
+      混装组: item.mixedGroupsSummary,
+      装走整箱: item.loadedCartonCount ?? 0,
+      装走尾数: item.loadedTailQuantity,
+      留下整箱: item.leftCartonCount ?? 0,
+      留下尾数: item.leftTailQuantity,
+      物流备注: item.note,
+    })));
+  const worksheet = XLSX.utils.json_to_sheet(exportRows);
+  worksheet['!cols'] = [14, 26, 22, 12, 14, 42, 28, 18, 32, 42, 14, 12, 12, 12, 12, 12, 36, 12, 12, 12, 12, 36].map((wch) => ({ wch }));
+  worksheet['!autofilter'] = { ref: worksheet['!ref'] ?? 'A1:V1' };
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, '物流待审核');
+  writeWorkbook(workbook, '物流装柜待审核表', 'xlsx');
 }
 
 export function exportProfitAnalysisRows(rows: ProfitAnalysisRow[], shopName: string): void {
