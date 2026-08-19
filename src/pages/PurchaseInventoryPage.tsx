@@ -343,10 +343,19 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   }
 
   async function saveRecord() {
-    if (!canEditData || !canSaveDraft) return;
+    setMessage('已点击新增采购记录，正在准备保存...');
+    if (!canEditData) {
+      setMessage('当前账号没有编辑权限，不能新增采购记录。');
+      return;
+    }
+    if (!canSaveDraft) {
+      setMessage('请先填写 SKU，再新增采购记录。');
+      return;
+    }
     const record = withTotalAmount({ ...draft, id: editingId ?? crypto.randomUUID(), sku: draft.sku.trim() });
     try {
       setIsSaving(true);
+      setMessage(`正在保存采购记录：${record.sku}，请稍候...`);
       if (onSaveRecord) {
         await onSaveRecord(record);
       } else if (editingId) {
@@ -354,7 +363,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
       } else {
         await onChange([record, ...records]);
       }
-      setMessage(editingId ? '已保存采购记录修改。' : '已新增采购记录。');
+      setMessage(editingId ? '已保存采购记录修改。' : '已新增采购记录；如果列表未显示，请清空搜索或切换为全部历史。');
       resetDraft();
       setSortNowMs(Date.now());
     } catch (error) {
@@ -481,8 +490,6 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           </div>
         </div>
 
-        {message && <div className="inline-notice">{message}</div>}
-
         <div className="filter-grid inventory-filter-grid">
           <label>采购月份<select value={filters.purchaseMonth} onChange={(event) => setFilters({ ...filters, purchaseMonth: event.target.value })}><option value="recent">最近 3 个月</option><option value="">全部月份</option>{purchaseMonthOptions.map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>厂家名<select value={filters.manufacturerName} onChange={(event) => setFilters({ ...filters, manufacturerName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'manufacturerName').map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -539,8 +546,19 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           <label>状态<select value={draft.status} onChange={(event) => patchDraft('status', event.target.value as PurchaseStatus)}><option value="pending">待采购</option><option value="in_transit">海运在途</option><option value="arrived">已到货</option></select></label>
           <label className="wide">备注<input value={draft.note} onChange={(event) => patchDraft('note', event.target.value)} /></label>
           <div className="form-actions">
-            <button className="primary" type="button" onClick={() => void saveRecord()} disabled={!canSaveDraft || isSaving}>{isSaving ? '保存中...' : editingId ? '保存修改' : '新增采购记录'}</button>
+            <button
+              className="primary"
+              type="button"
+              onPointerDown={() => {
+                if (canSaveDraft && !isSaving) setMessage('按钮已触发，正在进入保存流程...');
+              }}
+              onClick={() => void saveRecord()}
+              disabled={!canSaveDraft || isSaving}
+            >
+              {isSaving ? '保存中...' : editingId ? '保存修改' : '新增采购记录'}
+            </button>
             <button type="button" onClick={resetDraft}>清空</button>
+            <span className="muted-action">{message || (canSaveDraft ? '保存状态：可新增' : '保存状态：请先填写 SKU')}</span>
           </div>
         </div>}
 
