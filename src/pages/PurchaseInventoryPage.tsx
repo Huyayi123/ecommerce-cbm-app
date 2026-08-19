@@ -7,7 +7,8 @@ import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logistic
 type Props = {
   records: PurchaseRecord[];
   skuItems: SkuItem[];
-  onChange: (records: PurchaseRecord[]) => void;
+  onChange: (records: PurchaseRecord[]) => void | Promise<void>;
+  onSaveRecord?: (record: PurchaseRecord) => void | Promise<void>;
   onDeleteRecords?: (ids: string[]) => void | Promise<void>;
   canEditData?: boolean;
   canDeleteData?: boolean;
@@ -165,13 +166,15 @@ function skuKey(value: string): string {
   return value.trim().toUpperCase();
 }
 
-export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRecords, canEditData = true, canDeleteData = true, canSaveMissingSkuHistory = false }: Props) {
+export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecord, onDeleteRecords, canEditData = true, canDeleteData = true, canSaveMissingSkuHistory = false }: Props) {
   const [draft, setDraft] = useState<DraftRecord>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchDraft, setSearchDraft] = useState('');
   const [page, setPage] = useState(1);
   const [sortNowMs, setSortNowMs] = useState(() => Date.now());
+  const [message, setMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const canSaveDraft = Boolean(draft.sku.trim()) || Boolean(editingId && canSaveMissingSkuHistory);
   const [filters, setFilters] = useState({
     manufacturerName: '',
@@ -339,15 +342,27 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
     setEditingId(null);
   }
 
-  function saveRecord() {
+  async function saveRecord() {
     if (!canEditData || !canSaveDraft) return;
     const record = withTotalAmount({ ...draft, id: editingId ?? crypto.randomUUID(), sku: draft.sku.trim() });
-    if (editingId) {
-      onChange(records.map((item) => (item.id === editingId ? record : item)));
-    } else {
-      onChange([record, ...records]);
+    try {
+      setIsSaving(true);
+      if (onSaveRecord) {
+        await onSaveRecord(record);
+      } else if (editingId) {
+        await onChange(records.map((item) => (item.id === editingId ? record : item)));
+      } else {
+        await onChange([record, ...records]);
+      }
+      setMessage(editingId ? '已保存采购记录修改。' : '已新增采购记录。');
+      resetDraft();
+      setSortNowMs(Date.now());
+    } catch (error) {
+      console.error(error);
+      setMessage(`保存失败：${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setIsSaving(false);
     }
-    resetDraft();
   }
 
   function editRecord(record: PurchaseRecord) {
@@ -466,6 +481,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
           </div>
         </div>
 
+        {message && <div className="inline-notice">{message}</div>}
+
         <div className="filter-grid inventory-filter-grid">
           <label>采购月份<select value={filters.purchaseMonth} onChange={(event) => setFilters({ ...filters, purchaseMonth: event.target.value })}><option value="recent">最近 3 个月</option><option value="">全部月份</option>{purchaseMonthOptions.map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>厂家名<select value={filters.manufacturerName} onChange={(event) => setFilters({ ...filters, manufacturerName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'manufacturerName').map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -522,7 +539,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onDeleteRec
           <label>状态<select value={draft.status} onChange={(event) => patchDraft('status', event.target.value as PurchaseStatus)}><option value="pending">待采购</option><option value="in_transit">海运在途</option><option value="arrived">已到货</option></select></label>
           <label className="wide">备注<input value={draft.note} onChange={(event) => patchDraft('note', event.target.value)} /></label>
           <div className="form-actions">
-            <button className="primary" type="button" onClick={saveRecord} disabled={!canSaveDraft}>{editingId ? '保存修改' : '新增采购记录'}</button>
+            <button className="primary" type="button" onClick={() => void saveRecord()} disabled={!canSaveDraft || isSaving}>{isSaving ? '保存中...' : editingId ? '保存修改' : '新增采购记录'}</button>
             <button type="button" onClick={resetDraft}>清空</button>
           </div>
         </div>}

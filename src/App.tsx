@@ -619,6 +619,7 @@ function App() {
           records={purchaseRecords}
           skuItems={skuItems}
           onChange={(records) => void persistPurchaseRecords(records)}
+          onSaveRecord={(record) => persistPurchaseRecordUpdates([record])}
           onDeleteRecords={persistPurchaseRecordDeletes}
           canEditData={editable}
           canDeleteData={deletable}
