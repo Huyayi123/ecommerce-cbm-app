@@ -549,9 +549,6 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
             <button
               className="primary"
               type="button"
-              onPointerDown={() => {
-                if (canSaveDraft && !isSaving) setMessage('按钮已触发，正在进入保存流程...');
-              }}
               onClick={() => void saveRecord()}
               disabled={!canSaveDraft || isSaving}
             >

@@ -57,7 +57,7 @@ export function effectivePurchaseQuantity(record: PurchaseQuantityLike): number 
 }
 
 export function isInventoryRecord(record: PurchaseRecord): boolean {
-  return record.status === 'in_transit' || record.status === 'arrived';
+  return record.status === 'pending' || record.status === 'in_transit' || record.status === 'arrived';
 }
 
 export function logisticsCbmFor(record: PurchaseRecord): number {
