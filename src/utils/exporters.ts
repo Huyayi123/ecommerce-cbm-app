@@ -97,12 +97,12 @@ function applyMyPurchaseOrderStyles(worksheet: XLSX.WorkSheet, rowCount: number)
   const left = { horizontal: 'left', vertical: 'center', wrapText: true };
 
   for (let row = 1; row <= rowCount; row += 1) {
-    for (let col = 1; col <= 18; col += 1) {
+    for (let col = 1; col <= 21; col += 1) {
       const address = cellRef(row, col);
       if (!worksheet[address]) worksheet[address] = { t: 's', v: '' };
       worksheet[address].s = {
         border: row === 1 ? undefined : border,
-        alignment: col === 1 || col === 4 || col === 5 || col === 17 ? left : center,
+        alignment: col === 1 || col === 4 || col === 5 || col === 20 ? left : center,
         font: row === 1 ? { bold: true } : undefined,
         fill: row === 1 ? { patternType: 'solid', fgColor: { rgb: '92D050' } } : undefined,
       };
@@ -118,6 +118,9 @@ function applyMyPurchaseOrderStyles(worksheet: XLSX.WorkSheet, rowCount: number)
     { wch: 12 },
     { wch: 12 },
     { wch: 12 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
     { wch: 10 },
     { wch: 10 },
     { wch: 14 },
@@ -147,6 +150,9 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: Sku
     '店铺',
     '采购人',
     '实际采购数量',
+    '整箱件数',
+    '每箱数量',
+    '尾箱数量',
     '采购单价',
     '运费',
     '混装总金额',
@@ -180,6 +186,9 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: Sku
       record.shopName,
       buyerName,
       baseQuantity,
+      record.cartonCount ?? '',
+      record.unitsPerCarton ?? '',
+      record.tailQuantity,
       record.purchasePrice,
       record.freightCost,
       '',
@@ -202,6 +211,9 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: Sku
         record.shopName,
         buyerName,
         line.quantity,
+        '',
+        '',
+        '',
         line.purchasePrice,
         '',
         '',
@@ -218,7 +230,7 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: Sku
     const endRow = rows.length;
     formulaSections.push({ start: startRow, end: endRow, totalCbm: record.totalCbm, totalWeightKg: record.totalWeightKg });
     if (endRow > startRow) {
-      for (const column of [1, 11, 12, 16, 18]) {
+      for (const column of [1, 14, 15, 19, 21]) {
         merges.push({ s: { r: startRow - 1, c: column - 1 }, e: { r: endRow - 1, c: column - 1 } });
       }
     }
@@ -228,12 +240,12 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: Sku
   worksheet['!merges'] = merges;
   for (const section of formulaSections) {
     const rowRefs = Array.from({ length: section.end - section.start + 1 }, (_, index) => section.start + index);
-    const amountFormula = rowRefs.map((row) => `H${row}*I${row}`).join('+') + '+' + rowRefs.map((row) => `J${row}`).join('+');
+    const amountFormula = rowRefs.map((row) => `H${row}*L${row}`).join('+') + '+' + rowRefs.map((row) => `M${row}`).join('+');
     const quantityFormulaText = rowRefs.map((row) => `H${row}`).join('+');
-    setFormula(worksheet, section.start, 11, amountFormula);
-    setFormula(worksheet, section.start, 18, quantityFormulaText);
-    worksheet[cellRef(section.start, 12)] = { t: 'n', v: section.totalCbm };
-    if (section.totalWeightKg !== null) worksheet[cellRef(section.start, 16)] = { t: 'n', v: section.totalWeightKg };
+    setFormula(worksheet, section.start, 14, amountFormula);
+    setFormula(worksheet, section.start, 21, quantityFormulaText);
+    worksheet[cellRef(section.start, 15)] = { t: 'n', v: section.totalCbm };
+    if (section.totalWeightKg !== null) worksheet[cellRef(section.start, 19)] = { t: 'n', v: section.totalWeightKg };
   }
   applyMyPurchaseOrderStyles(worksheet, rows.length);
 
