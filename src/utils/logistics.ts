@@ -1,6 +1,6 @@
 import type { AppProfile, LogisticsBatch, LogisticsBatchItem, PurchaseRecord, SkuItem } from '../types';
 import { round } from './number';
-import { mixedGroupsSummary, withPurchaseTotals } from './purchaseRecords';
+import { effectivePurchaseQuantity, mixedGroupsSummary, withPurchaseTotals } from './purchaseRecords';
 
 function safeBatchId(containerDate: string, logisticsUserId: string, logisticsEmail: string): string {
   const owner = logisticsUserId || logisticsEmail || 'unassigned';
@@ -44,6 +44,18 @@ function findSkuForRecord(
     ?? lookups.byEnglishName.get(normalizedKey(record.englishName));
 }
 
+function packingTotalQuantity(cartonCount: number | null, unitsPerCarton: number | null, tailQuantity: number): number | null {
+  return cartonCount !== null && unitsPerCarton !== null && unitsPerCarton > 0
+    ? cartonCount * unitsPerCarton + tailQuantity
+    : null;
+}
+
+export function logisticsItemTotalQuantity(item: LogisticsBatchItem): number {
+  const packedTotal = packingTotalQuantity(item.cartonCount, item.unitsPerCarton, item.tailQuantity);
+  if (packedTotal !== null) return packedTotal;
+  return Math.max(0, Number(item.totalQuantity ?? 0));
+}
+
 export function logisticsStatusLabel(status: LogisticsBatch['status']): string {
   if (status === 'submitted') return '待审核';
   if (status === 'approved') return '已审核';
@@ -81,6 +93,7 @@ export function buildLogisticsBatch(
     const existing = existingItems.get(record.id);
     const cartonCount = record.cartonCount ?? null;
     const tailQuantity = record.tailQuantity ?? 0;
+    const totalQuantity = effectivePurchaseQuantity(record);
     return {
       id: existing?.id || `${batchId}-${record.id}`.replace(/[^a-zA-Z0-9_-]/g, '-'),
       batchId,
@@ -96,6 +109,7 @@ export function buildLogisticsBatch(
       cartonCount,
       unitsPerCarton: record.unitsPerCarton,
       tailQuantity,
+      totalQuantity,
       loadingType: record.loadingType,
       isMixed: record.isMixed,
       mixedGroupsSummary: mixedGroupsSummary(record),
@@ -142,6 +156,7 @@ export function normalizeLogisticsItemInput(item: LogisticsBatchItem): Logistics
 
   return {
     ...item,
+    totalQuantity: logisticsItemTotalQuantity(item),
     loadedCartonCount: loadedCartons,
     loadedTailQuantity: loadedTail,
     leftCartonCount: leftCartons,
@@ -160,6 +175,28 @@ function setPacking(record: PurchaseRecord, cartonCount: number, tailQuantity: n
     cartonCount,
     tailQuantity,
   }, { recalculateAmount: true });
+}
+
+function quantityForLogisticsPart(record: PurchaseRecord, item: LogisticsBatchItem, cartonCount: number, tailQuantity: number): number {
+  if (record.unitsPerCarton !== null && record.unitsPerCarton !== undefined && record.unitsPerCarton > 0) {
+    return cartonCount * record.unitsPerCarton + tailQuantity;
+  }
+  const totalQuantity = logisticsItemTotalQuantity(item) || effectivePurchaseQuantity(record);
+  const originalCartons = Math.max(0, record.cartonCount ?? 0);
+  const originalTail = Math.max(0, record.tailQuantity ?? 0);
+  const originalParts = originalCartons + (originalTail > 0 ? 1 : 0);
+  const selectedParts = Math.max(0, cartonCount) + (tailQuantity > 0 ? 1 : 0);
+  if (originalParts > 0) return round(totalQuantity * Math.min(1, selectedParts / originalParts), 0);
+  return tailQuantity > 0 ? tailQuantity : totalQuantity;
+}
+
+function setPackingWithQuantity(record: PurchaseRecord, item: LogisticsBatchItem, cartonCount: number, tailQuantity: number): PurchaseRecord {
+  const quantity = quantityForLogisticsPart(record, item, cartonCount, tailQuantity);
+  return setPacking({
+    ...record,
+    purchaseQuantity: quantity,
+    confirmedPurchaseQuantity: quantity,
+  }, cartonCount, tailQuantity);
 }
 
 export function applyApprovedLogisticsBatch(
@@ -226,7 +263,7 @@ export function applyApprovedLogisticsBatch(
       continue;
     }
 
-    const loadedRecord = setPacking({
+    const loadedRecord = setPackingWithQuantity({
       ...record,
       ...common,
       isConfirmed: true,
@@ -237,9 +274,9 @@ export function applyApprovedLogisticsBatch(
       cartonCount: loadedCartons,
       tailQuantity: loadedTail,
       note: noteWithLogistics(record, item.note, '物流确认部分装柜'),
-    }, loadedCartons, loadedTail);
+    }, item, loadedCartons, loadedTail);
 
-    const leftRecord = setPacking({
+    const leftRecord = setPackingWithQuantity({
       ...record,
       id: crypto.randomUUID(),
       logisticsSourceRecordId: record.id,
@@ -259,7 +296,7 @@ export function applyApprovedLogisticsBatch(
       note: noteWithLogistics(record, item.note, '物流拆分留下部分'),
       createdAt: now,
       updatedAt: now,
-    }, leftCartons, leftTail);
+    }, item, leftCartons, leftTail);
 
     changed.set(record.id, loadedRecord);
     created.push(leftRecord);

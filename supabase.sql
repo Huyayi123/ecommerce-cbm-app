@@ -430,6 +430,7 @@ create table if not exists public.logistics_batch_items (
   carton_count numeric,
   units_per_carton numeric,
   tail_quantity numeric not null default 0,
+  total_quantity numeric not null default 0,
   loading_type text,
   is_mixed boolean not null default false,
   mixed_groups_summary text,
@@ -441,6 +442,9 @@ create table if not exists public.logistics_batch_items (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.logistics_batch_items
+add column if not exists total_quantity numeric not null default 0;
 
 create index if not exists logistics_batches_container_date_idx
 on public.logistics_batches (container_date desc);

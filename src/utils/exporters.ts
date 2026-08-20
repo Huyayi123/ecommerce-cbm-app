@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx-js-style';
 import type { AdAnalysisRow, AuditLog, CalculationRow, LogisticsBatch, MonthlyProfitDetail, MonthlyProfitReturnDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
+import { logisticsItemTotalQuantity } from './logistics';
 import { mixedGroupsSummary, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
@@ -570,7 +571,7 @@ export function exportSubmittedLogisticsBatches(batches: LogisticsBatch[]): void
       整箱件数: item.cartonCount ?? '',
       每箱数量: item.unitsPerCarton ?? '',
       尾箱数量: item.tailQuantity,
-      总件数: (item.cartonCount ?? 0) * (item.unitsPerCarton ?? 0) + item.tailQuantity,
+      总件数: logisticsItemTotalQuantity(item),
       装货方式: item.loadingType || '整柜',
       混装组: item.mixedGroupsSummary,
       装走整箱: item.loadedCartonCount ?? 0,
@@ -584,7 +585,7 @@ export function exportSubmittedLogisticsBatches(batches: LogisticsBatch[]): void
     const row = index + 2;
     const imageFormula = imageFormulaFor(item.imageUrl);
     if (imageFormula) worksheet[cellRef(row, 5)] = { t: 's', f: imageFormula, v: '' };
-    setFormula(worksheet, row, 15, `L${row}*M${row}+N${row}`, (item.cartonCount ?? 0) * (item.unitsPerCarton ?? 0) + item.tailQuantity);
+    setFormula(worksheet, row, 15, `IF(OR(M${row}="",M${row}=0),${logisticsItemTotalQuantity(item)},L${row}*M${row}+N${row})`, logisticsItemTotalQuantity(item));
     setFormula(worksheet, row, 20, `MAX(0,L${row}-R${row})`, item.leftCartonCount ?? 0);
     setFormula(worksheet, row, 21, `MAX(0,N${row}-S${row})`, item.leftTailQuantity);
   });
@@ -606,7 +607,7 @@ export function exportLogisticsBatch(batch: LogisticsBatch): void {
     整箱件数: item.cartonCount ?? '',
     每箱数量: item.unitsPerCarton ?? '',
     尾箱数量: item.tailQuantity,
-    总件数: (item.cartonCount ?? 0) * (item.unitsPerCarton ?? 0) + item.tailQuantity,
+    总件数: logisticsItemTotalQuantity(item),
     装货方式: item.loadingType || '整柜',
     混装组: item.mixedGroupsSummary,
     装走整箱: item.loadedCartonCount ?? 0,
@@ -618,7 +619,7 @@ export function exportLogisticsBatch(batch: LogisticsBatch): void {
   const worksheet = XLSX.utils.json_to_sheet(exportRows);
   batch.items.forEach((item, index) => {
     const row = index + 2;
-    setFormula(worksheet, row, 10, `G${row}*H${row}+I${row}`, (item.cartonCount ?? 0) * (item.unitsPerCarton ?? 0) + item.tailQuantity);
+    setFormula(worksheet, row, 10, `IF(OR(H${row}="",H${row}=0),${logisticsItemTotalQuantity(item)},G${row}*H${row}+I${row})`, logisticsItemTotalQuantity(item));
     setFormula(worksheet, row, 15, `MAX(0,G${row}-M${row})`, item.leftCartonCount ?? 0);
     setFormula(worksheet, row, 16, `MAX(0,I${row}-N${row})`, item.leftTailQuantity);
   });

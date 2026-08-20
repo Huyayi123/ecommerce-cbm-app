@@ -159,6 +159,7 @@ export type LogisticsBatchItem = {
   cartonCount: number | null;
   unitsPerCarton: number | null;
   tailQuantity: number;
+  totalQuantity: number;
   loadingType: PurchaseRecord['loadingType'];
   isMixed: boolean;
   mixedGroupsSummary: string;

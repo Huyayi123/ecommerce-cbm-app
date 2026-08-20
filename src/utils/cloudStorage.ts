@@ -100,6 +100,7 @@ type LogisticsBatchItemRow = {
   carton_count: number | null;
   units_per_carton: number | null;
   tail_quantity: number | null;
+  total_quantity?: number | null;
   loading_type: PurchaseRecord['loadingType'] | null;
   is_mixed: boolean | null;
   mixed_groups_summary: string | null;
@@ -111,6 +112,8 @@ type LogisticsBatchItemRow = {
   created_at: string | null;
   updated_at: string | null;
 };
+
+type LogisticsBatchItemRowWithoutTotalQuantity = Omit<LogisticsBatchItemRow, 'total_quantity'>;
 
 type ContainerRow = {
   id: string;
@@ -471,6 +474,7 @@ function mapLogisticsBatchItem(row: LogisticsBatchItemRow): LogisticsBatchItem {
     cartonCount: row.carton_count === null || row.carton_count === undefined ? null : Number(row.carton_count),
     unitsPerCarton: row.units_per_carton === null || row.units_per_carton === undefined ? null : Number(row.units_per_carton),
     tailQuantity: Number(row.tail_quantity ?? 0),
+    totalQuantity: Number(row.total_quantity ?? 0),
     loadingType: row.loading_type ?? '',
     isMixed: Boolean(row.is_mixed ?? false),
     mixedGroupsSummary: row.mixed_groups_summary ?? '',
@@ -533,6 +537,7 @@ function toLogisticsBatchItemRow(item: LogisticsBatchItem): LogisticsBatchItemRo
     carton_count: item.cartonCount,
     units_per_carton: item.unitsPerCarton,
     tail_quantity: item.tailQuantity,
+    total_quantity: item.totalQuantity,
     loading_type: item.loadingType || null,
     is_mixed: item.isMixed,
     mixed_groups_summary: item.mixedGroupsSummary,
@@ -544,6 +549,12 @@ function toLogisticsBatchItemRow(item: LogisticsBatchItem): LogisticsBatchItemRo
     created_at: item.createdAt || null,
     updated_at: item.updatedAt || null,
   };
+}
+
+function withoutLogisticsTotalQuantity(row: LogisticsBatchItemRow): LogisticsBatchItemRowWithoutTotalQuantity {
+  const rest = { ...row };
+  delete rest.total_quantity;
+  return rest;
 }
 
 function toPurchasePoolRow(pool: PurchasePool): PurchasePoolRow {
@@ -876,8 +887,13 @@ export async function upsertLogisticsBatch(batch: LogisticsBatch): Promise<void>
   if (deleteError) throwSupabaseError(deleteError);
 
   if (normalized.items.length > 0) {
-    const { error: itemsError } = await client.from('logistics_batch_items').insert(normalized.items.map(toLogisticsBatchItemRow));
-    if (itemsError) throwSupabaseError(itemsError);
+    const itemRows = normalized.items.map(toLogisticsBatchItemRow);
+    const { error: itemsError } = await client.from('logistics_batch_items').insert(itemRows);
+    if (itemsError) {
+      if (!isMissingColumnError(itemsError)) throwSupabaseError(itemsError);
+      const { error: retryError } = await client.from('logistics_batch_items').insert(itemRows.map(withoutLogisticsTotalQuantity));
+      if (retryError) throwSupabaseError(retryError);
+    }
   }
 }
 

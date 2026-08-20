@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { AppProfile, LogisticsBatch, LogisticsBatchItem, PurchaseRecord, SkuItem } from '../types';
 import { exportLogisticsBatch, exportSubmittedLogisticsBatches } from '../utils/exporters';
 import { parseLogisticsBatchFile } from '../utils/fileParsers';
-import { buildLogisticsBatch, logisticsStatusLabel, normalizeLogisticsItemInput } from '../utils/logistics';
+import { buildLogisticsBatch, logisticsItemTotalQuantity, logisticsStatusLabel, normalizeLogisticsItemInput } from '../utils/logistics';
 import { formatErrorMessage } from '../utils/errors';
 
 type Props = {
@@ -398,7 +398,7 @@ export function LogisticsLoadingPage({
                     <td>{normalized.cartonCount ?? ''}</td>
                     <td>{normalized.unitsPerCarton ?? ''}</td>
                     <td>{normalized.tailQuantity}</td>
-                    <td>{(normalized.cartonCount ?? 0) * (normalized.unitsPerCarton ?? 0) + normalized.tailQuantity}</td>
+                    <td>{logisticsItemTotalQuantity(normalized)}</td>
                     <td>{normalized.loadingType || '整柜'}</td>
                     <td><span className="cell-ellipsis" title={normalized.mixedGroupsSummary}>{normalized.mixedGroupsSummary || '-'}</span></td>
                     <td><input type="number" min="0" value={normalized.loadedCartonCount ?? 0} disabled={readOnly || normalized.isMixed} onChange={(event) => patchItem(normalized.id, { loadedCartonCount: nonNegativeInteger(Number(event.target.value)) })} /></td>
