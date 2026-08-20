@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { AppProfile, LogisticsBatch, LogisticsBatchItem, PurchaseRecord, SkuItem } from '../types';
-import { exportSubmittedLogisticsBatches } from '../utils/exporters';
+import { exportLogisticsBatch, exportSubmittedLogisticsBatches } from '../utils/exporters';
+import { parseLogisticsBatchFile } from '../utils/fileParsers';
 import { buildLogisticsBatch, logisticsStatusLabel, normalizeLogisticsItemInput } from '../utils/logistics';
 import { formatErrorMessage } from '../utils/errors';
 
@@ -110,6 +111,7 @@ export function LogisticsLoadingPage({
   const [draftBatch, setDraftBatch] = useState<LogisticsBatch | null>(null);
   const [message, setMessage] = useState('');
   const [searchText, setSearchText] = useState('');
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const activeBatch = draftBatch
     ?? visibleBatches.find((batch) => batch.id === activeBatchId)
@@ -163,6 +165,47 @@ export function LogisticsLoadingPage({
       items: activeBatch.items.map((item) => (item.id === itemId ? normalizeLogisticsItemInput({ ...item, ...patch }) : item)),
     };
     setDraftBatch(nextBatch);
+  }
+
+  async function handleImportBatch(file: File | undefined) {
+    if (!file || !activeBatch || !canEditActive) return;
+    try {
+      const importRows = await parseLogisticsBatchFile(file);
+      let matchedCount = 0;
+      const itemById = new Map(activeBatch.items.map((item) => [item.id, item]));
+      const itemByInternalCode = new Map(activeBatch.items.filter((item) => item.internalCode.trim()).map((item) => [item.internalCode.trim(), item]));
+      const itemBySku = new Map(activeBatch.items.filter((item) => item.sku.trim()).map((item) => [item.sku.trim().toUpperCase(), item]));
+      const patches = new Map<string, Partial<LogisticsBatchItem>>();
+
+      for (const row of importRows) {
+        const matched = itemById.get(row.itemId)
+          ?? itemByInternalCode.get(row.internalCode)
+          ?? itemBySku.get(row.sku.toUpperCase());
+        if (!matched) continue;
+        const patch: Partial<LogisticsBatchItem> = {};
+        if (row.loadedCartonCount !== null) patch.loadedCartonCount = nonNegativeInteger(row.loadedCartonCount);
+        if (row.loadedTailQuantity !== null) patch.loadedTailQuantity = nonNegativeInteger(row.loadedTailQuantity);
+        if (row.leftCartonCount !== null) patch.leftCartonCount = nonNegativeInteger(row.leftCartonCount);
+        if (row.leftTailQuantity !== null) patch.leftTailQuantity = nonNegativeInteger(row.leftTailQuantity);
+        if (row.note) patch.note = row.note;
+        patches.set(matched.id, patch);
+        matchedCount += 1;
+      }
+
+      if (matchedCount === 0) {
+        setMessage('导入失败：没有匹配到当前批次的明细，请确认表格来自当前批次导出。');
+        return;
+      }
+      setDraftBatch({
+        ...activeBatch,
+        items: activeBatch.items.map((item) => normalizeLogisticsItemInput({ ...item, ...(patches.get(item.id) ?? {}) })),
+      });
+      setMessage(`已导入 ${matchedCount} 条物流明细，请检查后保存草稿或提交审核。`);
+    } catch (error) {
+      setMessage(`导入失败：${formatErrorMessage(error)}`);
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
   }
 
   async function handleSubmit() {
@@ -255,12 +298,15 @@ export function LogisticsLoadingPage({
         </div>
         {activeBatch && (
           <div className="export-actions">
+            {!isAdmin && <button type="button" disabled={!activeBatch} onClick={() => exportLogisticsBatch(activeBatch)}>导出表格</button>}
+            {!isAdmin && <button type="button" disabled={!canEditActive} onClick={() => importInputRef.current?.click()}>导入表格</button>}
             {isAdmin && <button type="button" disabled={submittedBatches.length === 0} onClick={() => exportSubmittedLogisticsBatches(submittedBatches)}>导出待审核表格</button>}
             {isAdmin && <button type="button" className="danger" disabled={batches.length === 0} onClick={() => void handleClearLogistics()}>清空物流确认</button>}
             <strong className={`logistics-status ${activeBatch.status}`}>{logisticsStatusLabel(activeBatch.status)}</strong>
             {isAdmin && activeBatch.status === 'submitted' && <button type="button" className="primary" onClick={handleApprove}>审核通过并写回</button>}
             {isAdmin && activeBatch.status === 'submitted' && <button type="button" onClick={handleReject}>驳回</button>}
             {!isAdmin && <button type="button" className="primary" disabled={!canEditActive} onClick={handleSubmit}>提交审核</button>}
+            <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" hidden onChange={(event) => void handleImportBatch(event.target.files?.[0])} />
           </div>
         )}
       </div>

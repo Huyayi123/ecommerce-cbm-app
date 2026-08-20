@@ -586,6 +586,34 @@ export function exportSubmittedLogisticsBatches(batches: LogisticsBatch[]): void
   writeWorkbook(workbook, '物流装柜待审核表', 'xlsx');
 }
 
+export function exportLogisticsBatch(batch: LogisticsBatch): void {
+  const exportRows = batch.items.map((item) => ({
+    明细ID: item.id,
+    内部编号: item.internalCode,
+    SKU: item.sku,
+    产品名称: item.productName,
+    英文名称: item.englishName,
+    装柜日期: item.containerDate,
+    整箱件数: item.cartonCount ?? '',
+    每箱数量: item.unitsPerCarton ?? '',
+    尾箱数量: item.tailQuantity,
+    总件数: (item.cartonCount ?? 0) * (item.unitsPerCarton ?? 0) + item.tailQuantity,
+    装货方式: item.loadingType || '整柜',
+    混装组: item.mixedGroupsSummary,
+    装走整箱: item.loadedCartonCount ?? 0,
+    装走尾数: item.loadedTailQuantity,
+    留下整箱: item.leftCartonCount ?? 0,
+    留下尾数: item.leftTailQuantity,
+    物流备注: item.note,
+  }));
+  const worksheet = XLSX.utils.json_to_sheet(exportRows);
+  worksheet['!cols'] = [28, 12, 18, 32, 42, 14, 12, 12, 12, 12, 12, 36, 12, 12, 12, 12, 36].map((wch) => ({ wch }));
+  worksheet['!autofilter'] = { ref: worksheet['!ref'] ?? 'A1:Q1' };
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, '物流装柜确认');
+  writeWorkbook(workbook, `${batch.containerDate || '未填日期'}_物流装柜确认`, 'xlsx');
+}
+
 export function exportProfitAnalysisRows(rows: ProfitAnalysisRow[], shopName: string): void {
   const statusLabels: Record<ProfitAnalysisRow['status'], string> = {
     profit: '盈利',

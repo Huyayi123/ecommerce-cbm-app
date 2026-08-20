@@ -59,6 +59,17 @@ const AD_REPORT_HEADERS = {
   roas: ['ROAS', 'roas', 'RoAS', 'Return on Ad Spend'],
 } as const;
 
+const LOGISTICS_IMPORT_HEADERS = {
+  itemId: ['明细ID', '物流明细ID', 'item_id', 'id'],
+  internalCode: ['内部编号', '内部产品编号', 'internal_code', 'internalCode'],
+  sku: ['SKU', 'sku'],
+  loadedCartonCount: ['装走整箱', '装走箱数', 'loaded_carton_count', 'loadedCartonCount'],
+  loadedTailQuantity: ['装走尾数', 'loaded_tail_quantity', 'loadedTailQuantity'],
+  leftCartonCount: ['留下整箱', '留下箱数', 'left_carton_count', 'leftCartonCount'],
+  leftTailQuantity: ['留下尾数', 'left_tail_quantity', 'leftTailQuantity'],
+  note: ['物流备注', '备注', 'note', 'notes'],
+} as const;
+
 export type AdReportImportRow = {
   rowId: string;
   rowNumber: number;
@@ -71,6 +82,18 @@ export type AdReportImportRow = {
   adSalesQuantity: number;
   roas: number | null;
   raw: Record<string, unknown>;
+};
+
+export type LogisticsBatchImportRow = {
+  rowNumber: number;
+  itemId: string;
+  internalCode: string;
+  sku: string;
+  loadedCartonCount: number | null;
+  loadedTailQuantity: number | null;
+  leftCartonCount: number | null;
+  leftTailQuantity: number | null;
+  note: string;
 };
 
 function buildHeaderMap(headers: string[]): Map<string, string> {
@@ -308,6 +331,10 @@ function pickAdReportField(row: Record<string, unknown>, headers: string[], fiel
   return pickField(row, headers, AD_REPORT_HEADERS[field]);
 }
 
+function pickLogisticsField(row: Record<string, unknown>, headers: string[], field: keyof typeof LOGISTICS_IMPORT_HEADERS): unknown {
+  return pickField(row, headers, LOGISTICS_IMPORT_HEADERS[field]);
+}
+
 function pickDirectField(row: Record<string, unknown>, keys: string[]): unknown {
   for (const key of keys) {
     const value = row[key];
@@ -337,6 +364,27 @@ export async function parseAdReportFile(file: File): Promise<AdReportImportRow[]
       adSalesQuantity: toNumber(pickAdReportField(row, headers, 'adSalesQuantity') ?? pickDirectField(row, ['Orders (SKU)', 'Orders', 'Units Sold'])) ?? 0,
       roas: toNumber(pickAdReportField(row, headers, 'roas')),
       raw: row,
+    }];
+  });
+}
+
+export async function parseLogisticsBatchFile(file: File): Promise<LogisticsBatchImportRow[]> {
+  const { headers, rows } = readRows(await file.arrayBuffer(), file.name);
+  return rows.flatMap((row, index) => {
+    const itemId = String(pickLogisticsField(row, headers, 'itemId') ?? '').trim();
+    const internalCode = String(pickLogisticsField(row, headers, 'internalCode') ?? '').trim();
+    const sku = String(pickLogisticsField(row, headers, 'sku') ?? '').trim();
+    if (!itemId && !internalCode && !sku) return [];
+    return [{
+      rowNumber: index + 2,
+      itemId,
+      internalCode,
+      sku,
+      loadedCartonCount: toNumber(pickLogisticsField(row, headers, 'loadedCartonCount')),
+      loadedTailQuantity: toNumber(pickLogisticsField(row, headers, 'loadedTailQuantity')),
+      leftCartonCount: toNumber(pickLogisticsField(row, headers, 'leftCartonCount')),
+      leftTailQuantity: toNumber(pickLogisticsField(row, headers, 'leftTailQuantity')),
+      note: String(pickLogisticsField(row, headers, 'note') ?? '').trim(),
     }];
   });
 }
