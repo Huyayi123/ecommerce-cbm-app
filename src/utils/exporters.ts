@@ -552,9 +552,10 @@ export function exportAdAnalysisRows(rows: AdAnalysisRow[], format: ExportFormat
 }
 
 export function exportSubmittedLogisticsBatches(batches: LogisticsBatch[]): void {
-  const exportRows = batches
+  const flatItems = batches
     .filter((batch) => batch.status === 'submitted')
-    .flatMap((batch) => batch.items.map((item) => ({
+    .flatMap((batch) => batch.items.map((item) => ({ batch, item })));
+  const exportRows = flatItems.map(({ batch, item }) => ({
       批次日期: batch.containerDate,
       物流商账号: batch.logisticsEmail,
       提交时间: batch.submittedAt,
@@ -577,8 +578,16 @@ export function exportSubmittedLogisticsBatches(batches: LogisticsBatch[]): void
       留下整箱: item.leftCartonCount ?? 0,
       留下尾数: item.leftTailQuantity,
       物流备注: item.note,
-    })));
+    }));
   const worksheet = XLSX.utils.json_to_sheet(exportRows);
+  flatItems.forEach(({ item }, index) => {
+    const row = index + 2;
+    const imageFormula = imageFormulaFor(item.imageUrl);
+    if (imageFormula) worksheet[cellRef(row, 5)] = { t: 's', f: imageFormula, v: '' };
+    setFormula(worksheet, row, 15, `L${row}*M${row}+N${row}`, (item.cartonCount ?? 0) * (item.unitsPerCarton ?? 0) + item.tailQuantity);
+    setFormula(worksheet, row, 20, `MAX(0,L${row}-R${row})`, item.leftCartonCount ?? 0);
+    setFormula(worksheet, row, 21, `MAX(0,N${row}-S${row})`, item.leftTailQuantity);
+  });
   worksheet['!cols'] = [14, 26, 22, 12, 14, 42, 28, 18, 32, 42, 14, 12, 12, 12, 12, 12, 36, 12, 12, 12, 12, 36].map((wch) => ({ wch }));
   worksheet['!autofilter'] = { ref: worksheet['!ref'] ?? 'A1:V1' };
   const workbook = XLSX.utils.book_new();
@@ -607,6 +616,12 @@ export function exportLogisticsBatch(batch: LogisticsBatch): void {
     物流备注: item.note,
   }));
   const worksheet = XLSX.utils.json_to_sheet(exportRows);
+  batch.items.forEach((item, index) => {
+    const row = index + 2;
+    setFormula(worksheet, row, 10, `G${row}*H${row}+I${row}`, (item.cartonCount ?? 0) * (item.unitsPerCarton ?? 0) + item.tailQuantity);
+    setFormula(worksheet, row, 15, `MAX(0,G${row}-M${row})`, item.leftCartonCount ?? 0);
+    setFormula(worksheet, row, 16, `MAX(0,I${row}-N${row})`, item.leftTailQuantity);
+  });
   worksheet['!cols'] = [28, 12, 18, 32, 42, 14, 12, 12, 12, 12, 12, 36, 12, 12, 12, 12, 36].map((wch) => ({ wch }));
   worksheet['!autofilter'] = { ref: worksheet['!ref'] ?? 'A1:Q1' };
   const workbook = XLSX.utils.book_new();
