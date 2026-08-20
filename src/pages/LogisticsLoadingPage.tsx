@@ -35,9 +35,9 @@ function batchStats(batch: LogisticsBatch): { items: number; cartons: number; lo
   }, { items: 0, cartons: 0, loaded: 0, left: 0 });
 }
 
-function clampNumber(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min;
-  return Math.min(max, Math.max(min, Math.floor(value)));
+function nonNegativeInteger(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
 }
 
 function setItemAllLoaded(item: LogisticsBatchItem): LogisticsBatchItem {
@@ -45,6 +45,8 @@ function setItemAllLoaded(item: LogisticsBatchItem): LogisticsBatchItem {
     ...item,
     loadedCartonCount: item.cartonCount ?? 0,
     loadedTailQuantity: item.tailQuantity,
+    leftCartonCount: 0,
+    leftTailQuantity: 0,
   });
 }
 
@@ -53,6 +55,8 @@ function setItemAllLeft(item: LogisticsBatchItem): LogisticsBatchItem {
     ...item,
     loadedCartonCount: 0,
     loadedTailQuantity: 0,
+    leftCartonCount: item.cartonCount ?? 0,
+    leftTailQuantity: item.tailQuantity,
   });
 }
 
@@ -351,10 +355,10 @@ export function LogisticsLoadingPage({
                     <td>{(normalized.cartonCount ?? 0) * (normalized.unitsPerCarton ?? 0) + normalized.tailQuantity}</td>
                     <td>{normalized.loadingType || '整柜'}</td>
                     <td><span className="cell-ellipsis" title={normalized.mixedGroupsSummary}>{normalized.mixedGroupsSummary || '-'}</span></td>
-                    <td><input type="number" min="0" value={normalized.loadedCartonCount ?? 0} disabled={readOnly || normalized.isMixed} onChange={(event) => patchItem(normalized.id, { loadedCartonCount: Math.max(0, Math.floor(Number(event.target.value) || 0)) })} /></td>
-                    <td><input type="number" min="0" max={normalized.tailQuantity} value={normalized.loadedTailQuantity} disabled={readOnly || normalized.isMixed} onChange={(event) => patchItem(normalized.id, { loadedTailQuantity: clampNumber(Number(event.target.value), 0, normalized.tailQuantity) })} /></td>
-                    <td>{normalized.leftCartonCount ?? 0}</td>
-                    <td>{normalized.leftTailQuantity}</td>
+                    <td><input type="number" min="0" value={normalized.loadedCartonCount ?? 0} disabled={readOnly || normalized.isMixed} onChange={(event) => patchItem(normalized.id, { loadedCartonCount: nonNegativeInteger(Number(event.target.value)) })} /></td>
+                    <td><input type="number" min="0" value={normalized.loadedTailQuantity} disabled={readOnly || normalized.isMixed} onChange={(event) => patchItem(normalized.id, { loadedTailQuantity: nonNegativeInteger(Number(event.target.value)) })} /></td>
+                    <td><input type="number" min="0" value={normalized.leftCartonCount ?? 0} disabled={readOnly || normalized.isMixed} onChange={(event) => patchItem(normalized.id, { leftCartonCount: nonNegativeInteger(Number(event.target.value)) })} /></td>
+                    <td><input type="number" min="0" value={normalized.leftTailQuantity} disabled={readOnly || normalized.isMixed} onChange={(event) => patchItem(normalized.id, { leftTailQuantity: nonNegativeInteger(Number(event.target.value)) })} /></td>
                     <td><input value={normalized.note} disabled={readOnly} onChange={(event) => patchItem(normalized.id, { note: isSingleRejected ? withSingleRejectNote(event.target.value) : event.target.value })} /></td>
                     <td className="row-actions">
                       {isAdmin && activeBatch.status === 'submitted' ? (

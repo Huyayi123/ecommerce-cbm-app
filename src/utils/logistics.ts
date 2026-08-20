@@ -2,11 +2,6 @@ import type { AppProfile, LogisticsBatch, LogisticsBatchItem, PurchaseRecord, Sk
 import { round } from './number';
 import { mixedGroupsSummary, withPurchaseTotals } from './purchaseRecords';
 
-function clamp(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min;
-  return Math.min(max, Math.max(min, value));
-}
-
 function safeBatchId(containerDate: string, logisticsUserId: string, logisticsEmail: string): string {
   const owner = logisticsUserId || logisticsEmail || 'unassigned';
   return `logistics-${containerDate || 'no-date'}-${owner}`.replace(/[^a-zA-Z0-9_-]/g, '-');
@@ -134,19 +129,23 @@ export function normalizeLogisticsItemInput(item: LogisticsBatchItem): Logistics
   const cartonCount = item.cartonCount ?? 0;
   const tailQuantity = item.tailQuantity ?? 0;
   let loadedCartons = Math.max(0, Math.floor(Number(item.loadedCartonCount ?? 0)));
-  let loadedTail = Math.floor(clamp(Number(item.loadedTailQuantity ?? 0), 0, tailQuantity));
+  let loadedTail = Math.max(0, Math.floor(Number(item.loadedTailQuantity ?? 0)));
+  let leftCartons = Math.max(0, Math.floor(Number(item.leftCartonCount ?? 0)));
+  let leftTail = Math.max(0, Math.floor(Number(item.leftTailQuantity ?? 0)));
 
   if (item.isMixed && !(loadedCartons === 0 && loadedTail === 0)) {
     loadedCartons = cartonCount;
     loadedTail = tailQuantity;
+    leftCartons = 0;
+    leftTail = 0;
   }
 
   return {
     ...item,
     loadedCartonCount: loadedCartons,
     loadedTailQuantity: loadedTail,
-    leftCartonCount: Math.max(0, cartonCount - loadedCartons),
-    leftTailQuantity: tailQuantity - loadedTail,
+    leftCartonCount: leftCartons,
+    leftTailQuantity: leftTail,
   };
 }
 
@@ -220,8 +219,8 @@ export function applyApprovedLogisticsBatch(
         containerDate: '',
         logisticsLoadedCartonCount: 0,
         logisticsLoadedTailQuantity: 0,
-        logisticsLeftCartonCount: cartonCount,
-        logisticsLeftTailQuantity: tailQuantity,
+        logisticsLeftCartonCount: leftCartons,
+        logisticsLeftTailQuantity: leftTail,
         note: noteWithLogistics(record, item.note, '物流确认本次未装柜，留待后续装柜'),
       }));
       continue;
