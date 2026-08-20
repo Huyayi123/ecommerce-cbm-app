@@ -93,13 +93,37 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
     setSyncingStore(store);
     setSyncMessage('');
     try {
-      const response = await fetch(`/api/repricing-monitor?store=${encodeURIComponent(store)}`, { method: 'POST' });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      let offset = 0;
+      let totalRows = 0;
+      let checked = 0;
+      let confirmedAlerts = 0;
+      let errors = 0;
+      const inactiveByType: Record<string, number> = {};
+
+      while (true) {
+        const params = new URLSearchParams({ store, offset: String(offset), batchSize: '20' });
+        if (offset === 0) params.set('reset', '1');
+        const response = await fetch(`/api/repricing-monitor?${params.toString()}`, { method: 'POST' });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+
+        totalRows = Number(payload.totalRows ?? totalRows);
+        checked += Number(payload.checked ?? 0);
+        confirmedAlerts += Number(payload.confirmedAlerts ?? 0);
+        errors += Number(payload.errors ?? 0);
+        for (const [key, value] of Object.entries(payload.inactiveByType ?? {})) {
+          inactiveByType[key] = (inactiveByType[key] ?? 0) + Number(value ?? 0);
+        }
+
+        offset = Number(payload.nextOffset ?? offset);
+        setSyncMessage(`${store} 同步中：已检查 ${Math.min(offset, totalRows || offset)} / ${totalRows || '?'} 条，发现 ${confirmedAlerts} 条确定预警。`);
+        if (!payload.hasMore) break;
+      }
+
       await onRefresh?.();
       setShopFilter(store);
-      const skippedSummary = formatInactiveSummary(payload.inactiveByType);
-      setSyncMessage(`${store} 同步完成：检查 ${payload.checked ?? 0} 条，确定被跟价 ${payload.confirmedAlerts ?? 0} 条。${skippedSummary ? `跳过原因：${skippedSummary}` : ''}`);
+      const skippedSummary = formatInactiveSummary(inactiveByType);
+      setSyncMessage(`${store} 同步完成：检查 ${checked} 条，确定被跟价 ${confirmedAlerts} 条${errors ? `，失败 ${errors} 条` : ''}。${skippedSummary ? `跳过原因：${skippedSummary}` : ''}`);
     } catch (error) {
       console.error(error);
       setSyncMessage(`${store} 同步失败：${error instanceof Error ? error.message : '未知错误'}`);

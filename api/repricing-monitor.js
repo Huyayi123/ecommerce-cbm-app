@@ -746,6 +746,23 @@ function incrementCount(map, key) {
   map[normalizedKey] = (map[normalizedKey] || 0) + 1;
 }
 
+async function mapWithConcurrency(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await worker(items[index], index);
+    }
+  }
+
+  const workerCount = Math.min(Math.max(1, concurrency), items.length || 1);
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  return results;
+}
+
 async function clearStoreRepricingAlerts(storeName) {
   const normalizedStoreName = encodeURIComponent(storeName);
   await supabaseRequest('DELETE', `repricing_alerts?shop_name=eq.${normalizedStoreName}`, undefined, {
@@ -857,6 +874,18 @@ export default async function handler(request, response) {
   const storeName = String(request.query.store || DEFAULT_STORE).trim();
   const requestedSku = String(request.query.sku || '').trim();
   const requestedLimit = Number(request.query.limit);
+  const requestedOffset = Number(request.query.offset);
+  const requestedBatchSize = Number(request.query.batchSize);
+  const batchMode = !requestedSku && (
+    Number.isFinite(requestedOffset)
+    || (Number.isFinite(requestedBatchSize) && requestedBatchSize > 0)
+    || String(request.query.reset || '') === '1'
+  );
+  const offset = batchMode && Number.isFinite(requestedOffset) && requestedOffset > 0 ? Math.floor(requestedOffset) : 0;
+  const batchSize = batchMode
+    ? Math.min(50, Number.isFinite(requestedBatchSize) && requestedBatchSize > 0 ? Math.floor(requestedBatchSize) : 20)
+    : null;
+  const shouldReset = String(request.query.reset || '') === '1';
   const limit = requestedSku
     ? null
     : (Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.floor(requestedLimit) : null);
@@ -864,8 +893,9 @@ export default async function handler(request, response) {
   const checkedAt = new Date().toISOString();
 
   try {
-    const { rows, contextRows, pagesFetched, totalResults } = await fetchTakealotRows(storeName, limit, requestedSku);
-    if (!requestedSku) await clearStoreRepricingAlerts(storeName);
+    const { rows, contextRows, pagesFetched, totalResults } = await fetchTakealotRows(storeName, batchMode ? null : limit, requestedSku);
+    const batchRows = batchMode ? rows.slice(offset, offset + batchSize) : rows;
+    if (!requestedSku && (!batchMode || shouldReset)) await clearStoreRepricingAlerts(storeName);
     const details = [];
     const alertDetails = [];
     let checked = 0;
@@ -875,18 +905,14 @@ export default async function handler(request, response) {
     const inactiveByType = {};
     const sourceCounts = {};
 
-    for (const row of rows) {
+    const outcomes = await mapWithConcurrency(
+      batchRows,
+      numberFromEnv('TAKEALOT_REPRICING_CONCURRENCY', 5),
+      async (row) => {
       try {
         const productDetails = await fetchProductDetails(row, storeName);
         const alert = evaluateAlert({ row, storeName, productDetails, ownRows: contextRows });
         await syncRepricingResult({ storeName, storeId, row, alert, checkedAt });
-        checked += 1;
-        if (alert.isActive) confirmedAlerts += 1;
-        else {
-          inactive += 1;
-          incrementCount(inactiveByType, alert.alertType);
-        }
-        incrementCount(sourceCounts, alert.source || productDetails.source);
         const detail = {
           sku: alert.sku,
           title: alert.title,
@@ -900,16 +926,36 @@ export default async function handler(request, response) {
           isActive: alert.isActive,
           source: alert.source,
           message: alert.alertMessage,
+          checkedAt,
+          offerUrl: offerUrlFor(row),
           signals: request.query.debug ? productDetails.signals : undefined,
         };
-        details.push(detail);
-        if (alert.isActive) alertDetails.push(detail);
+        return { detail, alert, source: alert.source || productDetails.source };
       } catch (error) {
         console.error(error);
-        errors += 1;
-        details.push({ sku: skuFor(row), error: error instanceof Error ? error.message : 'Unknown row error' });
+        return { detail: { sku: skuFor(row), error: error instanceof Error ? error.message : 'Unknown row error' }, error: true };
       }
+      },
+    );
+
+    for (const outcome of outcomes) {
+      details.push(outcome.detail);
+      if (outcome.error) {
+        errors += 1;
+        continue;
+      }
+      checked += 1;
+      if (outcome.alert.isActive) {
+        confirmedAlerts += 1;
+        alertDetails.push(outcome.detail);
+      } else {
+        inactive += 1;
+        incrementCount(inactiveByType, outcome.alert.alertType);
+      }
+      incrementCount(sourceCounts, outcome.source);
     }
+
+    const nextOffset = batchMode ? Math.min(offset + batchRows.length, rows.length) : rows.length;
 
     response.status(200).json({
       ok: errors === 0,
@@ -920,6 +966,10 @@ export default async function handler(request, response) {
       errors,
       pagesFetched,
       totalResults,
+      totalRows: rows.length,
+      offset: batchMode ? offset : 0,
+      nextOffset,
+      hasMore: batchMode ? nextOffset < rows.length : false,
       inactiveByType,
       sourceCounts,
       details: details.slice(0, 50),
