@@ -133,7 +133,7 @@ export function buildLogisticsBatch(
 export function normalizeLogisticsItemInput(item: LogisticsBatchItem): LogisticsBatchItem {
   const cartonCount = item.cartonCount ?? 0;
   const tailQuantity = item.tailQuantity ?? 0;
-  let loadedCartons = Math.floor(clamp(Number(item.loadedCartonCount ?? 0), 0, cartonCount));
+  let loadedCartons = Math.max(0, Math.floor(Number(item.loadedCartonCount ?? 0)));
   let loadedTail = Math.floor(clamp(Number(item.loadedTailQuantity ?? 0), 0, tailQuantity));
 
   if (item.isMixed && !(loadedCartons === 0 && loadedTail === 0)) {
@@ -145,7 +145,7 @@ export function normalizeLogisticsItemInput(item: LogisticsBatchItem): Logistics
     ...item,
     loadedCartonCount: loadedCartons,
     loadedTailQuantity: loadedTail,
-    leftCartonCount: cartonCount - loadedCartons,
+    leftCartonCount: Math.max(0, cartonCount - loadedCartons),
     leftTailQuantity: tailQuantity - loadedTail,
   };
 }

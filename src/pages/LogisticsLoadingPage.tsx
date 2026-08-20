@@ -63,7 +63,7 @@ function isGuantongItem(item: LogisticsBatchItem): boolean {
 function matchesLogisticsSearch(item: LogisticsBatchItem, searchText: string): boolean {
   const keyword = searchText.trim().toLowerCase();
   if (!keyword) return true;
-  return [item.internalCode, item.manufacturerName, item.englishName]
+  return [item.internalCode, item.manufacturerName, item.sku, item.productName, item.englishName]
     .some((value) => String(value || '').toLowerCase().includes(keyword));
 }
 
@@ -351,7 +351,7 @@ export function LogisticsLoadingPage({
                     <td>{(normalized.cartonCount ?? 0) * (normalized.unitsPerCarton ?? 0) + normalized.tailQuantity}</td>
                     <td>{normalized.loadingType || '整柜'}</td>
                     <td><span className="cell-ellipsis" title={normalized.mixedGroupsSummary}>{normalized.mixedGroupsSummary || '-'}</span></td>
-                    <td><input type="number" min="0" max={normalized.cartonCount ?? 0} value={normalized.loadedCartonCount ?? 0} disabled={readOnly || normalized.isMixed} onChange={(event) => patchItem(normalized.id, { loadedCartonCount: clampNumber(Number(event.target.value), 0, normalized.cartonCount ?? 0) })} /></td>
+                    <td><input type="number" min="0" value={normalized.loadedCartonCount ?? 0} disabled={readOnly || normalized.isMixed} onChange={(event) => patchItem(normalized.id, { loadedCartonCount: Math.max(0, Math.floor(Number(event.target.value) || 0)) })} /></td>
                     <td><input type="number" min="0" max={normalized.tailQuantity} value={normalized.loadedTailQuantity} disabled={readOnly || normalized.isMixed} onChange={(event) => patchItem(normalized.id, { loadedTailQuantity: clampNumber(Number(event.target.value), 0, normalized.tailQuantity) })} /></td>
                     <td>{normalized.leftCartonCount ?? 0}</td>
                     <td>{normalized.leftTailQuantity}</td>
