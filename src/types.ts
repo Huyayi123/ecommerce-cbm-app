@@ -420,6 +420,52 @@ export type MonthlyProfitSummary = {
   updatedAt: string;
 };
 
+export type CommissionDetailRow = {
+  id: string;
+  runId: string;
+  shopName: string;
+  sku: string;
+  internalCode: string;
+  productName: string;
+  englishName: string;
+  imageUrl: string;
+  buyerName: string;
+  salesQuantity: number;
+  averageSellingPriceZar: number;
+  salesRevenueZar: number;
+  salesRevenueRmb: number;
+  commissionRate: number;
+  commissionAmountRmb: number;
+  messages: string[];
+};
+
+export type CommissionBuyerSummary = {
+  buyerName: string;
+  skuCount: number;
+  salesQuantity: number;
+  salesRevenueZar: number;
+  salesRevenueRmb: number;
+  commissionRate: number;
+  commissionAmountRmb: number;
+};
+
+export type CommissionRun = {
+  id: string;
+  shopName: string;
+  dateFrom: string;
+  dateTo: string;
+  createdAt: string;
+  createdBy: string;
+  rowCount: number;
+  totalSalesQuantity: number;
+  totalSalesRevenueZar: number;
+  totalSalesRevenueRmb: number;
+  totalCommissionRmb: number;
+  buyerSummaries: CommissionBuyerSummary[];
+  rows: CommissionDetailRow[];
+  exceptions: CommissionDetailRow[];
+};
+
 export type ProfitAnalysisStatus = 'profit' | 'loss' | 'break_even' | 'missing_data';
 
 export type ProfitAnalysisRow = {

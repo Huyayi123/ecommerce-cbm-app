@@ -5,6 +5,7 @@ import { ProfileBinding } from './components/ProfileBinding';
 import { SkuManager } from './components/SkuManager';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { AdAnalysisPage } from './pages/AdAnalysisPage';
+import { CommissionPage } from './pages/CommissionPage';
 import { ContainerCalculatorPage } from './pages/ContainerCalculatorPage';
 import { LogisticsLoadingPage } from './pages/LogisticsLoadingPage';
 import { MyPurchaseOrdersPage } from './pages/MyPurchaseOrdersPage';
@@ -14,7 +15,7 @@ import { PurchasePoolPage } from './pages/PurchasePoolPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
 import { RepricingAlertsPage } from './pages/RepricingAlertsPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
-import type { AdAnalysisRun, AppProfile, LogisticsBatch, MonthlyProfitSummary, ProfitAnalysisRun, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
+import type { AdAnalysisRun, AppProfile, CommissionRun, LogisticsBatch, MonthlyProfitSummary, ProfitAnalysisRun, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
 import {
   appendPurchaseRecordsToPool,
   deletePurchaseRecords,
@@ -24,6 +25,7 @@ import {
   fetchPurchasePools,
   fetchPurchaseRecords,
   fetchAdAnalysisRuns,
+  fetchCommissionRuns,
   fetchProfitAnalysisRuns,
   fetchMonthlyProfitSummaries,
   fetchRepricingAlerts,
@@ -38,6 +40,7 @@ import {
   subscribeToSharedTables,
   updateProfileBinding,
   saveAdAnalysisRun,
+  saveCommissionRun,
   saveProfitAnalysisRun,
   upsertMonthlyProfitSummary,
   submitLogisticsBatch,
@@ -51,7 +54,7 @@ import { applyApprovedLogisticsBatch } from './utils/logistics';
 import { canDelete, canEdit } from './utils/permissions';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'logistics';
+type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics';
 
 const ACTIVE_PAGE_STORAGE_KEY = 'ecommerce-cbm-active-page';
 
@@ -60,6 +63,7 @@ const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'profit-analysis', label: '利润分析' },
   { key: 'monthly-profit', label: '月度利润' },
   { key: 'ad-analysis', label: '广告分析' },
+  { key: 'commission', label: '采购人提成' },
   { key: 'logistics', label: '物流装柜确认' },
   { key: 'suggestions', label: '月销量采购建议' },
   { key: 'calculator', label: '装柜计算' },
@@ -77,7 +81,7 @@ function getInitialActivePage(): PageKey {
 }
 
 function isOptionalProfileLoadError(index: number, error: unknown): boolean {
-  return (index === 3 || index === 4 || index === 5 || index === 7) && /failed to fetch|fetch|广告分析表/i.test(formatErrorMessage(error));
+  return (index === 3 || index === 4 || index === 5 || index === 7 || index === 11) && /failed to fetch|fetch|广告分析表|commission_runs/i.test(formatErrorMessage(error));
 }
 
 function App() {
@@ -95,6 +99,7 @@ function App() {
   const [adAnalysisRuns, setAdAnalysisRuns] = useState<AdAnalysisRun[]>([]);
   const [profitAnalysisRuns, setProfitAnalysisRuns] = useState<ProfitAnalysisRun[]>([]);
   const [monthlyProfitSummaries, setMonthlyProfitSummaries] = useState<MonthlyProfitSummary[]>([]);
+  const [commissionRuns, setCommissionRuns] = useState<CommissionRun[]>([]);
   const [profiles, setProfiles] = useState<AppProfile[]>([]);
   const [fileName, setFileName] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
@@ -135,6 +140,7 @@ function App() {
       fetchLogisticsBatches(),
       activeProfile?.role === 'admin' || activeProfile?.role === 'owner' ? fetchProfitAnalysisRuns() : Promise.resolve([]),
       activeProfile?.role === 'owner' ? fetchMonthlyProfitSummaries() : Promise.resolve([]),
+      activeProfile?.role === 'admin' || activeProfile?.role === 'owner' ? fetchCommissionRuns() : Promise.resolve([]),
     ]);
     const errors = results.flatMap((result, index) => {
       if (result.status !== 'rejected') return [];
@@ -158,6 +164,7 @@ function App() {
     if (results[8].status === 'fulfilled') setLogisticsBatches(results[8].value);
     if (results[9].status === 'fulfilled') setProfitAnalysisRuns(results[9].value);
     if (results[10].status === 'fulfilled') setMonthlyProfitSummaries(results[10].value);
+    if (results[11].status === 'fulfilled') setCommissionRuns(results[11].value);
 
     if (errors.length > 0) {
       setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
@@ -222,6 +229,7 @@ function App() {
         setAdAnalysisRuns([]);
         setProfitAnalysisRuns([]);
         setMonthlyProfitSummaries([]);
+        setCommissionRuns([]);
         return;
       }
       void fetchProfile(user.id, user.email ?? '').then((nextProfile) => {
@@ -529,6 +537,7 @@ function App() {
     ? navItems.filter((item) => item.key === 'logistics')
     : navItems.filter((item) => (item.key !== 'logistics' || profile.role === 'admin' || profile.role === 'owner')
       && (item.key !== 'profit-analysis' || profile.role === 'admin' || profile.role === 'owner')
+      && (item.key !== 'commission' || profile.role === 'admin' || profile.role === 'owner')
       && (item.key !== 'monthly-profit' || profile.role === 'owner'));
   const currentPage = visibleNavItems.some((item) => item.key === activePage) ? activePage : visibleNavItems[0]?.key ?? 'logistics';
 
@@ -688,6 +697,15 @@ function App() {
           profile={profile}
           savedRuns={adAnalysisRuns}
           onSaveRun={saveAdAnalysisRun}
+          onRefresh={loadCloudData}
+        />
+      )}
+      {currentPage === 'commission' && (profile.role === 'admin' || profile.role === 'owner') && (
+        <CommissionPage
+          profile={profile}
+          skuItems={skuItems}
+          runs={commissionRuns}
+          onSaveRun={saveCommissionRun}
           onRefresh={loadCloudData}
         />
       )}

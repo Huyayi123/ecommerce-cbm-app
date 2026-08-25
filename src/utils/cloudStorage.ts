@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, LogisticsBatch, LogisticsBatchItem, LogisticsBatchStatus, MonthlyProfitSummary, ProfitAnalysisRow, ProfitAnalysisRun, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
+import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, CommissionBuyerSummary, CommissionDetailRow, CommissionRun, LogisticsBatch, LogisticsBatchItem, LogisticsBatchStatus, MonthlyProfitSummary, ProfitAnalysisRow, ProfitAnalysisRun, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { findMatchingSkuItem, getSkuMatchKey } from './calculations';
 import { assignNewInternalCodes, ensureInternalCodes } from './internalCodes';
@@ -206,6 +206,24 @@ type MonthlyProfitSummaryRow = {
   missing_sales_quantity: number; missing_sales_revenue: number; missing_return_quantity: number;
   status: 'complete' | 'incomplete'; note: string | null; created_by: string | null; updated_at: string;
 };
+
+type CommissionRunRow = {
+  id: string;
+  shop_name: string;
+  date_from: string;
+  date_to: string;
+  created_at: string;
+  created_by: string | null;
+  row_count: number | null;
+  total_sales_quantity: number | null;
+  total_sales_revenue_zar: number | null;
+  total_sales_revenue_rmb: number | null;
+  total_commission_rmb: number | null;
+  buyer_summaries: CommissionBuyerSummary[] | null;
+  rows: CommissionDetailRow[] | null;
+  exceptions: CommissionDetailRow[] | null;
+};
+
 type ProfitAnalysisDetailRow = {
   id: string; run_id: string; shop_name: string; sku: string; product_name: string | null; image_url: string | null;
   latest_order_date: string | null; selling_price: number | null; purchase_cost_rmb: number | null; purchase_cost_zar: number | null;
@@ -1511,6 +1529,74 @@ export async function upsertMonthlyProfitSummary(summary: MonthlyProfitSummary):
   if (error) throwSupabaseError(error);
 }
 
+function mapCommissionRun(row: CommissionRunRow): CommissionRun {
+  const buyerSummaries = Array.isArray(row.buyer_summaries) ? row.buyer_summaries : [];
+  const rows = Array.isArray(row.rows) ? row.rows : [];
+  const exceptions = Array.isArray(row.exceptions) ? row.exceptions : [];
+  return {
+    id: row.id,
+    shopName: row.shop_name,
+    dateFrom: row.date_from,
+    dateTo: row.date_to,
+    createdAt: row.created_at,
+    createdBy: row.created_by ?? '',
+    rowCount: Number(row.row_count ?? rows.length),
+    totalSalesQuantity: Number(row.total_sales_quantity ?? 0),
+    totalSalesRevenueZar: Number(row.total_sales_revenue_zar ?? 0),
+    totalSalesRevenueRmb: Number(row.total_sales_revenue_rmb ?? 0),
+    totalCommissionRmb: Number(row.total_commission_rmb ?? 0),
+    buyerSummaries,
+    rows,
+    exceptions,
+  };
+}
+
+export async function fetchCommissionRuns(): Promise<CommissionRun[]> {
+  const { data, error } = await requireSupabase()
+    .from('commission_runs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(12);
+  if (error) {
+    if (/commission_runs|schema cache|does not exist/i.test(formatErrorMessage(error))) return [];
+    throwSupabaseError(error);
+  }
+  return ((data ?? []) as CommissionRunRow[]).map(mapCommissionRun);
+}
+
+export async function saveCommissionRun(run: CommissionRun): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await client.from('commission_runs').upsert({
+    id: run.id,
+    shop_name: run.shopName,
+    date_from: run.dateFrom,
+    date_to: run.dateTo,
+    created_at: run.createdAt,
+    created_by: run.createdBy,
+    row_count: run.rowCount,
+    total_sales_quantity: run.totalSalesQuantity,
+    total_sales_revenue_zar: run.totalSalesRevenueZar,
+    total_sales_revenue_rmb: run.totalSalesRevenueRmb,
+    total_commission_rmb: run.totalCommissionRmb,
+    buyer_summaries: run.buyerSummaries,
+    rows: run.rows,
+    exceptions: run.exceptions,
+  });
+  if (error) throwSupabaseError(error);
+
+  const { data: staleRuns, error: staleError } = await client
+    .from('commission_runs')
+    .select('id')
+    .order('created_at', { ascending: false })
+    .range(12, 1000);
+  if (staleError) throwSupabaseError(staleError);
+  const staleIds = ((staleRuns ?? []) as Array<{ id: string }>).map((item) => item.id);
+  if (staleIds.length) {
+    const { error: deleteError } = await client.from('commission_runs').delete().in('id', staleIds);
+    if (deleteError) throwSupabaseError(deleteError);
+  }
+}
+
 function mapAuditLog(row: AuditLogRow): AuditLog {
   return {
     id: row.id,
@@ -1563,6 +1649,7 @@ export function subscribeToSharedTables(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_suggestions' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'repricing_alerts' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'ad_analysis_runs' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'commission_runs' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'logistics_batches' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'logistics_batch_items' }, onChange)
     .subscribe();

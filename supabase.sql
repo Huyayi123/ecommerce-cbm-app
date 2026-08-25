@@ -1010,3 +1010,44 @@ drop policy if exists "owner update monthly profit" on public.monthly_profit_sum
 create policy "owner update monthly profit" on public.monthly_profit_summaries for update to authenticated using (public.is_owner()) with check (public.is_owner());
 drop policy if exists "owner delete monthly profit" on public.monthly_profit_summaries;
 create policy "owner delete monthly profit" on public.monthly_profit_summaries for delete to authenticated using (public.is_owner());
+
+-- 2026-08-25 采购人提成：按 Takealot Sales 和 Selling Price 计算，并保留历史结果用于导出。
+create table if not exists public.commission_runs (
+  id text primary key,
+  shop_name text not null,
+  date_from date not null,
+  date_to date not null,
+  created_at timestamptz not null default now(),
+  created_by text,
+  row_count numeric not null default 0,
+  total_sales_quantity numeric not null default 0,
+  total_sales_revenue_zar numeric not null default 0,
+  total_sales_revenue_rmb numeric not null default 0,
+  total_commission_rmb numeric not null default 0,
+  buyer_summaries jsonb not null default '[]'::jsonb,
+  rows jsonb not null default '[]'::jsonb,
+  exceptions jsonb not null default '[]'::jsonb
+);
+
+create index if not exists commission_runs_created_idx on public.commission_runs (created_at desc);
+
+alter table public.commission_runs enable row level security;
+
+drop policy if exists "admin select commission runs" on public.commission_runs;
+create policy "admin select commission runs" on public.commission_runs for select to authenticated using (public.is_admin());
+drop policy if exists "admin insert commission runs" on public.commission_runs;
+create policy "admin insert commission runs" on public.commission_runs for insert to authenticated with check (public.is_admin());
+drop policy if exists "admin update commission runs" on public.commission_runs;
+create policy "admin update commission runs" on public.commission_runs for update to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "admin delete commission runs" on public.commission_runs;
+create policy "admin delete commission runs" on public.commission_runs for delete to authenticated using (public.is_admin());
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'commission_runs'
+  ) then
+    alter publication supabase_realtime add table public.commission_runs;
+  end if;
+end $$;

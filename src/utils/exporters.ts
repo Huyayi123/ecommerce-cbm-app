@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx-js-style';
-import type { AdAnalysisRow, AuditLog, CalculationRow, LogisticsBatch, MonthlyProfitDetail, MonthlyProfitReturnDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
+import type { AdAnalysisRow, AuditLog, CalculationRow, CommissionRun, LogisticsBatch, MonthlyProfitDetail, MonthlyProfitReturnDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
+import { commissionRateLabel } from './commission';
 import { logisticsItemTotalQuantity } from './logistics';
 import { mixedGroupsSummary, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from './purchaseRecords';
 
@@ -749,6 +750,67 @@ export function exportMonthlyProfit(summary: MonthlyProfitSummary, details: Mont
     XLSX.utils.book_append_sheet(workbook, returnSheet, '退货逐笔明细');
   }
   XLSX.writeFile(workbook, `${summary.shopName}-${summary.dateFrom}至${summary.dateTo}-月度利润.xlsx`);
+}
+export function exportCommissionRun(run: CommissionRun): void {
+  const workbook = XLSX.utils.book_new();
+  const summaryRows = run.buyerSummaries.map((row) => ({
+    采购人: row.buyerName,
+    SKU数: row.skuCount,
+    Sales合计: row.salesQuantity,
+    销售额ZAR: row.salesRevenueZar,
+    销售额RMB: row.salesRevenueRmb,
+    提成比例: commissionRateLabel(row.commissionRate),
+    提成金额RMB: row.commissionAmountRmb,
+  }));
+  const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
+  run.buyerSummaries.forEach((row, index) => {
+    const excelRow = index + 2;
+    setFormula(summarySheet, excelRow, 5, `D${excelRow}/3`, row.salesRevenueRmb);
+    setFormula(summarySheet, excelRow, 7, `E${excelRow}*${row.commissionRate}`, row.commissionAmountRmb);
+  });
+  summarySheet['!cols'] = [16, 10, 12, 14, 14, 12, 16].map((wch) => ({ wch }));
+  XLSX.utils.book_append_sheet(workbook, summarySheet, '采购人汇总');
+
+  const detailRows = run.rows.map((row) => ({
+    店铺: row.shopName,
+    采购人: row.buyerName,
+    内部编号: row.internalCode,
+    SKU: row.sku,
+    产品名称: row.productName,
+    英文名称: row.englishName,
+    Sales: row.salesQuantity,
+    'Selling Price ZAR': row.averageSellingPriceZar,
+    销售额ZAR: row.salesRevenueZar,
+    销售额RMB: row.salesRevenueRmb,
+    提成比例: commissionRateLabel(row.commissionRate),
+    提成金额RMB: row.commissionAmountRmb,
+    提示: row.messages.join('；'),
+  }));
+  const detailSheet = XLSX.utils.json_to_sheet(detailRows);
+  run.rows.forEach((row, index) => {
+    const excelRow = index + 2;
+    setFormula(detailSheet, excelRow, 9, `G${excelRow}*H${excelRow}`, row.salesRevenueZar);
+    setFormula(detailSheet, excelRow, 10, `I${excelRow}/3`, row.salesRevenueRmb);
+    setFormula(detailSheet, excelRow, 12, `J${excelRow}*${row.commissionRate}`, row.commissionAmountRmb);
+  });
+  detailSheet['!cols'] = [12, 14, 12, 18, 30, 42, 10, 18, 14, 14, 12, 16, 40].map((wch) => ({ wch }));
+  XLSX.utils.book_append_sheet(workbook, detailSheet, 'SKU明细');
+
+  const exceptionRows = run.exceptions.map((row) => ({
+    店铺: row.shopName,
+    SKU: row.sku,
+    产品名称: row.productName,
+    Sales: row.salesQuantity,
+    'Selling Price ZAR': row.averageSellingPriceZar,
+    销售额ZAR: row.salesRevenueZar,
+    采购人: row.buyerName,
+    异常原因: row.messages.join('；'),
+  }));
+  const exceptionSheet = XLSX.utils.json_to_sheet(exceptionRows);
+  exceptionSheet['!cols'] = [12, 18, 34, 10, 18, 14, 14, 50].map((wch) => ({ wch }));
+  XLSX.utils.book_append_sheet(workbook, exceptionSheet, '异常明细');
+
+  writeWorkbook(workbook, `${run.shopName}-${run.dateFrom}至${run.dateTo}-采购人提成`, 'xlsx');
 }
 export function exportBatchPurchaseOrder(records: PurchaseRecord[], format: ExportFormat): void {
   const exportRows = [...records]
