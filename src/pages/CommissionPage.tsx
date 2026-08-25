@@ -3,6 +3,7 @@ import { DateRangePicker } from '../components/DateRangePicker';
 import type { AppProfile, CommissionRun, SkuItem, TakealotSale } from '../types';
 import { buildCommissionRun, commissionRateLabel } from '../utils/commission';
 import { exportCommissionRun } from '../utils/exporters';
+import { canonicalShopName } from '../utils/shops';
 import { fetchTakealotSales } from '../utils/takealotSales';
 
 type Props = {
@@ -14,6 +15,9 @@ type Props = {
 };
 
 const ALL_STORES = '全部店铺';
+const ALL_BUYERS = '全部采购人';
+const COMMISSION_STORES = ['Bestby', 'MegaValue', 'Aicom', 'Arfast', 'KeepFit', 'Lifon', 'PatPaw'];
+const STORE_SET = new Set(COMMISSION_STORES.map((store) => store.toLowerCase()));
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -31,9 +35,30 @@ function moneyRmb(value: number): string {
   return `¥ ${value.toFixed(2)}`;
 }
 
+function buyerKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function skuKey(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+function isCommissionStore(value: string): boolean {
+  return STORE_SET.has(canonicalShopName(value).toLowerCase());
+}
+
 export function CommissionPage({ profile, skuItems, runs, onSaveRun, onRefresh }: Props) {
-  const stores = useMemo(() => Array.from(new Set(skuItems.map((item) => item.shopName).filter(Boolean))).sort(), [skuItems]);
-  const [shopName, setShopName] = useState('');
+  const buyerNames = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const item of skuItems) {
+      const name = item.buyerName.trim();
+      if (name && isCommissionStore(item.shopName)) names.set(buyerKey(name), name);
+    }
+    return [...names.values()].sort((left, right) => left.localeCompare(right, 'zh-Hans-CN'));
+  }, [skuItems]);
+
+  const [shopName, setShopName] = useState(ALL_STORES);
+  const [buyerName, setBuyerName] = useState(ALL_BUYERS);
   const [dateFrom, setDateFrom] = useState(monthStartIso());
   const [dateTo, setDateTo] = useState(todayIso());
   const [currentRun, setCurrentRun] = useState<CommissionRun | null>(null);
@@ -43,8 +68,10 @@ export function CommissionPage({ profile, skuItems, runs, onSaveRun, onRefresh }
   const [expandedBuyers, setExpandedBuyers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!shopName && stores[0]) setShopName(stores.length > 1 ? ALL_STORES : stores[0]);
-  }, [shopName, stores]);
+    if (buyerName !== ALL_BUYERS && !buyerNames.some((name) => buyerKey(name) === buyerKey(buyerName))) {
+      setBuyerName(ALL_BUYERS);
+    }
+  }, [buyerName, buyerNames]);
 
   const selectedRun = currentRun ?? runs.find((run) => run.id === historyId) ?? runs[0] ?? null;
   const visibleRowsByBuyer = useMemo(() => {
@@ -61,11 +88,23 @@ export function CommissionPage({ profile, skuItems, runs, onSaveRun, onRefresh }
       setMessage('请选择有效的统计日期范围。');
       return;
     }
-    const targetStores = shopName === ALL_STORES ? stores : [shopName];
-    if (targetStores.length === 0 || !targetStores[0]) {
-      setMessage('SKU 资料库里还没有店铺，无法同步销售。');
+
+    const targetStores = shopName === ALL_STORES ? COMMISSION_STORES : [shopName];
+    const targetStoreKeys = new Set(targetStores.map((store) => store.toLowerCase()));
+    const targetBuyerKey = buyerName === ALL_BUYERS ? '' : buyerKey(buyerName);
+    const scopedSkuItems = skuItems.filter((item) => {
+      const itemStore = canonicalShopName(item.shopName).toLowerCase();
+      if (!targetStoreKeys.has(itemStore)) return false;
+      if (targetBuyerKey && buyerKey(item.buyerName) !== targetBuyerKey) return false;
+      return Boolean(item.sku.trim());
+    });
+    const includedSkuKeys = new Set(scopedSkuItems.map((item) => skuKey(item.sku)));
+
+    if (includedSkuKeys.size === 0) {
+      setMessage('当前店铺和采购人没有匹配到 SKU 资料，无法计算提成。');
       return;
     }
+
     try {
       setSyncing(true);
       setCurrentRun(null);
@@ -80,14 +119,17 @@ export function CommissionPage({ profile, skuItems, runs, onSaveRun, onRefresh }
         );
         allSales.push(...result.rows);
       }
+
+      const storeLabel = shopName === ALL_STORES ? ALL_STORES : targetStores[0];
       const run = buildCommissionRun({
-        shopName: shopName === ALL_STORES ? ALL_STORES : targetStores[0],
+        shopName: buyerName === ALL_BUYERS ? storeLabel : `${storeLabel} / ${buyerName}`,
         dateFrom,
         dateTo,
         createdAt: new Date().toISOString(),
         profile,
         sales: allSales,
-        skuItems,
+        skuItems: scopedSkuItems,
+        includedSkuKeys,
       });
       await onSaveRun(run);
       setCurrentRun(run);
@@ -120,8 +162,14 @@ export function CommissionPage({ profile, skuItems, runs, onSaveRun, onRefresh }
       <div className="profit-analysis-controls">
         <label>店铺
           <select value={shopName} onChange={(event) => { setShopName(event.target.value); setCurrentRun(null); }}>
-            {stores.length > 1 && <option value={ALL_STORES}>{ALL_STORES}</option>}
-            {stores.map((store) => <option key={store}>{store}</option>)}
+            <option value={ALL_STORES}>{ALL_STORES}</option>
+            {COMMISSION_STORES.map((store) => <option key={store} value={store}>{store}</option>)}
+          </select>
+        </label>
+        <label>采购人
+          <select value={buyerName} onChange={(event) => { setBuyerName(event.target.value); setCurrentRun(null); }}>
+            <option value={ALL_BUYERS}>{ALL_BUYERS}</option>
+            {buyerNames.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
         </label>
         <label className="monthly-date-control">统计日期
@@ -247,7 +295,7 @@ export function CommissionPage({ profile, skuItems, runs, onSaveRun, onRefresh }
         </>
       )}
 
-      {!selectedRun && <div className="empty">请选择店铺和日期后同步提成数据，或查看历史结果。</div>}
+      {!selectedRun && <div className="empty">请选择店铺、采购人和日期后同步提成数据，或查看历史结果。</div>}
     </section>
   );
 }

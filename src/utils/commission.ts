@@ -34,6 +34,7 @@ export function buildCommissionRun(input: {
   profile: AppProfile;
   sales: TakealotSale[];
   skuItems: SkuItem[];
+  includedSkuKeys?: Set<string>;
 }): CommissionRun {
   const runId = crypto.randomUUID();
   const itemsBySku = skuLookup(input.skuItems);
@@ -48,6 +49,7 @@ export function buildCommissionRun(input: {
   for (const sale of input.sales) {
     const sku = sale.sku.trim();
     if (!sku) continue;
+    if (input.includedSkuKeys && !input.includedSkuKeys.has(key(sku))) continue;
     const rowKey = key(`${input.shopName}:${sku}`);
     const current = grouped.get(rowKey) ?? { shopName: input.shopName, sku, salesQuantity: 0, salesRevenueZar: 0, messages: [] };
     const quantity = Math.max(0, Number(sale.quantity ?? 0));
