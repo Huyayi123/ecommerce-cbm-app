@@ -36,7 +36,7 @@ export function DateRangePicker({ startDate, endDate, maxDate, onChange }: Props
 
   function select(value: string) {
     if (value > maxDate) return;
-    if (!startDate || endDate || value.slice(0, 7) !== startDate.slice(0, 7) || value < startDate) onChange(value, '');
+    if (!startDate || endDate || value < startDate) onChange(value, '');
     else { onChange(startDate, value); setOpen(false); }
   }
 
@@ -53,7 +53,7 @@ export function DateRangePicker({ startDate, endDate, maxDate, onChange }: Props
       <div className="date-range-month-nav"><button type="button" onClick={() => moveMonth(-1)}>‹</button><strong>{visibleMonth}</strong><button type="button" disabled={visibleMonth >= maxDate.slice(0, 7)} onClick={() => moveMonth(1)}>›</button></div>
       <div className="date-range-weekdays">{['日', '一', '二', '三', '四', '五', '六'].map((day) => <span key={day}>{day}</span>)}</div>
       <div className="date-range-days">{days.map((item) => {
-        const disabled = !item.inMonth || item.value > maxDate || Boolean(startDate && !endDate && item.value.slice(0, 7) === startDate.slice(0, 7) && item.value < startDate);
+        const disabled = !item.inMonth || item.value > maxDate;
         const selected = item.value === startDate || item.value === endDate;
         const inRange = Boolean(startDate && endDate && item.value > startDate && item.value < endDate);
         return <button type="button" key={item.value} disabled={disabled} className={`${selected ? 'selected' : ''} ${inRange ? 'in-range' : ''}`} onClick={() => select(item.value)}>{item.day}</button>;
