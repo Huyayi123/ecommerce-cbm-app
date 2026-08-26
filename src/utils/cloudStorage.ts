@@ -1331,7 +1331,7 @@ export async function fetchAdAnalysisRuns(): Promise<AdAnalysisRun[]> {
     .from('ad_analysis_runs')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(12);
+    .limit(6);
   if (runsError) {
     console.error(runsError);
     if (isMissingColumnError(runsError) || /ad_analysis_runs/i.test(formatErrorMessage(runsError))) {
@@ -1341,19 +1341,26 @@ export async function fetchAdAnalysisRuns(): Promise<AdAnalysisRun[]> {
   }
 
   const runRows = (runsData ?? []) as AdAnalysisRunRow[];
-  const runIds = runRows.map((row) => row.id);
+  const runIds = runRows.slice(0, 3).map((row) => row.id);
   if (runIds.length === 0) return [];
 
-  const { data: detailData, error: detailError } = await client
-    .from('ad_analysis_rows')
-    .select('*')
-    .in('run_id', runIds);
-  if (detailError) throwSupabaseError(detailError);
-
   const rowsByRun = new Map<string, AdAnalysisRow[]>();
-  for (const row of (detailData ?? []) as AdAnalysisDetailRow[]) {
-    const item = mapAdAnalysisRow(row);
-    rowsByRun.set(item.runId, [...(rowsByRun.get(item.runId) ?? []), item]);
+  const pageSize = 500;
+  for (const runId of runIds) {
+    const rows: AdAnalysisRow[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await client
+        .from('ad_analysis_rows')
+        .select('*')
+        .eq('run_id', runId)
+        .order('id', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throwSupabaseError(error);
+      const page = (data ?? []) as AdAnalysisDetailRow[];
+      rows.push(...page.map(mapAdAnalysisRow));
+      if (page.length < pageSize) break;
+    }
+    rowsByRun.set(runId, rows);
   }
 
   return runRows
@@ -1438,7 +1445,12 @@ function toProfitRow(row: ProfitAnalysisRow): ProfitAnalysisDetailRow {
 
 export async function fetchProfitAnalysisRuns(): Promise<ProfitAnalysisRun[]> {
   const client = requireSupabase();
-  const { data: runData, error: runError } = await client.from('profit_analysis_runs').select('*').eq('is_complete', true).order('created_at', { ascending: false });
+  const { data: runData, error: runError } = await client
+    .from('profit_analysis_runs')
+    .select('*')
+    .eq('is_complete', true)
+    .order('created_at', { ascending: false })
+    .limit(36);
   if (runError) {
     if (/profit_analysis_runs|schema cache|does not exist/i.test(formatErrorMessage(runError))) return [];
     throwSupabaseError(runError);

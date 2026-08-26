@@ -128,6 +128,20 @@ function App() {
       return;
     }
 
+    const loadNames = [
+      'SKU资料库',
+      '装柜计算',
+      '采购记录',
+      '账号资料',
+      '月销量采购建议',
+      '价格预警',
+      '采购订单池',
+      '广告分析历史',
+      '物流装柜确认',
+      '利润分析历史',
+      '月利润汇总',
+      '采购人提成历史',
+    ];
     const results = await Promise.allSettled([
       fetchSkuItems(),
       fetchContainerRows(),
@@ -146,7 +160,7 @@ function App() {
       if (result.status !== 'rejected') return [];
       console.error('云端数据加载失败', { index, error: result.reason });
       if (isOptionalProfileLoadError(index, result.reason)) return [];
-      return [formatErrorMessage(result.reason)];
+      return [`${loadNames[index] ?? `模块${index + 1}`}：${formatErrorMessage(result.reason)}`];
     });
 
     if (results[0].status === 'fulfilled') setSkuItems(results[0].value);
