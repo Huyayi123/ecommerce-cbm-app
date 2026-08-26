@@ -7,6 +7,37 @@ import { calculateProfitTotalCost } from './profitCalculations';
 import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
 import { frontendSkuToSupabase, supabaseSkuToFrontend, type SupabaseSkuRow } from './skuFieldMapping';
 
+const SKU_SELECT_COLUMNS = [
+  'id',
+  'internal_code',
+  'manufacturer_name',
+  'sku',
+  'tsin',
+  'product_name',
+  'english_name',
+  'image_url',
+  'storage_location',
+  'purchase_url',
+  'purchase_price',
+  'unit_cbm',
+  'total_cbm',
+  'total_quantity',
+  'shop_name',
+  'buyer_name',
+  'is_seasonal',
+  'box_length_cm',
+  'box_width_cm',
+  'box_height_cm',
+  'units_per_carton',
+  'notes',
+  'cbm_source',
+  'updated_at',
+  'carton_length_cm',
+  'carton_width_cm',
+  'carton_height_cm',
+  'manual_unit_cbm',
+].join(',');
+
 type PurchaseRecordRow = {
   id: string;
   internal_code?: string | null;
@@ -810,11 +841,11 @@ async function fetchRawSkuItems(): Promise<SkuItem[]> {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await client
       .from('sku_items')
-      .select('*')
-      .order('manufacturer_name')
+      .select(SKU_SELECT_COLUMNS)
+      .order('id', { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throwSupabaseError(error);
-    rows.push(...((data ?? []) as SupabaseSkuRow[]));
+    rows.push(...((data ?? []) as unknown as SupabaseSkuRow[]));
     if (!data || data.length < pageSize) break;
   }
 
