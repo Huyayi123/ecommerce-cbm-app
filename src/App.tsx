@@ -140,7 +140,7 @@ function App() {
       fetchLogisticsBatches(),
       activeProfile?.role === 'admin' || activeProfile?.role === 'owner' ? fetchProfitAnalysisRuns() : Promise.resolve([]),
       activeProfile?.role === 'owner' ? fetchMonthlyProfitSummaries() : Promise.resolve([]),
-      activeProfile?.role === 'admin' || activeProfile?.role === 'owner' ? fetchCommissionRuns() : Promise.resolve([]),
+      activeProfile?.role === 'admin' ? fetchCommissionRuns() : Promise.resolve([]),
     ]);
     const errors = results.flatMap((result, index) => {
       if (result.status !== 'rejected') return [];
@@ -537,7 +537,7 @@ function App() {
     ? navItems.filter((item) => item.key === 'logistics')
     : navItems.filter((item) => (item.key !== 'logistics' || profile.role === 'admin' || profile.role === 'owner')
       && (item.key !== 'profit-analysis' || profile.role === 'admin' || profile.role === 'owner')
-      && (item.key !== 'commission' || profile.role === 'admin' || profile.role === 'owner')
+      && (item.key !== 'commission' || profile.role === 'admin')
       && (item.key !== 'monthly-profit' || profile.role === 'owner'));
   const currentPage = visibleNavItems.some((item) => item.key === activePage) ? activePage : visibleNavItems[0]?.key ?? 'logistics';
 
@@ -700,7 +700,7 @@ function App() {
           onRefresh={loadCloudData}
         />
       )}
-      {currentPage === 'commission' && (profile.role === 'admin' || profile.role === 'owner') && (
+      {currentPage === 'commission' && profile.role === 'admin' && (
         <CommissionPage
           profile={profile}
           skuItems={skuItems}
