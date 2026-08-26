@@ -89,6 +89,10 @@ function sortDateValue(record: PurchaseRecord): string {
   return record.containerDate || record.purchaseDate || '';
 }
 
+function inventoryFilterDate(record: PurchaseRecord): string {
+  return record.containerDate || record.purchaseBatchDate || record.purchasePoolDate || record.purchaseDate || '';
+}
+
 function isRecentlyUploaded(record: PurchaseRecord, nowMs: number): boolean {
   const createdAt = timestampMs(record.createdAt);
   return createdAt > 0 && nowMs >= createdAt && nowMs - createdAt <= RECENT_UPLOAD_WINDOW_MS;
@@ -195,7 +199,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   );
   const recentMonths = useMemo(() => recentMonthOptions(3), []);
   const purchaseMonthOptions = useMemo(() => {
-    const months = Array.from(new Set(inventoryRecords.map((record) => record.purchaseDate.slice(0, 7)).filter(Boolean))).sort().reverse();
+    const months = Array.from(new Set(inventoryRecords.map((record) => inventoryFilterDate(record).slice(0, 7)).filter(Boolean))).sort().reverse();
     return months.filter((month) => !recentMonths.includes(month));
   }, [inventoryRecords, recentMonths]);
   const batchOptions = useMemo(() => {
@@ -219,7 +223,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
         if (filters.manufacturerName && record.manufacturerName !== filters.manufacturerName) return false;
         if (filters.shopName && record.shopName !== filters.shopName) return false;
         if (filters.buyerName && record.buyerName !== filters.buyerName) return false;
-        const recordMonth = record.purchaseDate.slice(0, 7);
+        const recordDate = inventoryFilterDate(record);
+        const recordMonth = recordDate.slice(0, 7);
         if (filters.purchaseMonth === 'recent') {
           if (!recentMonths.includes(recordMonth)) return false;
         } else if (filters.purchaseMonth && recordMonth !== filters.purchaseMonth) {
@@ -239,8 +244,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           ].join(' ').toLowerCase();
           if (!searchable.includes(search)) return false;
         }
-        if (filters.purchaseDateFrom && record.purchaseDate < filters.purchaseDateFrom) return false;
-        if (filters.purchaseDateTo && record.purchaseDate > filters.purchaseDateTo) return false;
+        if (filters.purchaseDateFrom && recordDate < filters.purchaseDateFrom) return false;
+        if (filters.purchaseDateTo && recordDate > filters.purchaseDateTo) return false;
         return true;
       }).sort((left, right) => compareInventoryRecords(left, right, sortNowMs)),
     [filters, inventoryRecords, recentMonths, sortNowMs],

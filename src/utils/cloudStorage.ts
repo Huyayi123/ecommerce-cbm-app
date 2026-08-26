@@ -844,14 +844,24 @@ export async function replaceSkuItems(items: SkuItem[]): Promise<void> {
 }
 
 export async function fetchPurchaseRecords(): Promise<PurchaseRecord[]> {
-  const { data, error } = await requireSupabase()
-    .from('purchase_records')
-    .select('*')
-    .order('purchase_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .order('id', { ascending: true });
-  if (error) throwSupabaseError(error);
-  return (data ?? []).map((row) => mapPurchaseRecord(row as PurchaseRecordRow));
+  const client = requireSupabase();
+  const pageSize = 1000;
+  const rows: PurchaseRecordRow[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await client
+      .from('purchase_records')
+      .select('*')
+      .order('purchase_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throwSupabaseError(error);
+    rows.push(...((data ?? []) as PurchaseRecordRow[]));
+    if (!data || data.length < pageSize) break;
+  }
+
+  return rows.map((row) => mapPurchaseRecord(row));
 }
 
 export async function fetchLogisticsBatches(): Promise<LogisticsBatch[]> {
@@ -1050,9 +1060,6 @@ export async function appendPurchaseRecordsToPool(pool: PurchasePool, records: P
 
 export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise<void> {
   const client = requireSupabase();
-  const remote = await fetchPurchaseRecords();
-  const nextIds = new Set(records.map((record) => record.id));
-  const deleteIds = remote.map((record) => record.id).filter((id) => !nextIds.has(id));
 
   if (records.length > 0) {
     const { error } = await client.from('purchase_records').upsert(records.map(toPurchaseRecordRow));
@@ -1063,10 +1070,6 @@ export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise
       }
       throw new Error(formatErrorMessage(error));
     }
-  }
-  if (deleteIds.length > 0) {
-    const { error } = await client.from('purchase_records').delete().in('id', deleteIds);
-    if (error) throwSupabaseError(error);
   }
 }
 
