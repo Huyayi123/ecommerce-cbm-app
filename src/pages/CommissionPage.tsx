@@ -238,7 +238,7 @@ export function CommissionPage({ profile, skuItems, runs, onSaveRun, onRefresh }
                             <div className="monthly-sale-detail-table">
                               <table>
                                 <thead>
-                                  <tr><th>内部编号</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>Sales</th><th>Selling Price ZAR</th><th>销售额 ZAR</th><th>销售额 RMB</th><th>提成 RMB</th><th>提示</th></tr>
+                                  <tr><th>内部编号</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>Sales</th><th>平均 Selling Price ZAR</th><th>销售额 ZAR</th><th>销售额 RMB</th><th>提成 RMB</th><th>提示</th></tr>
                                 </thead>
                                 <tbody>
                                   {detailRows.map((detail) => (
@@ -273,7 +273,7 @@ export function CommissionPage({ profile, skuItems, runs, onSaveRun, onRefresh }
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>店铺</th><th>SKU</th><th>产品名称</th><th>Sales</th><th>Selling Price ZAR</th><th>销售额 ZAR</th><th>采购人</th><th>异常原因</th></tr>
+                  <tr><th>店铺</th><th>SKU</th><th>产品名称</th><th>Sales</th><th>平均 Selling Price ZAR</th><th>销售额 ZAR</th><th>采购人</th><th>异常原因</th></tr>
                 </thead>
                 <tbody>
                   {selectedRun.exceptions.map((row) => (

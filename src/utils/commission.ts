@@ -58,7 +58,7 @@ export function buildCommissionRun(input: {
     if (sellingPrice === null || !Number.isFinite(sellingPrice) || sellingPrice <= 0) current.messages.push('Selling Price 为空或 0');
     if (quantity > 0 && sellingPrice !== null && Number.isFinite(sellingPrice) && sellingPrice > 0) {
       current.salesQuantity += quantity;
-      current.salesRevenueZar += quantity * sellingPrice;
+      current.salesRevenueZar += sellingPrice;
     }
     grouped.set(rowKey, current);
   }

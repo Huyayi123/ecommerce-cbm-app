@@ -779,7 +779,7 @@ export function exportCommissionRun(run: CommissionRun): void {
     产品名称: row.productName,
     英文名称: row.englishName,
     Sales: row.salesQuantity,
-    'Selling Price ZAR': row.averageSellingPriceZar,
+    '平均 Selling Price ZAR': row.averageSellingPriceZar,
     销售额ZAR: row.salesRevenueZar,
     销售额RMB: row.salesRevenueRmb,
     提成比例: commissionRateLabel(row.commissionRate),
@@ -789,7 +789,7 @@ export function exportCommissionRun(run: CommissionRun): void {
   const detailSheet = XLSX.utils.json_to_sheet(detailRows);
   run.rows.forEach((row, index) => {
     const excelRow = index + 2;
-    setFormula(detailSheet, excelRow, 9, `G${excelRow}*H${excelRow}`, row.salesRevenueZar);
+    setFormula(detailSheet, excelRow, 8, `I${excelRow}/G${excelRow}`, row.averageSellingPriceZar);
     setFormula(detailSheet, excelRow, 10, `I${excelRow}/3`, row.salesRevenueRmb);
     setFormula(detailSheet, excelRow, 12, `J${excelRow}*${row.commissionRate}`, row.commissionAmountRmb);
   });
@@ -801,7 +801,7 @@ export function exportCommissionRun(run: CommissionRun): void {
     SKU: row.sku,
     产品名称: row.productName,
     Sales: row.salesQuantity,
-    'Selling Price ZAR': row.averageSellingPriceZar,
+    '平均 Selling Price ZAR': row.averageSellingPriceZar,
     销售额ZAR: row.salesRevenueZar,
     采购人: row.buyerName,
     异常原因: row.messages.join('；'),
