@@ -15,13 +15,17 @@ function normalizedShop(value: string): string {
   return value.trim().toLocaleLowerCase();
 }
 
+function normalizedLoadingType(value: PurchaseRecord['loadingType']): '整柜' | '冠通' {
+  return value === '冠通' ? '冠通' : '整柜';
+}
+
 function isMatchableSku(value: string): boolean {
   const sku = normalizedSku(value);
   return Boolean(sku) && sku !== 'NEW';
 }
 
 function importKey(record: PurchaseRecord): string {
-  return `${normalizedShop(record.shopName) || '*'}|${normalizedSku(record.sku)}`;
+  return `${normalizedShop(record.shopName) || '*'}|${normalizedSku(record.sku)}|${normalizedLoadingType(record.loadingType)}`;
 }
 
 function createdTime(record: PurchaseRecord): number {
@@ -85,9 +89,11 @@ export function mergeImportedPurchaseOrders(
 
     const sku = normalizedSku(imported.sku);
     const shop = normalizedShop(imported.shopName);
+    const loadingType = normalizedLoadingType(imported.loadingType);
     const matched = newestRecord(eligible.filter((record) => (
       normalizedSku(record.sku) === sku
       && (!shop || normalizedShop(record.shopName) === shop)
+      && normalizedLoadingType(record.loadingType) === loadingType
     )));
 
     if (matched) {
