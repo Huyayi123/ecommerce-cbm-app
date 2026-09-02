@@ -1600,14 +1600,28 @@ function mapCommissionRun(row: CommissionRunRow): CommissionRun {
 export async function fetchCommissionRuns(): Promise<CommissionRun[]> {
   const { data, error } = await requireSupabase()
     .from('commission_runs')
-    .select('*')
+    .select('id,shop_name,date_from,date_to,created_at,created_by,row_count,total_sales_quantity,total_sales_revenue_zar,total_sales_revenue_rmb,total_commission_rmb,buyer_summaries')
     .order('created_at', { ascending: false })
-    .limit(12);
+    .limit(6);
   if (error) {
     if (/commission_runs|schema cache|does not exist/i.test(formatErrorMessage(error))) return [];
     throwSupabaseError(error);
   }
   return ((data ?? []) as CommissionRunRow[]).map(mapCommissionRun);
+}
+
+export async function fetchCommissionRun(runId: string): Promise<CommissionRun | null> {
+  if (!runId) return null;
+  const { data, error } = await requireSupabase()
+    .from('commission_runs')
+    .select('*')
+    .eq('id', runId)
+    .maybeSingle();
+  if (error) {
+    if (/commission_runs|schema cache|does not exist/i.test(formatErrorMessage(error))) return null;
+    throwSupabaseError(error);
+  }
+  return data ? mapCommissionRun(data as CommissionRunRow) : null;
 }
 
 export async function saveCommissionRun(run: CommissionRun): Promise<void> {

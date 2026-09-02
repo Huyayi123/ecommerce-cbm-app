@@ -10,6 +10,7 @@ type Props = {
   profile: AppProfile;
   skuItems: SkuItem[];
   runs: CommissionRun[];
+  onLoadRun: (runId: string) => Promise<CommissionRun | null>;
   onSaveRun: (run: CommissionRun) => Promise<void>;
   onRefresh: () => Promise<void>;
 };
@@ -47,7 +48,7 @@ function isCommissionStore(value: string): boolean {
   return STORE_SET.has(canonicalShopName(value).toLowerCase());
 }
 
-export function CommissionPage({ profile, skuItems, runs, onSaveRun, onRefresh }: Props) {
+export function CommissionPage({ profile, skuItems, runs, onLoadRun, onSaveRun, onRefresh }: Props) {
   const buyerNames = useMemo(() => {
     const names = new Map<string, string>();
     for (const item of skuItems) {
@@ -65,6 +66,7 @@ export function CommissionPage({ profile, skuItems, runs, onSaveRun, onRefresh }
   const [historyId, setHistoryId] = useState('');
   const [message, setMessage] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [loadingHistoryId, setLoadingHistoryId] = useState('');
   const [expandedBuyers, setExpandedBuyers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -74,6 +76,24 @@ export function CommissionPage({ profile, skuItems, runs, onSaveRun, onRefresh }
   }, [buyerName, buyerNames]);
 
   const selectedRun = currentRun ?? runs.find((run) => run.id === historyId) ?? runs[0] ?? null;
+
+  useEffect(() => {
+    if (!selectedRun || currentRun?.id === selectedRun.id || selectedRun.rows.length > 0 || loadingHistoryId === selectedRun.id) return;
+    setLoadingHistoryId(selectedRun.id);
+    setMessage('正在加载历史提成明细...');
+    void onLoadRun(selectedRun.id)
+      .then((run) => {
+        if (!run) return;
+        setCurrentRun(run);
+        setHistoryId(run.id);
+        setMessage('');
+      })
+      .catch((error) => {
+        console.error(error);
+        setMessage(error instanceof Error ? `历史提成明细加载失败：${error.message}` : '历史提成明细加载失败。');
+      })
+      .finally(() => setLoadingHistoryId(''));
+  }, [currentRun?.id, loadingHistoryId, onLoadRun, selectedRun]);
   const visibleRowsByBuyer = useMemo(() => {
     const result = new Map<string, CommissionRun['rows']>();
     if (!selectedRun) return result;

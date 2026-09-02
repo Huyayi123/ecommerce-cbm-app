@@ -25,6 +25,7 @@ import {
   fetchPurchasePools,
   fetchPurchaseRecords,
   fetchAdAnalysisRuns,
+  fetchCommissionRun,
   fetchCommissionRuns,
   fetchProfitAnalysisRuns,
   fetchMonthlyProfitSummaries,
@@ -735,6 +736,7 @@ function App() {
           profile={profile}
           skuItems={skuItems}
           runs={commissionRuns}
+          onLoadRun={fetchCommissionRun}
           onSaveRun={saveCommissionRun}
           onRefresh={loadCloudData}
         />
