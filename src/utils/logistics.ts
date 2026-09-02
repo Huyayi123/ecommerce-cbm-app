@@ -1,5 +1,6 @@
 import type { AppProfile, LogisticsBatch, LogisticsBatchItem, PurchaseRecord, SkuItem } from '../types';
 import { round } from './number';
+import { isRecordEligibleForLogistics } from './purchasePoolFlows';
 import { effectivePurchaseQuantity, mixedGroupsSummary, withPurchaseTotals } from './purchaseRecords';
 
 function safeBatchId(containerDate: string, logisticsUserId: string, logisticsEmail: string): string {
@@ -81,7 +82,7 @@ export function buildLogisticsBatch(
   const batchId = existingBatch?.id || safeBatchId(containerDate, logisticsProfile?.id || '', logisticsProfile?.email || '');
   const existingItems = new Map((existingBatch?.items ?? []).map((item) => [item.purchaseRecordId, item]));
   const sourceRecords = records
-    .filter((record) => record.poolStatus === 'submitted_to_pool' && record.status !== 'cancelled' && record.containerDate === containerDate)
+    .filter((record) => isRecordEligibleForLogistics(record, containerDate))
     .sort((left, right) => (
       (left.internalCode || '').localeCompare(right.internalCode || '', 'zh-Hans-CN', { numeric: true })
       || left.manufacturerName.localeCompare(right.manufacturerName, 'zh-Hans-CN')

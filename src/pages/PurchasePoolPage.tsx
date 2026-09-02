@@ -3,6 +3,7 @@ import type { AppProfile, LogisticsBatch, PurchasePool, PurchaseRecord, SkuItem 
 import { exportBatchPurchaseOrder, exportPurchaseRecords } from '../utils/exporters';
 import { formatErrorMessage } from '../utils/errors';
 import { buildLogisticsBatch } from '../utils/logistics';
+import { applyContainerDateToPoolRecords, changePurchasePoolLoadingType, normalizeRecordForPurchasePool, prepareDatedGuantongForInventory } from '../utils/purchasePoolFlows';
 import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
 import { calculatedPurchaseTotalAmount, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
 
@@ -65,7 +66,7 @@ function isPoolPendingRecord(record: PurchaseRecord): boolean {
 function buildPoolOptions(records: PurchaseRecord[], pools: PurchasePool[]): PoolOption[] {
   const options = new Map<string, PoolOption>();
   for (const pool of pools) {
-    const pendingRecords = pool.records.filter(isPoolPendingRecord);
+    const pendingRecords = pool.records.filter(isPoolPendingRecord).map(normalizeRecordForPurchasePool);
     options.set(pool.id, {
       ...pool,
       records: pendingRecords,
@@ -78,7 +79,10 @@ function buildPoolOptions(records: PurchaseRecord[], pools: PurchasePool[]): Poo
     if (!key) continue;
     if (record.poolStatus !== 'submitted_to_pool') continue;
     const existing = options.get(key);
-    if (existing?.records.some((item) => item.id === record.id)) continue;
+    if (existing?.records.some((item) => item.id === record.id)) {
+      existing.records = existing.records.map((item) => (item.id === record.id ? normalizeRecordForPurchasePool(record) : item));
+      continue;
+    }
     const option = existing ?? {
       id: key,
       name: poolNameFromRecord(record),
@@ -93,7 +97,7 @@ function buildPoolOptions(records: PurchaseRecord[], pools: PurchasePool[]): Poo
       recordCount: 0,
       submittedCount: 0,
     };
-    option.records.push(record);
+    option.records.push(normalizeRecordForPurchasePool(record));
     option.recordCount = option.records.length;
     option.submittedCount = option.records.filter(isPoolPendingRecord).length;
     options.set(key, option);
@@ -243,15 +247,17 @@ export function PurchasePoolPage({
       setMessage('请先填写本池装柜日期。');
       return;
     }
-    const nextRecords = submittedRecords.map((record) => withPurchaseTotals({
+    const dateResult = applyContainerDateToPoolRecords(submittedRecords, activePool.containerDate, nextDate);
+    if (dateResult.updatedCount === 0) {
+      setMessage(`本池没有可统一日期的整柜订单；保留 ${dateResult.preservedManualCount} 条人工日期，跳过 ${dateResult.skippedGuantongCount} 条冠通订单。`);
+      return;
+    }
+    const nextRecords = dateResult.records.map((record) => withPurchaseTotals({
       ...record,
       purchasePoolId: activePool.isAggregate ? record.purchasePoolId : activePool.id,
       purchasePoolName: activePool.isAggregate ? record.purchasePoolName : activePool.name,
-      purchasePoolDate: nextDate,
       purchaseBatchId: activePool.isAggregate ? record.purchaseBatchId : record.purchaseBatchId || activePool.id,
       purchaseBatchName: activePool.isAggregate ? record.purchaseBatchName : activePool.name,
-      purchaseBatchDate: nextDate,
-      containerDate: nextDate,
     }));
     const nextRecordsById = new Map(nextRecords.map((record) => [record.id, record]));
     const nextPools: PurchasePool[] = activePool.isAggregate
@@ -279,10 +285,31 @@ export function PurchasePoolPage({
     try {
       if (nextPools.length > 0) await onSavePools(nextPools);
       await onSaveRecords(nextRecords);
-      setMessage(`已把本池 ${nextRecords.length} 条订单的装柜日期统一修改为 ${nextDate}。`);
+      setMessage(`已统一 ${dateResult.updatedCount} 条整柜订单的装柜日期为 ${nextDate}；保留 ${dateResult.preservedManualCount} 条人工日期，跳过 ${dateResult.skippedGuantongCount} 条冠通订单。`);
     } catch (error) {
       console.error(error);
       setMessage(`统一装柜日期失败：${formatErrorMessage(error)}`);
+    }
+  }
+
+  async function sendDatedGuantongToInventory() {
+    if (!isAdmin || !activePool) return;
+    const result = prepareDatedGuantongForInventory(submittedRecords);
+    if (result.sentRecords.length === 0) {
+      setMessage(result.missingDateCount > 0 ? `当前池有 ${result.missingDateCount} 条冠通订单尚未填写装柜日期。` : '当前池没有已填写装柜日期的冠通订单。');
+      return;
+    }
+    const sentIds = new Set(result.sentRecords.map((record) => record.id));
+    const affectedPools = sourcePoolOptions
+      .filter((pool) => pool.records.some((record) => sentIds.has(record.id)))
+      .map((pool) => ({ ...pool, records: pool.records.filter((record) => !sentIds.has(record.id)) }));
+    try {
+      if (affectedPools.length > 0) await onSavePools(affectedPools);
+      await onSaveRecords(result.sentRecords);
+      setMessage(`已发送 ${result.sentRecords.length} 条冠通订单到采购 / 在途库存${result.missingDateCount > 0 ? `；另有 ${result.missingDateCount} 条未填日期，继续保留在采购池` : ''}。`);
+    } catch (error) {
+      console.error(error);
+      setMessage(`发送冠通订单失败：${formatErrorMessage(error)}`);
     }
   }
 
@@ -342,10 +369,13 @@ export function PurchasePoolPage({
   }
 
   function canEditField(field: EditablePoolField): boolean {
-    return isAdmin && Boolean(activePool) && (!activePool?.isAggregate || field === 'containerDate');
+    return isAdmin && Boolean(activePool) && (!activePool?.isAggregate || field === 'containerDate' || field === 'loadingType');
   }
 
   function patchRecord(record: PurchaseRecord, field: EditablePoolField, value: string): PurchaseRecord {
+    if (field === 'loadingType') {
+      return changePurchasePoolLoadingType(record, value as PurchaseRecord['loadingType']);
+    }
     const next: PurchaseRecord = { ...record };
     if (
       field === 'purchaseQuantity'
@@ -378,14 +408,16 @@ export function PurchasePoolPage({
   async function savePoolRecord(record: PurchaseRecord, field: EditablePoolField) {
     const key = draftKey(record.id, field);
     if (!(key in drafts) || !canEditField(field) || !activePool) return;
-    const nextRecord = patchRecord(record, field, drafts[key]);
+    const nextRecord = normalizeRecordForPurchasePool(patchRecord(record, field, drafts[key]));
     const sourcePool = activePool.isAggregate
       ? sourcePoolOptions.find((pool) => pool.records.some((item) => item.id === record.id))
       : activePool;
     if (!sourcePool) return;
     const nextPool: PurchasePool = {
       ...sourcePool,
-      records: sourcePool.records.map((item) => (item.id === nextRecord.id ? nextRecord : item)),
+      records: sourcePool.records.map((item) => (
+        item.id === nextRecord.id ? nextRecord : normalizeRecordForPurchasePool(item)
+      )),
     };
     setDrafts((current) => {
       const next = { ...current };
@@ -417,13 +449,18 @@ export function PurchasePoolPage({
       poolStatus: 'pending_purchase',
     });
     try {
+      const remainingRecords = sourcePool
+        ? sourcePool.records
+          .filter((item) => item.id !== record.id)
+          .map(normalizeRecordForPurchasePool)
+        : [];
       if (sourcePool) {
         await onSavePools([{
           ...sourcePool,
-          records: sourcePool.records.filter((item) => item.id !== record.id),
+          records: remainingRecords,
         }]);
       }
-      await onSaveRecords([nextRecord]);
+      await onSaveRecords([...remainingRecords, nextRecord]);
       setMessage(`已退回 ${record.sku || record.productName} 给采购人。`);
     } catch (error) {
       console.error(error);
@@ -511,6 +548,7 @@ export function PurchasePoolPage({
         {isAdmin && (
           <div className="form-actions">
             <button type="button" onClick={() => void applyPoolContainerDate()} disabled={!canApplyPoolDate || !poolDateDraft}>统一本池装柜日期</button>
+            <button type="button" onClick={() => void sendDatedGuantongToInventory()} disabled={!activePool || submittedRecords.length === 0}>发送已填日期的冠通到在途库存</button>
             <button type="button" className="primary" onClick={() => void assignLogisticsBatch()} disabled={!activePool || submittedRecords.length === 0 || logisticsProfiles.length === 0}>生成/刷新物流批次</button>
           </div>
         )}

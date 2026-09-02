@@ -52,6 +52,7 @@ import {
 import { formatErrorMessage } from './utils/errors';
 import { applyApprovedLogisticsBatch } from './utils/logistics';
 import { canDelete, canEdit } from './utils/permissions';
+import { repairPurchasePoolMembership } from './utils/purchasePoolFlows';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
 type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics';
@@ -165,7 +166,21 @@ function App() {
 
     if (results[0].status === 'fulfilled') setSkuItems(results[0].value);
     if (results[1].status === 'fulfilled') setPurchaseRows(results[1].value);
-    if (results[2].status === 'fulfilled') setPurchaseRecords(results[2].value);
+    if (results[2].status === 'fulfilled' && results[6].status === 'fulfilled') {
+      const repaired = repairPurchasePoolMembership(results[2].value, results[6].value);
+      setPurchaseRecords(repaired.records);
+      if (repaired.repairedRecords.length > 0 && activeProfile && canEdit(activeProfile.role)) {
+        try {
+          await upsertPurchaseRecords(repaired.repairedRecords);
+          setStatusMessage(`已自动修复 ${repaired.repairedRecords.length} 条采购池状态不一致记录。`);
+        } catch (error) {
+          console.error('采购池状态自动修复失败', error);
+          setStatusMessage(`采购池状态自动修复失败：${formatErrorMessage(error)}`);
+        }
+      }
+    } else if (results[2].status === 'fulfilled') {
+      setPurchaseRecords(results[2].value);
+    }
     if (results[3].status === 'fulfilled') {
       setProfiles(results[3].value);
     } else if (profile) {
@@ -339,6 +354,7 @@ function App() {
       purchaseBatchId: record.purchaseBatchId || pool.id,
       purchaseBatchName: record.purchaseBatchName || pool.name,
       purchaseBatchDate: record.purchaseBatchDate || pool.containerDate,
+      containerDate: record.loadingType === '冠通' ? '' : record.containerDate,
     }));
     try {
       const savedPool = await appendPurchaseRecordsToPool({ ...pool, records: [] }, submittedRecords);
