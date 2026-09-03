@@ -32,10 +32,6 @@ const SKU_SELECT_COLUMNS = [
   'notes',
   'cbm_source',
   'updated_at',
-  'carton_length_cm',
-  'carton_width_cm',
-  'carton_height_cm',
-  'manual_unit_cbm',
 ].join(',');
 
 type PurchaseRecordRow = {
