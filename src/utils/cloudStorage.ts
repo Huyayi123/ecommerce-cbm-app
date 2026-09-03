@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, CommissionBuyerSummary, CommissionDetailRow, CommissionRun, LogisticsBatch, LogisticsBatchItem, LogisticsBatchStatus, MonthlyProfitSummary, ProfitAnalysisRow, ProfitAnalysisRun, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { findMatchingSkuItem, getSkuMatchKey } from './calculations';
-import { assignNewInternalCodes, ensureInternalCodes } from './internalCodes';
+import { assignNewInternalCodes, ensureInternalCodes, formatInternalCode, parseInternalCode } from './internalCodes';
 import { calculateProfitTotalCost } from './profitCalculations';
 import { normalizeMixedGroups, withPurchaseTotals } from './purchaseRecords';
 import { frontendSkuToSupabase, supabaseSkuToFrontend, type SupabaseSkuRow } from './skuFieldMapping';
@@ -868,6 +868,40 @@ export async function replaceSkuItems(items: SkuItem[]): Promise<void> {
     const { error } = await client.from('sku_items').delete().in('id', deleteIds);
     if (error) throwSupabaseError(error);
   }
+}
+
+export async function upsertSkuItem(item: SkuItem, localItems: SkuItem[] = []): Promise<SkuItem> {
+  const client = requireSupabase();
+  let normalized = item;
+
+  if (parseInternalCode(normalized.internalCode) === 0) {
+    const localMaxCode = localItems.reduce((max, current) => Math.max(max, parseInternalCode(current.internalCode)), 0);
+    const { data, error } = await client
+      .from('sku_items')
+      .select('internal_code')
+      .not('internal_code', 'is', null)
+      .neq('internal_code', '')
+      .order('internal_code', { ascending: false })
+      .limit(1);
+    if (error) throwSupabaseError(error);
+    const remoteMaxCode = parseInternalCode(String(data?.[0]?.internal_code ?? ''));
+    normalized = {
+      ...normalized,
+      internalCode: formatInternalCode(Math.max(localMaxCode, remoteMaxCode) + 1),
+    };
+  }
+
+  const { data, error } = await client
+    .from('sku_items')
+    .upsert(frontendSkuToSupabase(normalized), { onConflict: 'id' })
+    .select(SKU_SELECT_COLUMNS)
+    .single();
+  if (error) {
+    console.error(error);
+    throw new Error(formatErrorMessage(error));
+  }
+  if (!data) throw new Error('SKU 保存失败：云端没有返回保存结果');
+  return supabaseSkuToFrontend(data as unknown as SupabaseSkuRow);
 }
 
 export async function fetchPurchaseRecords(): Promise<PurchaseRecord[]> {

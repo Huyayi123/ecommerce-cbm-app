@@ -40,6 +40,7 @@ import {
   replaceSkuItems,
   subscribeToSharedTables,
   updateProfileBinding,
+  upsertSkuItem,
   saveAdAnalysisRun,
   saveCommissionRun,
   saveProfitAnalysisRun,
@@ -296,6 +297,15 @@ function App() {
   async function persistSkuItems(nextItems: SkuItem[]) {
     await replaceSkuItems(nextItems);
     setSkuItems(nextItems);
+  }
+
+  async function persistSkuItem(item: SkuItem) {
+    const savedItem = await upsertSkuItem(item, skuItems);
+    setSkuItems((current) => {
+      const exists = current.some((existing) => existing.id === savedItem.id);
+      return exists ? current.map((existing) => (existing.id === savedItem.id ? savedItem : existing)) : [savedItem, ...current];
+    });
+    return savedItem;
   }
 
   async function persistPurchaseRows(nextRows: PurchaseRow[]) {
@@ -635,6 +645,7 @@ function App() {
         <SkuManager
           items={skuItems}
           onChange={persistSkuItems}
+          onSaveItem={persistSkuItem}
           loadImportMatches={fetchSkuItemsForImport}
           onCloudRefresh={loadCloudData}
           canEditData={editable}

@@ -32,6 +32,7 @@ type ColumnKey =
 type Props = {
   items: SkuItem[];
   onChange: (items: SkuItem[]) => void | Promise<void>;
+  onSaveItem?: (item: SkuItem) => Promise<SkuItem>;
   loadImportMatches?: (importItems: SkuItem[]) => Promise<SkuItem[]>;
   onCloudRefresh?: () => void | Promise<void>;
   canEditData?: boolean;
@@ -171,7 +172,7 @@ function combineSkuItemsForMatching(localItems: SkuItem[], remoteMatches: SkuIte
   return Array.from(byId.values());
 }
 
-export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh, canEditData = true, canDeleteData = true }: Props) {
+export function SkuManager({ items, onChange, onSaveItem, loadImportMatches, onCloudRefresh, canEditData = true, canDeleteData = true }: Props) {
   const [draft, setDraft] = useState<DraftSku>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState('');
@@ -179,6 +180,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
   const [importMatchItems, setImportMatchItems] = useState<SkuItem[]>([]);
   const [recentImportIds, setRecentImportIds] = useState<Set<string>>(new Set());
   const [isSyncingNewSkus, setIsSyncingNewSkus] = useState(false);
+  const [isSavingItem, setIsSavingItem] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(defaultVisibleColumns);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState('');
@@ -233,7 +235,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
   }
 
   async function saveItem() {
-    if (!canEditData || (!draft.sku.trim() && !draft.productName.trim() && !draft.englishName.trim())) return;
+    if (!canEditData || isSavingItem || (!draft.sku.trim() && !draft.productName.trim() && !draft.englishName.trim())) return;
     const item = hydrateSku({
       ...draft,
       id: editingId ?? crypto.randomUUID(),
@@ -242,21 +244,31 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
       shopName: canonicalShopName(draft.shopName),
       updatedAt: new Date().toISOString(),
     });
+    const existingMatch = editingId ? null : findMatchingSkuItem(item, items);
+    const itemToSave = existingMatch ? { ...item, id: existingMatch.id, internalCode: existingMatch.internalCode } : item;
 
     try {
-      if (editingId) {
-        await onChange(items.map((existing) => (existing.id === editingId ? item : existing)));
+      setIsSavingItem(true);
+      setImportMessage(editingId ? '正在保存 SKU 修改...' : '正在新增 SKU...');
+      if (onSaveItem) {
+        const savedItem = await onSaveItem(itemToSave);
+        setImportMessage(editingId ? `SKU 已保存：${savedItem.sku || savedItem.productName}` : `SKU 已新增：${savedItem.sku || savedItem.productName}`);
       } else {
-        const existing = findMatchingSkuItem(item, items);
-        await onChange(existing
-          ? items.map((current) => (current.id === existing.id ? { ...item, id: existing.id, internalCode: current.internalCode } : current))
-          : [item, ...items]);
+        if (editingId) {
+          await onChange(items.map((existing) => (existing.id === editingId ? item : existing)));
+        } else {
+          await onChange(existingMatch
+            ? items.map((current) => (current.id === existingMatch.id ? itemToSave : current))
+            : [item, ...items]);
+        }
+        setImportMessage(editingId ? 'SKU 已保存' : 'SKU 已新增');
       }
-      setImportMessage(editingId ? 'SKU 已保存' : 'SKU 已新增');
       resetForm();
     } catch (error) {
       console.error(error);
       setImportMessage(`保存失败：${formatErrorMessage(error)}`);
+    } finally {
+      setIsSavingItem(false);
     }
   }
 
@@ -475,7 +487,7 @@ export function SkuManager({ items, onChange, loadImportMatches, onCloudRefresh,
           <span>来源：{sourceLabel(calculated.cbmSource)}</span>
         </div>
         {canEditData && <div className="form-actions">
-          <button className="primary" type="button" onClick={saveItem} disabled={!draft.sku.trim() && !draft.productName.trim() && !draft.englishName.trim()}>{editingId ? '保存修改' : '新增 SKU'}</button>
+          <button className="primary" type="button" onClick={saveItem} disabled={isSavingItem || (!draft.sku.trim() && !draft.productName.trim() && !draft.englishName.trim())}>{isSavingItem ? '保存中...' : editingId ? '保存修改' : '新增 SKU'}</button>
           <button type="button" onClick={resetForm}>清空</button>
         </div>}
       </div>
