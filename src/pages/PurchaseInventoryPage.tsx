@@ -3,6 +3,7 @@ import type { MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus,
 import { exportBatchPurchaseOrder, exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
 import { round } from '../utils/number';
 import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseAmountForRecordSku, purchaseQuantityForRecordSku, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
+import { recordsForSelectionAwareExport } from '../utils/selectionAwareExport';
 
 type Props = {
   records: PurchaseRecord[];
@@ -276,6 +277,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   const inTransitCbm = inTransitRecords.reduce((sum, record) => sum + logisticsCbmFor(record), 0);
   const loadingBatchCount = new Set(inTransitRecords.map((record) => record.containerDate).filter(Boolean)).size;
   const selectedRecords = inventoryRecords.filter((record) => selectedIds.has(record.id));
+  const regularExportRecords = recordsForSelectionAwareExport(inventoryRecords, filteredRecords, selectedIds);
   const selectedBatchRecords = filters.purchaseBatchKey
     ? inventoryRecords.filter((record) => batchKey(record) === filters.purchaseBatchKey)
     : [];
@@ -486,8 +488,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           <p>只显示采购人已确认回传的数据；物流商字段为空时显示待回传，不影响采购确认。</p>
           </div>
           <div className="export-actions">
-            <button type="button" onClick={() => exportPurchaseRecords(filteredRecords, 'xlsx')} disabled={filteredRecords.length === 0}>导出 Excel</button>
-            <button type="button" onClick={() => exportPurchaseRecords(filteredRecords, 'csv')} disabled={filteredRecords.length === 0}>导出 CSV</button>
+            <button type="button" onClick={() => exportPurchaseRecords(regularExportRecords, 'xlsx')} disabled={regularExportRecords.length === 0}>导出 Excel{selectedRecords.length > 0 ? `（已选 ${selectedRecords.length}）` : ''}</button>
+            <button type="button" onClick={() => exportPurchaseRecords(regularExportRecords, 'csv')} disabled={regularExportRecords.length === 0}>导出 CSV{selectedRecords.length > 0 ? `（已选 ${selectedRecords.length}）` : ''}</button>
             <button type="button" onClick={() => exportBatchPurchaseOrder(selectedBatchRecords, 'xlsx')} disabled={selectedBatchRecords.length === 0}>导出本批次订货表</button>
             <button type="button" onClick={exportSelectedInspectionChecklist} disabled={selectedRecords.length === 0}>导出验货单（已选 {selectedRecords.length}）</button>
             <button type="button" onClick={() => setSelectedIds(new Set())} disabled={selectedRecords.length === 0}>清空勾选</button>
