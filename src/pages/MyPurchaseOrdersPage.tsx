@@ -200,6 +200,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollRef = useRef<ScrollSnapshot | null>(null);
   const mixedAutoSaveTimer = useRef<number | null>(null);
+  const draftsRef = useRef<Record<string, string>>({});
+  const mixedDraftsRef = useRef<Record<string, string>>({});
+  const recordAutoSaveTimers = useRef<Map<string, number>>(new Map());
+  const recordSaveQueues = useRef<Map<string, Promise<void>>>(new Map());
+  const latestSavedRecords = useRef<Map<string, PurchaseRecord>>(new Map());
   const internalCodeRepairSignatureRef = useRef('');
   const [statusFilter, setStatusFilter] = useState<OrderFilterStatus>('pending');
   const [orderSearch, setOrderSearch] = useState('');
@@ -267,6 +272,22 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     [assignedRecords],
   );
   const unconfirmedVisibleCount = visibleRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase').length;
+
+  useEffect(() => {
+    const recordIds = new Set(records.map((record) => record.id));
+    for (const record of records) {
+      if (recordSaveQueues.current.has(record.id) || Object.keys(normalDraftSnapshot(record.id)).length > 0) continue;
+      latestSavedRecords.current.set(record.id, record);
+    }
+    for (const recordId of latestSavedRecords.current.keys()) {
+      if (!recordIds.has(recordId)) latestSavedRecords.current.delete(recordId);
+    }
+  }, [records]);
+
+  useEffect(() => () => {
+    for (const timer of recordAutoSaveTimers.current.values()) window.clearTimeout(timer);
+    recordAutoSaveTimers.current.clear();
+  }, []);
 
   useEffect(() => {
     if (isViewer || !onSaveRecords) return;
@@ -399,9 +420,23 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     });
   }
 
-  function patchDraftValue(recordId: string, field: EditableField, value: string) {
+  function patchDraftValue(record: PurchaseRecord, field: EditableField, value: string, immediate = false) {
     rememberScrollPosition();
-    setDrafts((current) => ({ ...current, [draftKey(recordId, field)]: value }));
+    const key = draftKey(record.id, field);
+    draftsRef.current = { ...draftsRef.current, [key]: value };
+    setDrafts(draftsRef.current);
+    const existingTimer = recordAutoSaveTimers.current.get(record.id);
+    if (existingTimer !== undefined) window.clearTimeout(existingTimer);
+    if (immediate) {
+      recordAutoSaveTimers.current.delete(record.id);
+      void saveRecord(record, false).catch(() => undefined);
+    } else {
+      const timer = window.setTimeout(() => {
+        recordAutoSaveTimers.current.delete(record.id);
+        void saveRecord(record, false).catch(() => undefined);
+      }, 600);
+      recordAutoSaveTimers.current.set(record.id, timer);
+    }
     restoreRememberedScroll();
   }
 
@@ -440,13 +475,54 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     });
   }
 
-  async function saveRecord(nextRecord: PurchaseRecord) {
+  function normalDraftSnapshot(recordId: string): Record<string, string> {
+    const prefix = `${recordId}:`;
+    return Object.fromEntries(Object.entries(draftsRef.current).filter(([key]) => key.startsWith(prefix)));
+  }
+
+  function applyNormalDraftSnapshot(record: PurchaseRecord, snapshot: Record<string, string>): PurchaseRecord {
+    return editableFields.reduce((current, field) => {
+      const key = draftKey(record.id, field);
+      return key in snapshot ? patchRecord(current, field, snapshot[key]) : current;
+    }, record);
+  }
+
+  async function persistRecord(nextRecord: PurchaseRecord) {
     const normalized = withPurchaseTotals(nextRecord);
     if (onSaveRecords) {
       await onSaveRecords([normalized]);
       return;
     }
     await onChange(records.map((item) => (item.id === normalized.id ? normalized : item)));
+  }
+
+  function saveRecord(nextRecord: PurchaseRecord, includeMixedChanges = true): Promise<void> {
+    const recordId = nextRecord.id;
+    const snapshot = normalDraftSnapshot(recordId);
+    const previous = recordSaveQueues.current.get(recordId) ?? Promise.resolve();
+    const queued = previous.catch(() => undefined).then(async () => {
+      const latest = latestSavedRecords.current.get(recordId) ?? nextRecord;
+      const merged = applyNormalDraftSnapshot(includeMixedChanges ? {
+        ...latest,
+        mixedGroups: nextRecord.mixedGroups,
+        isMixed: nextRecord.isMixed,
+      } : latest, snapshot);
+      const normalized = withPurchaseTotals(merged);
+      await persistRecord(normalized);
+      latestSavedRecords.current.set(recordId, normalized);
+      draftsRef.current = Object.fromEntries(Object.entries(draftsRef.current).filter(([key, value]) => snapshot[key] !== value));
+      setDrafts(draftsRef.current);
+      setMessage('已保存');
+    }).catch((error) => {
+      console.error(error);
+      setMessage(`保存失败：${formatErrorMessage(error)}；修改内容已保留，可继续编辑或失焦后重试。`);
+      throw error;
+    });
+    recordSaveQueues.current.set(recordId, queued);
+    void queued.finally(() => {
+      if (recordSaveQueues.current.get(recordId) === queued) recordSaveQueues.current.delete(recordId);
+    }).catch(() => undefined);
+    return queued;
   }
 
   function applyMixedDraftsToRecord(record: PurchaseRecord, draftSnapshot: Record<string, string>): PurchaseRecord {
@@ -497,13 +573,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       const changedRecords = records
         .map((record) => applyMixedDraftsToRecord(record, draftSnapshot))
         .filter((record, index) => record !== records[index]);
-      if (onSaveRecords) await onSaveRecords(changedRecords);
-      else await onChange(records.map((record) => applyMixedDraftsToRecord(record, draftSnapshot)));
+      await Promise.all(changedRecords.map((record) => saveRecord(record)));
       setMixedDrafts((current) => {
         const next = { ...current };
         for (const [key, value] of Object.entries(draftSnapshot)) {
           if (next[key] === value) delete next[key];
         }
+        mixedDraftsRef.current = next;
         return next;
       });
       setMessage('混装已自动保存');
@@ -653,10 +729,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   }
 
   function recordWithLocalDrafts(record: PurchaseRecord): PurchaseRecord {
-    return editableFields.reduce((current, field) => {
-      const key = draftKey(record.id, field);
-      return key in drafts ? patchRecord(current, field, drafts[key]) : current;
-    }, record);
+    return applyNormalDraftSnapshot(record, normalDraftSnapshot(record.id));
   }
 
   function mixedChildRows(record: PurchaseRecord) {
@@ -666,22 +739,21 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       .map((line) => ({ group, line })));
   }
 
-  async function commit(record: PurchaseRecord, field: EditableField) {
+  async function commit(record: PurchaseRecord, field: EditableField, value?: string) {
     const key = draftKey(record.id, field);
-    if (!(key in drafts)) return;
-    const nextRecord = patchRecord(record, field, drafts[key]);
+    if (value !== undefined) {
+      draftsRef.current = { ...draftsRef.current, [key]: value };
+      setDrafts(draftsRef.current);
+    }
+    if (!(key in draftsRef.current)) return;
+    const existingTimer = recordAutoSaveTimers.current.get(record.id);
+    if (existingTimer !== undefined) window.clearTimeout(existingTimer);
+    recordAutoSaveTimers.current.delete(record.id);
     rememberScrollPosition();
-    setDrafts((current) => {
-      const next = { ...current };
-      delete next[key];
-      return next;
-    });
     try {
-      await saveRecord(nextRecord);
-      setMessage('已保存');
-    } catch (error) {
-      console.error(error);
-      setMessage(`保存失败：${formatErrorMessage(error)}`);
+      await saveRecord(record, false);
+    } catch {
+      // saveRecord 会显示错误并保留草稿，失焦或继续编辑即可重试。
     } finally {
       restoreRememberedScroll();
     }
@@ -728,8 +800,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         }
       } else if (onSaveRecords) await onSaveRecords(confirmedRecords);
       else await onChange(records.map((item) => (visibleIds.has(item.id) ? confirmedRecord(item) : item)));
-      setDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleIds.has(key.split(':')[0]))));
-      setMixedDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleIds.has(key.split(':')[0]))));
+      draftsRef.current = Object.fromEntries(Object.entries(draftsRef.current).filter(([key]) => !visibleIds.has(key.split(':')[0])));
+      mixedDraftsRef.current = Object.fromEntries(Object.entries(mixedDraftsRef.current).filter(([key]) => !visibleIds.has(key.split(':')[0])));
+      setDrafts(draftsRef.current);
+      setMixedDrafts(mixedDraftsRef.current);
       setMessage(`已提交 ${visibleIds.size} 条采购订单到采购订单池，等待 admin 统一发送到采购 / 在途库存。`);
     } catch (error) {
       console.error(error);
@@ -783,23 +857,37 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     });
   }
 
-  async function commitGroup(record: PurchaseRecord, group: MixedCartonGroup, field: 'groupName' | 'cartonCount') {
+  async function commitGroup(record: PurchaseRecord, group: MixedCartonGroup, field: 'groupName' | 'cartonCount', explicitValue?: string) {
     const key = groupKey(record.id, group.id, field);
-    if (!(key in mixedDrafts)) return;
-    const value = mixedDrafts[key];
+    if (explicitValue !== undefined) {
+      mixedDraftsRef.current = { ...mixedDraftsRef.current, [key]: explicitValue };
+      setMixedDrafts(mixedDraftsRef.current);
+    }
+    if (!(key in mixedDraftsRef.current)) return;
+    const value = mixedDraftsRef.current[key];
     const nextGroup = { ...group, [field]: field === 'cartonCount' ? parseNumber(value) : value };
     setMixedDrafts((current) => {
       const next = { ...current };
       delete next[key];
+      mixedDraftsRef.current = next;
       return next;
     });
-    await saveRecord({ ...record, mixedGroups: record.mixedGroups.map((item) => item.id === group.id ? nextGroup : item) });
+    try {
+      await saveRecord({ ...record, mixedGroups: record.mixedGroups.map((item) => item.id === group.id ? nextGroup : item) });
+    } catch {
+      mixedDraftsRef.current = { ...mixedDraftsRef.current, [key]: value };
+      setMixedDrafts(mixedDraftsRef.current);
+    }
   }
 
-  async function commitLine(record: PurchaseRecord, group: MixedCartonGroup, line: MixedCartonLine, field: MixedLineField) {
+  async function commitLine(record: PurchaseRecord, group: MixedCartonGroup, line: MixedCartonLine, field: MixedLineField, explicitValue?: string) {
     const key = mixedKey(record.id, group.id, line.id, field);
-    if (!(key in mixedDrafts)) return;
-    const value = mixedDrafts[key];
+    if (explicitValue !== undefined) {
+      mixedDraftsRef.current = { ...mixedDraftsRef.current, [key]: explicitValue };
+      setMixedDrafts(mixedDraftsRef.current);
+    }
+    if (!(key in mixedDraftsRef.current)) return;
+    const value = mixedDraftsRef.current[key];
     let nextLine: MixedCartonLine = { ...line };
     if (field === 'quantity' || field === 'purchasePrice' || field === 'unitCbm') nextLine[field] = parseNumber(value);
     else nextLine[field] = value;
@@ -813,12 +901,18 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     setMixedDrafts((current) => {
       const next = { ...current };
       delete next[key];
+      mixedDraftsRef.current = next;
       return next;
     });
-    await saveRecord({
-      ...record,
-      mixedGroups: record.mixedGroups.map((item) => item.id === group.id ? { ...group, lines: group.lines.map((current) => current.id === line.id ? nextLine : current) } : item),
-    });
+    try {
+      await saveRecord({
+        ...record,
+        mixedGroups: record.mixedGroups.map((item) => item.id === group.id ? { ...group, lines: group.lines.map((current) => current.id === line.id ? nextLine : current) } : item),
+      });
+    } catch {
+      mixedDraftsRef.current = { ...mixedDraftsRef.current, [key]: value };
+      setMixedDrafts(mixedDraftsRef.current);
+    }
   }
 
   function toggleExpanded(recordId: string) {
@@ -845,8 +939,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       return (
         <select
           value={valueFor(record, field)}
-          onChange={(event) => patchDraftValue(record.id, field, event.target.value)}
-          onBlur={() => void commit(record, field)}
+          onChange={(event) => patchDraftValue(record, field, event.target.value, true)}
         >
           {statusEditOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
@@ -856,8 +949,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       return (
         <select
           value={valueFor(record, field) || '整柜'}
-          onChange={(event) => patchDraftValue(record.id, field, event.target.value)}
-          onBlur={() => void commit(record, field)}
+          onChange={(event) => patchDraftValue(record, field, event.target.value, true)}
         >
           <option value="整柜">整柜</option>
           <option value="冠通">冠通</option>
@@ -870,8 +962,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         value={valueFor(record, field)}
         placeholder={placeholder}
         title={title}
-        onChange={(event) => patchDraftValue(record.id, field, event.target.value)}
-        onBlur={() => void commit(record, field)}
+        onChange={(event) => patchDraftValue(record, field, event.target.value, type === 'date')}
+        onBlur={type === 'date' ? undefined : (event) => void commit(record, field, event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+        }}
       />
     );
   }
@@ -882,8 +977,14 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       <input
         type={type}
         value={groupValueFor(record, group, field)}
-        onChange={(event) => setMixedDrafts((current) => ({ ...current, [groupKey(record.id, group.id, field)]: event.target.value }))}
-        onBlur={() => void commitGroup(record, group, field)}
+        onChange={(event) => {
+          mixedDraftsRef.current = { ...mixedDraftsRef.current, [groupKey(record.id, group.id, field)]: event.target.value };
+          setMixedDrafts(mixedDraftsRef.current);
+        }}
+        onBlur={(event) => void commitGroup(record, group, field, event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+        }}
       />
     );
   }
@@ -894,8 +995,14 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       <input
         type={type}
         value={mixedValueFor(record, group, line, field)}
-        onChange={(event) => setMixedDrafts((current) => ({ ...current, [mixedKey(record.id, group.id, line.id, field)]: event.target.value }))}
-        onBlur={() => void commitLine(record, group, line, field)}
+        onChange={(event) => {
+          mixedDraftsRef.current = { ...mixedDraftsRef.current, [mixedKey(record.id, group.id, line.id, field)]: event.target.value };
+          setMixedDrafts(mixedDraftsRef.current);
+        }}
+        onBlur={(event) => void commitLine(record, group, line, field, event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+        }}
       />
     );
   }
