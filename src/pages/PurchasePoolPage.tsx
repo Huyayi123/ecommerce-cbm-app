@@ -408,7 +408,13 @@ export function PurchasePoolPage({
   async function savePoolRecord(record: PurchaseRecord, field: EditablePoolField) {
     const key = draftKey(record.id, field);
     if (!(key in drafts) || !canEditField(field) || !activePool) return;
-    const nextRecord = normalizeRecordForPurchasePool(patchRecord(record, field, drafts[key]));
+    await savePoolRecordValue(record, field, drafts[key]);
+  }
+
+  async function savePoolRecordValue(record: PurchaseRecord, field: EditablePoolField, value: string) {
+    const key = draftKey(record.id, field);
+    if (!canEditField(field) || !activePool) return;
+    const nextRecord = normalizeRecordForPurchasePool(patchRecord(record, field, value));
     const sourcePool = activePool.isAggregate
       ? sourcePoolOptions.find((pool) => pool.records.some((item) => item.id === record.id))
       : activePool;
@@ -487,12 +493,28 @@ export function PurchasePoolPage({
       return (
         <select
           value={valueFor(record, field) || '整柜'}
-          onChange={(event) => setDrafts((current) => ({ ...current, [draftKey(record.id, field)]: event.target.value }))}
-          onBlur={() => void savePoolRecord(record, field)}
+          onChange={(event) => {
+            const value = event.target.value;
+            setDrafts((current) => ({ ...current, [draftKey(record.id, field)]: value }));
+            void savePoolRecordValue(record, field, value);
+          }}
         >
           <option value="整柜">整柜</option>
           <option value="冠通">冠通</option>
         </select>
+      );
+    }
+    if (type === 'date') {
+      return (
+        <input
+          type="date"
+          value={valueFor(record, field)}
+          onChange={(event) => {
+            const value = event.target.value;
+            setDrafts((current) => ({ ...current, [draftKey(record.id, field)]: value }));
+            void savePoolRecordValue(record, field, value);
+          }}
+        />
       );
     }
     return (
