@@ -115,9 +115,8 @@ export function purchaseAmountForRecordSku(record: PurchaseRecord): number {
 }
 
 export function packageCountFor(record: PurchaseRecord): number {
-  const mixedCartons = record.mixedGroups.reduce((sum, group) => sum + group.cartonCount, 0);
   const tailCartons = (record.tailQuantity ?? 0) > 0 ? 1 : 0;
-  return (record.cartonCount ?? 0) + tailCartons + mixedCartons;
+  return (record.cartonCount ?? 0) + tailCartons;
 }
 
 export function mixedAmountFor(record: PurchaseRecord): number {
