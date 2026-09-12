@@ -953,6 +953,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         >
           <option value="整柜">整柜</option>
           <option value="冠通">冠通</option>
+          <option value="海川">海川</option>
         </select>
       );
     }
@@ -1124,7 +1125,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <label>单品CBM<input type="number" min="0" step="0.00000001" value={newOrder.unitCbm} onChange={(event) => patchNewOrder('unitCbm', event.target.value)} /></label>
           <label>总CBM<input value={newTotalCbm.toFixed(4)} readOnly /></label>
           <label>状态<select value={newOrder.status} onChange={(event) => patchNewOrder('status', event.target.value as PurchaseStatus)}>{statusEditOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-          <label>装货方式<select value={newOrder.loadingType || '整柜'} onChange={(event) => patchNewOrder('loadingType', event.target.value as PurchaseRecord['loadingType'])}><option value="整柜">整柜</option><option value="冠通">冠通</option></select></label>
+          <label>装货方式<select value={newOrder.loadingType || '整柜'} onChange={(event) => patchNewOrder('loadingType', event.target.value as PurchaseRecord['loadingType'])}><option value="整柜">整柜</option><option value="冠通">冠通</option><option value="海川">海川</option></select></label>
           <label className="wide">备注<input value={newOrder.note} onChange={(event) => patchNewOrder('note', event.target.value)} /></label>
           <div className="form-actions">
             <button className="primary" type="button" onClick={() => void addNewOrder()}>新增采购订单</button>

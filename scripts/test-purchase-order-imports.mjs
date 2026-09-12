@@ -96,11 +96,20 @@ try {
 
   result = mergeImportedPurchaseOrders(
     [],
-    [imported('container', '整柜'), imported('guantong', '冠通')],
+    [imported('container', '整柜'), imported('guantong', '冠通'), imported('haichuan', '海川')],
     'buyer@example.com',
   );
-  assert.equal(result.createdCount, 2);
-  assert.deepEqual(result.records.map((item) => item.loadingType), ['整柜', '冠通']);
+  assert.equal(result.createdCount, 3);
+  assert.deepEqual(result.records.map((item) => item.loadingType), ['整柜', '冠通', '海川']);
+
+  result = mergeImportedPurchaseOrders(
+    [record('existing-container', '整柜'), record('existing-guantong', '冠通')],
+    [imported('new-haichuan', '海川')],
+    'buyer@example.com',
+  );
+  assert.equal(result.updatedCount, 0);
+  assert.equal(result.createdCount, 1);
+  assert.equal(result.records[0].id, 'new-haichuan');
 
   console.log('purchase order loading type import tests passed');
 } finally {

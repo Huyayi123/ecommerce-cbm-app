@@ -118,7 +118,7 @@ export type PurchaseRecord = {
   status: PurchaseStatus;
   unitCbm: number;
   totalCbm: number;
-  loadingType: '' | '整柜' | '冠通';
+  loadingType: '' | '整柜' | '冠通' | '海川';
   containerDate: string;
   totalWeightKg: number | null;
   cartonCount: number | null;

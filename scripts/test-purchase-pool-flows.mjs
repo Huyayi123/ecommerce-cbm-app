@@ -49,15 +49,17 @@ try {
     record('container-default', '整柜', '2026-09-01'),
     record('container-blank', '', ''),
     record('container-manual', '整柜', '2026-09-03'),
+    record('haichuan', '海川', '2026-09-01'),
     record('guantong', '冠通', ''),
   ], '2026-09-01', '2026-09-10');
-  assert.equal(dateResult.updatedCount, 2);
+  assert.equal(dateResult.updatedCount, 3);
   assert.equal(dateResult.preservedManualCount, 1);
   assert.equal(dateResult.skippedGuantongCount, 1);
   assert.equal(dateResult.records[0].containerDate, '2026-09-10');
   assert.equal(dateResult.records[1].containerDate, '2026-09-10');
   assert.equal(dateResult.records[2].containerDate, '2026-09-03');
-  assert.equal(dateResult.records[3].containerDate, '');
+  assert.equal(dateResult.records[3].containerDate, '2026-09-10');
+  assert.equal(dateResult.records[4].containerDate, '');
 
   assert.equal(flows.changePurchasePoolLoadingType(record('switch', '整柜', '2026-09-01'), '冠通').containerDate, '');
   assert.equal(flows.changePurchasePoolLoadingType(record('switch-back', '冠通', '2026-09-02'), '整柜').containerDate, '');
@@ -66,6 +68,7 @@ try {
     record('dated-guantong', '冠通', '2026-09-05'),
     record('undated-guantong', '冠通', ''),
     record('container', '整柜', '2026-09-05'),
+    record('haichuan', '海川', '2026-09-05'),
   ]);
   assert.equal(sendResult.sentRecords.length, 1);
   assert.equal(sendResult.sentRecords[0].id, 'dated-guantong');
@@ -74,8 +77,13 @@ try {
   assert.equal(sendResult.missingDateCount, 1);
   assert.equal(sendResult.records.find((item) => item.id === 'undated-guantong').poolStatus, 'submitted_to_pool');
   assert.equal(sendResult.records.find((item) => item.id === 'container').poolStatus, 'submitted_to_pool');
+  assert.equal(sendResult.records.find((item) => item.id === 'haichuan').poolStatus, 'submitted_to_pool');
 
   assert.equal(flows.isRecordEligibleForLogistics(record('container', '整柜', '2026-09-05'), '2026-09-05'), true);
+  assert.equal(flows.isRecordEligibleForLogistics(record('blank', '', '2026-09-05'), '2026-09-05'), true);
+  assert.equal(flows.isRecordEligibleForLogistics(record('haichuan', '海川', '2026-09-05'), '2026-09-05'), false);
+  assert.equal(flows.isRecordEligibleForLogistics(record('haichuan', '海川', '2026-09-05'), '2026-09-05', '海川'), true);
+  assert.equal(flows.isRecordEligibleForLogistics(record('container', '整柜', '2026-09-05'), '2026-09-05', '海川'), false);
   assert.equal(flows.isRecordEligibleForLogistics(record('guantong', '冠通', '2026-09-05'), '2026-09-05'), false);
 
   const stalePoolRecord = { ...record('stale-pool-record', '整柜'), poolStatus: 'pending_purchase', isConfirmed: false };

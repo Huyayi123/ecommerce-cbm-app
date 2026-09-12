@@ -1,11 +1,16 @@
 import type { AppProfile, LogisticsBatch, LogisticsBatchItem, PurchaseRecord, SkuItem } from '../types';
 import { round } from './number';
-import { isRecordEligibleForLogistics } from './purchasePoolFlows';
+import { isRecordEligibleForLogistics, type LogisticsLoadingType } from './purchasePoolFlows';
 import { effectivePurchaseQuantity, mixedGroupsSummary, withPurchaseTotals } from './purchaseRecords';
 
-function safeBatchId(containerDate: string, logisticsUserId: string, logisticsEmail: string): string {
+function safeBatchId(containerDate: string, loadingType: LogisticsLoadingType, logisticsUserId: string, logisticsEmail: string): string {
   const owner = logisticsUserId || logisticsEmail || 'unassigned';
-  return `logistics-${containerDate || 'no-date'}-${owner}`.replace(/[^a-zA-Z0-9_-]/g, '-');
+  const route = loadingType === '海川' ? 'haichuan' : 'container';
+  return `logistics-${containerDate || 'no-date'}-${route}-${owner}`.replace(/[^a-zA-Z0-9_-]/g, '-');
+}
+
+export function logisticsBatchLoadingType(batch: Pick<LogisticsBatch, 'items'>): LogisticsLoadingType {
+  return batch.items.some((item) => item.loadingType === '海川') ? '海川' : '整柜';
 }
 
 function skuLookup(skuItems: SkuItem[]): Map<string, SkuItem> {
@@ -71,6 +76,7 @@ export function buildLogisticsBatch(
   containerDate: string,
   logisticsProfile: AppProfile | null,
   existingBatch?: LogisticsBatch,
+  loadingType: LogisticsLoadingType = '整柜',
 ): LogisticsBatch {
   const now = new Date().toISOString();
   const skuLookups = {
@@ -79,10 +85,10 @@ export function buildLogisticsBatch(
     byProductName: skuLookupByField(skuItems, 'productName'),
     byEnglishName: skuLookupByField(skuItems, 'englishName'),
   };
-  const batchId = existingBatch?.id || safeBatchId(containerDate, logisticsProfile?.id || '', logisticsProfile?.email || '');
+  const batchId = existingBatch?.id || safeBatchId(containerDate, loadingType, logisticsProfile?.id || '', logisticsProfile?.email || '');
   const existingItems = new Map((existingBatch?.items ?? []).map((item) => [item.purchaseRecordId, item]));
   const sourceRecords = records
-    .filter((record) => isRecordEligibleForLogistics(record, containerDate))
+    .filter((record) => isRecordEligibleForLogistics(record, containerDate, loadingType))
     .sort((left, right) => (
       (left.internalCode || '').localeCompare(right.internalCode || '', 'zh-Hans-CN', { numeric: true })
       || left.manufacturerName.localeCompare(right.manufacturerName, 'zh-Hans-CN')

@@ -303,6 +303,11 @@ function parseStatus(value: unknown): PurchaseStatus {
   return statusMap[text] ?? 'pending';
 }
 
+function parseLoadingType(value: unknown): PurchaseRecord['loadingType'] {
+  const text = String(value ?? '').trim();
+  return text === '整柜' || text === '冠通' || text === '海川' ? text : '';
+}
+
 function nonEmptyText(value: unknown, fallback = ''): string {
   const text = String(value ?? '').trim();
   return text || fallback;
@@ -473,7 +478,7 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
       status: parseStatus(pickPurchaseRecordField(row, headers, 'status')),
       unitCbm,
       totalCbm: importedTotalCbm ?? Math.round(effectiveQuantity * unitCbm * 10000) / 10000,
-      loadingType: (String(pickPurchaseRecordField(row, headers, 'loadingType') ?? '').trim() === '冠通' ? '冠通' : String(pickPurchaseRecordField(row, headers, 'loadingType') ?? '').trim() === '整柜' ? '整柜' : ''),
+      loadingType: parseLoadingType(pickPurchaseRecordField(row, headers, 'loadingType')),
       containerDate: nonEmptyText(pickPurchaseRecordField(row, headers, 'containerDate')),
       totalWeightKg: toNumber(pickPurchaseRecordField(row, headers, 'totalWeightKg')),
       cartonCount: toNumber(pickPurchaseRecordField(row, headers, 'cartonCount')),

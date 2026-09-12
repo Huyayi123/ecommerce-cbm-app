@@ -15,8 +15,9 @@ function normalizedShop(value: string): string {
   return value.trim().toLocaleLowerCase();
 }
 
-function normalizedLoadingType(value: PurchaseRecord['loadingType']): '整柜' | '冠通' {
-  return value === '冠通' ? '冠通' : '整柜';
+function normalizedLoadingType(value: PurchaseRecord['loadingType']): '整柜' | '冠通' | '海川' {
+  if (value === '冠通' || value === '海川') return value;
+  return '整柜';
 }
 
 function isMatchableSku(value: string): boolean {

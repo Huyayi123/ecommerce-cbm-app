@@ -142,7 +142,7 @@ export function loadPurchaseRecords(): PurchaseRecord[] {
         status,
         unitCbm: nullableNumber(record.unitCbm) ?? 0,
         totalCbm: nullableNumber(record.totalCbm) ?? 0,
-        loadingType: record.loadingType === '整柜' || record.loadingType === '冠通' ? record.loadingType : '',
+        loadingType: record.loadingType === '整柜' || record.loadingType === '冠通' || record.loadingType === '海川' ? record.loadingType : '',
         containerDate: String(record.containerDate ?? ''),
         totalWeightKg: nullableNumber(record.totalWeightKg),
         cartonCount: nullableNumber(record.cartonCount),

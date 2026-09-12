@@ -5,6 +5,17 @@ export function isGuantongLoadingType(record: Pick<PurchaseRecord, 'loadingType'
   return record.loadingType === '冠通';
 }
 
+export type LogisticsLoadingType = '整柜' | '海川';
+
+export function matchesLogisticsLoadingType(
+  record: Pick<PurchaseRecord, 'loadingType'>,
+  loadingType: LogisticsLoadingType,
+): boolean {
+  return loadingType === '整柜'
+    ? record.loadingType === '' || record.loadingType === '整柜'
+    : record.loadingType === '海川';
+}
+
 export function normalizeRecordForPurchasePool(record: PurchaseRecord): PurchaseRecord {
   return withPurchaseTotals({
     ...record,
@@ -36,10 +47,14 @@ export function repairPurchasePoolMembership(
   return { records: nextRecords, repairedRecords };
 }
 
-export function isRecordEligibleForLogistics(record: PurchaseRecord, containerDate: string): boolean {
+export function isRecordEligibleForLogistics(
+  record: PurchaseRecord,
+  containerDate: string,
+  loadingType: LogisticsLoadingType = '整柜',
+): boolean {
   return record.poolStatus === 'submitted_to_pool'
     && record.status !== 'cancelled'
-    && !isGuantongLoadingType(record)
+    && matchesLogisticsLoadingType(record, loadingType)
     && record.containerDate === containerDate;
 }
 

@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AppProfile, LogisticsBatch, LogisticsBatchItem, PurchaseRecord, SkuItem } from '../types';
 import { exportLogisticsBatch, exportSubmittedLogisticsBatches } from '../utils/exporters';
 import { parseLogisticsBatchFile } from '../utils/fileParsers';
-import { buildLogisticsBatch, logisticsItemTotalQuantity, logisticsStatusLabel, normalizeLogisticsItemInput } from '../utils/logistics';
+import { buildLogisticsBatch, logisticsBatchLoadingType, logisticsItemTotalQuantity, logisticsStatusLabel, normalizeLogisticsItemInput } from '../utils/logistics';
+import { matchesLogisticsLoadingType, type LogisticsLoadingType } from '../utils/purchasePoolFlows';
 import { formatErrorMessage } from '../utils/errors';
 
 type Props = {
@@ -95,10 +96,14 @@ export function LogisticsLoadingPage({
 }: Props) {
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics'), [profiles]);
+  const [logisticsLoadingType, setLogisticsLoadingType] = useState<LogisticsLoadingType>('整柜');
   const containerDates = useMemo(() => Array.from(new Set(records
-    .filter((record) => record.poolStatus === 'submitted_to_pool' && record.status !== 'cancelled' && record.containerDate)
+    .filter((record) => record.poolStatus === 'submitted_to_pool'
+      && record.status !== 'cancelled'
+      && record.containerDate
+      && matchesLogisticsLoadingType(record, logisticsLoadingType))
     .map((record) => record.containerDate)))
-    .sort((left, right) => right.localeCompare(left)), [records]);
+    .sort((left, right) => right.localeCompare(left)), [logisticsLoadingType, records]);
   const visibleBatches = useMemo(() => {
     if (isAdmin) return batches;
     const email = profile.email.trim().toLowerCase();
@@ -112,6 +117,10 @@ export function LogisticsLoadingPage({
   const [message, setMessage] = useState('');
   const [searchText, setSearchText] = useState('');
   const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!containerDates.includes(containerDate)) setContainerDate(containerDates[0] ?? todayIso());
+  }, [containerDate, containerDates]);
 
   const activeBatch = draftBatch
     ?? visibleBatches.find((batch) => batch.id === activeBatchId)
@@ -141,10 +150,12 @@ export function LogisticsLoadingPage({
       return;
     }
 
-    const existing = batches.find((batch) => batch.containerDate === containerDate && batch.logisticsUserId === logisticsProfile.id);
-    const batch = buildLogisticsBatch(records, skuItems, profile, containerDate, logisticsProfile, existing);
+    const existing = batches.find((batch) => batch.containerDate === containerDate
+      && batch.logisticsUserId === logisticsProfile.id
+      && logisticsBatchLoadingType(batch) === logisticsLoadingType);
+    const batch = buildLogisticsBatch(records, skuItems, profile, containerDate, logisticsProfile, existing, logisticsLoadingType);
     if (batch.items.length === 0) {
-      setMessage('这个装柜日期下面没有可分配给物流商的装柜池记录。');
+      setMessage(`这个装柜日期下面没有可分配给物流商的${logisticsLoadingType}记录。`);
       return;
     }
 
@@ -152,7 +163,7 @@ export function LogisticsLoadingPage({
       await onSaveBatch(batch);
       setDraftBatch(null);
       setActiveBatchId(batch.id);
-      setMessage(`已生成/刷新 ${batch.items.length} 条物流装柜确认明细。`);
+      setMessage(`已生成/刷新 ${batch.items.length} 条${logisticsLoadingType}物流装柜确认明细。`);
     } catch (error) {
       setMessage(`物流批次保存失败：${formatErrorMessage(error)}`);
     }
@@ -313,6 +324,12 @@ export function LogisticsLoadingPage({
 
       {isAdmin && (
         <div className="logistics-admin-bar">
+          <label>物流装柜方式
+            <select value={logisticsLoadingType} onChange={(event) => setLogisticsLoadingType(event.target.value as LogisticsLoadingType)}>
+              <option value="整柜">整柜</option>
+              <option value="海川">海川</option>
+            </select>
+          </label>
           <label>装柜日期
             <select value={containerDate} onChange={(event) => setContainerDate(event.target.value)}>
               {containerDates.map((date) => <option key={date} value={date}>{date}</option>)}
@@ -341,7 +358,7 @@ export function LogisticsLoadingPage({
                 setActiveBatchId(batch.id);
               }}
             >
-              {batch.containerDate || '未填日期'} · {batch.logisticsEmail || '未分配'} · {logisticsStatusLabel(batch.status)}
+              {batch.containerDate || '未填日期'} · {logisticsBatchLoadingType(batch)} · {batch.logisticsEmail || '未分配'} · {logisticsStatusLabel(batch.status)}
             </button>
           ))}
         </div>

@@ -2,8 +2,8 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { AppProfile, LogisticsBatch, PurchasePool, PurchaseRecord, SkuItem } from '../types';
 import { exportBatchPurchaseOrder, exportPurchaseRecords } from '../utils/exporters';
 import { formatErrorMessage } from '../utils/errors';
-import { buildLogisticsBatch } from '../utils/logistics';
-import { applyContainerDateToPoolRecords, changePurchasePoolLoadingType, normalizeRecordForPurchasePool, prepareDatedGuantongForInventory } from '../utils/purchasePoolFlows';
+import { buildLogisticsBatch, logisticsBatchLoadingType } from '../utils/logistics';
+import { applyContainerDateToPoolRecords, changePurchasePoolLoadingType, matchesLogisticsLoadingType, normalizeRecordForPurchasePool, prepareDatedGuantongForInventory, type LogisticsLoadingType } from '../utils/purchasePoolFlows';
 import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
 import { calculatedPurchaseTotalAmount, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
 
@@ -200,6 +200,7 @@ export function PurchasePoolPage({
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [poolDateDraft, setPoolDateDraft] = useState('');
   const [logisticsUserId, setLogisticsUserId] = useState('');
+  const [logisticsLoadingType, setLogisticsLoadingType] = useState<LogisticsLoadingType>('整柜');
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics'), [profiles]);
   const sourcePoolOptions = useMemo(() => buildPoolOptions(records, pools), [pools, records]);
@@ -249,7 +250,7 @@ export function PurchasePoolPage({
     }
     const dateResult = applyContainerDateToPoolRecords(submittedRecords, activePool.containerDate, nextDate);
     if (dateResult.updatedCount === 0) {
-      setMessage(`本池没有可统一日期的整柜订单；保留 ${dateResult.preservedManualCount} 条人工日期，跳过 ${dateResult.skippedGuantongCount} 条冠通订单。`);
+      setMessage(`本池没有可统一日期的整柜/海川订单；保留 ${dateResult.preservedManualCount} 条人工日期，跳过 ${dateResult.skippedGuantongCount} 条冠通订单。`);
       return;
     }
     const nextRecords = dateResult.records.map((record) => withPurchaseTotals({
@@ -285,7 +286,7 @@ export function PurchasePoolPage({
     try {
       if (nextPools.length > 0) await onSavePools(nextPools);
       await onSaveRecords(nextRecords);
-      setMessage(`已统一 ${dateResult.updatedCount} 条整柜订单的装柜日期为 ${nextDate}；保留 ${dateResult.preservedManualCount} 条人工日期，跳过 ${dateResult.skippedGuantongCount} 条冠通订单。`);
+      setMessage(`已统一 ${dateResult.updatedCount} 条整柜/海川订单的装柜日期为 ${nextDate}；保留 ${dateResult.preservedManualCount} 条人工日期，跳过 ${dateResult.skippedGuantongCount} 条冠通订单。`);
     } catch (error) {
       console.error(error);
       setMessage(`统一装柜日期失败：${formatErrorMessage(error)}`);
@@ -320,10 +321,12 @@ export function PurchasePoolPage({
       setMessage('请先选择物流商账号。');
       return;
     }
-    const assignableRecords = submittedRecords.map((record) => withPurchaseTotals({
-      ...record,
-      containerDate: record.containerDate || poolDateDraft.trim() || activePool.containerDate,
-    }));
+    const assignableRecords = submittedRecords
+      .filter((record) => matchesLogisticsLoadingType(record, logisticsLoadingType))
+      .map((record) => withPurchaseTotals({
+        ...record,
+        containerDate: record.containerDate || poolDateDraft.trim() || activePool.containerDate,
+      }));
     const dates = Array.from(new Set(assignableRecords.map((record) => record.containerDate).filter(Boolean)));
     if (dates.length === 0) {
       setMessage('请先填写本池装柜日期，或逐行填写装柜日期。');
@@ -333,18 +336,20 @@ export function PurchasePoolPage({
       let totalItems = 0;
       let batchCount = 0;
       for (const batchDate of dates) {
-        const existing = logisticsBatches.find((batch) => batch.containerDate === batchDate && batch.logisticsUserId === logisticsProfile.id);
-        const batch = buildLogisticsBatch(assignableRecords, skuItems, profile, batchDate, logisticsProfile, existing);
+        const existing = logisticsBatches.find((batch) => batch.containerDate === batchDate
+          && batch.logisticsUserId === logisticsProfile.id
+          && logisticsBatchLoadingType(batch) === logisticsLoadingType);
+        const batch = buildLogisticsBatch(assignableRecords, skuItems, profile, batchDate, logisticsProfile, existing, logisticsLoadingType);
         if (batch.items.length === 0) continue;
         await onSaveLogisticsBatch(batch);
         totalItems += batch.items.length;
         batchCount += 1;
       }
       if (totalItems === 0) {
-        setMessage('当前采购池没有可分配给物流商的装柜记录。');
+        setMessage(`当前采购池没有可分配给物流商的${logisticsLoadingType}记录。`);
         return;
       }
-      setMessage(`已生成/刷新 ${batchCount} 个物流批次、${totalItems} 条物流装柜确认明细，并分配给 ${logisticsProfile.displayName || logisticsProfile.email}。`);
+      setMessage(`已生成/刷新 ${batchCount} 个${logisticsLoadingType}物流批次、${totalItems} 条物流装柜确认明细，并分配给 ${logisticsProfile.displayName || logisticsProfile.email}。`);
       onOpenLogistics?.();
     } catch (error) {
       console.error(error);
@@ -501,6 +506,7 @@ export function PurchasePoolPage({
         >
           <option value="整柜">整柜</option>
           <option value="冠通">冠通</option>
+          <option value="海川">海川</option>
         </select>
       );
     }
@@ -559,6 +565,14 @@ export function PurchasePoolPage({
           })}
         </select></label>
         <label>本池装柜日期<input type="date" value={poolDateDraft} onChange={(event) => setPoolDateDraft(event.target.value)} disabled={!canApplyPoolDate} /></label>
+        {isAdmin && (
+          <label>物流装柜方式
+            <select value={logisticsLoadingType} onChange={(event) => setLogisticsLoadingType(event.target.value as LogisticsLoadingType)}>
+              <option value="整柜">整柜</option>
+              <option value="海川">海川</option>
+            </select>
+          </label>
+        )}
         {isAdmin && (
           <label>物流商账号
             <select value={logisticsUserId} onChange={(event) => setLogisticsUserId(event.target.value)} disabled={logisticsProfiles.length === 0}>
