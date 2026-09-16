@@ -417,6 +417,7 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
     return;
   }
 
+  const itemsBySku = skuLookup(skuItems);
   const includeBuyerEmail = moduleName !== '我的采购订单';
   const includePlanQuantity = moduleName === '我的采购订单';
   const hideMixedChildAmount = includePlanQuantity && !includeBuyerEmail;
@@ -461,7 +462,7 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
       批次: normalized.purchaseBatchName,
       批次日期: normalized.purchaseBatchDate,
       厂家名: normalized.manufacturerName,
-      内部编号: normalized.internalCode,
+      内部编号: itemsBySku.get(skuKey(line.sku))?.internalCode || '',
       SKU: line.sku,
       产品名称: line.productName,
       英文名称: '',

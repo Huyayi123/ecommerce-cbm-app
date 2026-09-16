@@ -623,7 +623,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
                           <td className="pin-col pin-manufacturer"><span className="cell-ellipsis" title={normalized.manufacturerName}>{normalized.manufacturerName}</span></td>
                           <td className="pin-col pin-sku"><span className="cell-ellipsis" title={line.sku}>{line.sku}</span></td>
                           <td className="pin-col pin-product"><span className="cell-ellipsis" title={line.productName}>{line.productName}</span></td>
-                          <td>{normalized.internalCode || '-'}</td>
+                          <td>{skuBySku.get(line.sku.trim().toUpperCase())?.internalCode || '-'}</td>
                           <td>{batchLabel(normalized)}</td>
                           <td>{normalized.purchaseBatchDate || '-'}</td>
                           <td />

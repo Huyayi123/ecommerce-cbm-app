@@ -28,7 +28,7 @@ const PURCHASE_RECORD_HEADERS = {
   confirmedPurchaseQuantity: ['实际采购数量', '确认采购数量', '实际数量', 'confirmed_purchase_quantity'],
   purchasePrice: ['采购单价', '单价', '成本价', 'purchase_price'],
   freightCost: ['运费', 'freight_cost', 'freightCost'],
-  totalAmount: ['总金额', '金额', 'total_amount'],
+  totalAmount: ['总金额', '混装总金额', '含混装总金额', '金额', 'total_amount'],
   purchaseBatchId: ['批次ID', '批次编号', 'purchase_batch_id', 'purchaseBatchId'],
   purchaseBatchName: ['批次', '批次名称', '采购批次', 'purchase_batch_name', 'purchaseBatchName'],
   purchaseBatchDate: ['批次日期', '装柜批次日期', 'purchase_batch_date', 'purchaseBatchDate'],
@@ -447,6 +447,7 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
     const logisticsTotalCbm = toNumber(pickPurchaseRecordField(row, headers, 'logisticsTotalCbm'));
     const effectiveQuantity = confirmedPurchaseQuantity ?? purchaseQuantity;
     const buyerName = String(pickPurchaseRecordField(row, headers, 'buyerName') ?? profile.buyerName).trim() || profile.buyerName;
+    const mixedGroups = parseMixedGroups(pickPurchaseRecordField(row, headers, 'mixedGroups'));
 
     const record = withPurchaseTotals({
       id: crypto.randomUUID(),
@@ -465,7 +466,7 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
       confirmedPurchaseQuantity,
       purchasePrice,
       freightCost,
-      totalAmount: importedTotalAmount ?? Math.round(effectiveQuantity * purchasePrice * 100) / 100,
+      totalAmount: importedTotalAmount ?? 0,
       purchaseDate: nonEmptyText(pickPurchaseRecordField(row, headers, 'purchaseDate'), new Date().toISOString().slice(0, 10)),
       purchasePoolId: nonEmptyText(pickPurchaseRecordField(row, headers, 'purchaseBatchId')),
       purchasePoolName: nonEmptyText(pickPurchaseRecordField(row, headers, 'purchaseBatchName')),
@@ -485,7 +486,7 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
       unitsPerCarton: toNumber(pickPurchaseRecordField(row, headers, 'unitsPerCarton')),
       tailQuantity: toNumber(pickPurchaseRecordField(row, headers, 'tailQuantity')) ?? 0,
       isMixed: parseBoolean(pickPurchaseRecordField(row, headers, 'isMixed')),
-      mixedGroups: parseMixedGroups(pickPurchaseRecordField(row, headers, 'mixedGroups')),
+      mixedGroups,
       logisticsTotalCbm,
       logisticsBatchId: '',
       logisticsConfirmationStatus: 'unassigned',
@@ -495,7 +496,7 @@ export async function parsePurchaseRecordsFile(file: File, profile: AppProfile):
       logisticsLeftTailQuantity: 0,
       logisticsSourceRecordId: '',
       note: String(pickPurchaseRecordField(row, headers, 'note') ?? `导入行 ${index + 2}`).trim(),
-    });
+    }, { recalculateAmount: importedTotalAmount === null });
     return [{ record, providedFields: providedPurchaseRecordFields(row, headers) }];
   });
 }

@@ -652,7 +652,7 @@ export function PurchasePoolPage({
                       <tr className="mixed-child-row" key={`${record.id}:${group.id}:${line.id}`}>
                         <td className="image-sticky-col">{childImageUrl ? <img className="sku-thumb" src={childImageUrl} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                         <td>{record.manufacturerName}</td>
-                        <td>{record.internalCode || '-'}</td>
+                        <td>{skuBySku.get(skuLookupKey(line.sku))?.internalCode || '-'}</td>
                         <td><strong>{line.sku}</strong></td>
                         <td><strong>{line.productName}</strong></td>
                         <td />

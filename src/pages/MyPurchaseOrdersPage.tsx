@@ -226,6 +226,12 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       .map((item) => [skuLookupKey(item.sku), item.imageUrl])),
     [skuItems],
   );
+  const internalCodeBySku = useMemo(
+    () => new Map(skuItems
+      .filter((item) => item.sku.trim())
+      .map((item) => [skuLookupKey(item.sku), item.internalCode.trim()])),
+    [skuItems],
+  );
   const skuBySku = useMemo(
     () => new Map(skuItems
       .filter((item) => item.sku.trim() && !isNewSkuValue(item.sku))
@@ -1186,7 +1192,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <tr className="mixed-child-row" key={`${normalized.id}:${group.id}:${line.id}`}>
                       <td className="image-sticky-col">{imageUrlBySku.get(skuLookupKey(line.sku)) ? <img className="sku-thumb" src={imageUrlBySku.get(skuLookupKey(line.sku))} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                       <td>{normalized.manufacturerName}</td>
-                      <td>{normalized.internalCode || '-'}</td>
+                      <td>{internalCodeBySku.get(skuLookupKey(line.sku)) || '-'}</td>
                       <td><strong>{line.sku}</strong></td>
                       <td><strong>{line.productName}</strong></td>
                       <td />
