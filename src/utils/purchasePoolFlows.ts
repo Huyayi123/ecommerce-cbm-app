@@ -71,6 +71,7 @@ export type PoolDateUpdateResult = {
   updatedCount: number;
   preservedManualCount: number;
   skippedGuantongCount: number;
+  skippedHaichuanCount: number;
 };
 
 export function applyContainerDateToPoolRecords(
@@ -81,9 +82,14 @@ export function applyContainerDateToPoolRecords(
   let updatedCount = 0;
   let preservedManualCount = 0;
   let skippedGuantongCount = 0;
+  let skippedHaichuanCount = 0;
   const nextRecords = records.map((record) => {
     if (isGuantongLoadingType(record)) {
       skippedGuantongCount += 1;
+      return record;
+    }
+    if (record.loadingType === '海川') {
+      skippedHaichuanCount += 1;
       return record;
     }
     if (record.containerDate && record.containerDate !== previousPoolDate) {
@@ -98,7 +104,7 @@ export function applyContainerDateToPoolRecords(
       containerDate: nextDate,
     });
   });
-  return { records: nextRecords, updatedCount, preservedManualCount, skippedGuantongCount };
+  return { records: nextRecords, updatedCount, preservedManualCount, skippedGuantongCount, skippedHaichuanCount };
 }
 
 export type GuantongInventoryResult = {

@@ -7,6 +7,7 @@ import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { AdAnalysisPage } from './pages/AdAnalysisPage';
 import { CommissionPage } from './pages/CommissionPage';
 import { ContainerCalculatorPage } from './pages/ContainerCalculatorPage';
+import { HaichuanWorkflowPage } from './pages/HaichuanWorkflowPage';
 import { LogisticsLoadingPage } from './pages/LogisticsLoadingPage';
 import { MyPurchaseOrdersPage } from './pages/MyPurchaseOrdersPage';
 import { MonthlyProfitPage } from './pages/MonthlyProfitPage';
@@ -15,7 +16,7 @@ import { PurchasePoolPage } from './pages/PurchasePoolPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
 import { RepricingAlertsPage } from './pages/RepricingAlertsPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
-import type { AdAnalysisRun, AppProfile, CommissionRun, LogisticsBatch, MonthlyProfitSummary, ProfitAnalysisRun, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
+import type { AdAnalysisRun, AppProfile, CommissionRun, HaichuanData, LogisticsBatch, MonthlyProfitSummary, ProfitAnalysisRun, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
 import {
   appendPurchaseRecordsToPool,
   deletePurchaseRecords,
@@ -51,13 +52,14 @@ import {
   upsertPurchasePools,
   upsertPurchaseRecords,
 } from './utils/cloudStorage';
+import { confirmHaichuanReceipt, createHaichuanInboundItems, deletePendingHaichuanInboundItems, fetchHaichuanData, reviewHaichuanLoadingBatch, submitHaichuanLoadingBatch } from './utils/haichuanStorage';
 import { formatErrorMessage } from './utils/errors';
 import { applyApprovedLogisticsBatch } from './utils/logistics';
 import { canDelete, canEdit } from './utils/permissions';
 import { repairPurchasePoolMembership } from './utils/purchasePoolFlows';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics';
+type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics' | 'haichuan-warehouse';
 
 const ACTIVE_PAGE_STORAGE_KEY = 'ecommerce-cbm-active-page';
 
@@ -68,6 +70,7 @@ const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'ad-analysis', label: '广告分析' },
   { key: 'commission', label: '采购人提成' },
   { key: 'logistics', label: '物流装柜确认' },
+  { key: 'haichuan-warehouse', label: '海川仓库库存' },
   { key: 'suggestions', label: '月销量采购建议' },
   { key: 'calculator', label: '装柜计算' },
   { key: 'my-orders', label: '我的采购订单' },
@@ -97,6 +100,7 @@ function App() {
   const [purchaseRecords, setPurchaseRecords] = useState<PurchaseRecord[]>([]);
   const [purchasePools, setPurchasePools] = useState<PurchasePool[]>([]);
   const [logisticsBatches, setLogisticsBatches] = useState<LogisticsBatch[]>([]);
+  const [haichuanData, setHaichuanData] = useState<HaichuanData>({ inboundItems: [], warehouseLots: [], loadingBatches: [] });
   const [savedSalesSuggestions, setSavedSalesSuggestions] = useState<SalesSuggestionRow[]>([]);
   const [repricingAlerts, setRepricingAlerts] = useState<RepricingAlert[]>([]);
   const [adAnalysisRuns, setAdAnalysisRuns] = useState<AdAnalysisRun[]>([]);
@@ -121,8 +125,12 @@ function App() {
     if (!supabase) return;
     if (activeProfile?.role === 'logistics') {
       try {
-        const batches = await fetchLogisticsBatches();
-        setLogisticsBatches(batches);
+        if (activeProfile.logisticsProviderType === 'haichuan') {
+          setHaichuanData(await fetchHaichuanData());
+        } else {
+          const batches = await fetchLogisticsBatches();
+          setLogisticsBatches(batches);
+        }
         setProfiles((current) => (current.some((item) => item.id === activeProfile.id) ? current : [activeProfile, ...current]));
       } catch (error) {
         console.error('物流批次加载失败', error);
@@ -144,6 +152,7 @@ function App() {
       '利润分析历史',
       '月利润汇总',
       '采购人提成历史',
+      '海川仓库',
     ];
     const results = await Promise.allSettled([
       fetchSkuItems(),
@@ -158,6 +167,7 @@ function App() {
       activeProfile?.role === 'admin' || activeProfile?.role === 'owner' ? fetchProfitAnalysisRuns() : Promise.resolve([]),
       activeProfile?.role === 'owner' ? fetchMonthlyProfitSummaries() : Promise.resolve([]),
       activeProfile?.role === 'admin' ? fetchCommissionRuns() : Promise.resolve([]),
+      fetchHaichuanData(),
     ]);
     const errors = results.flatMap((result, index) => {
       if (result.status !== 'rejected') return [];
@@ -196,6 +206,31 @@ function App() {
     if (results[9].status === 'fulfilled') setProfitAnalysisRuns(results[9].value);
     if (results[10].status === 'fulfilled') setMonthlyProfitSummaries(results[10].value);
     if (results[11].status === 'fulfilled') setCommissionRuns(results[11].value);
+    if (results[12].status === 'fulfilled') setHaichuanData(results[12].value);
+
+    if (results[2].status === 'fulfilled' && results[3].status === 'fulfilled' && results[8].status === 'fulfilled' && results[12].status === 'fulfilled') {
+      const haichuanProfile = results[3].value.find((item) => item.role === 'logistics' && item.logisticsProviderType === 'haichuan');
+      if (haichuanProfile) {
+        const existingInboundRecordIds = new Set(results[12].value.inboundItems.map((item) => item.purchaseRecordId));
+        const legacyActiveRecordIds = new Set(results[8].value
+          .filter((batch) => batch.status === 'draft' || batch.status === 'submitted')
+          .flatMap((batch) => batch.items.filter((item) => item.loadingType === '海川').map((item) => item.purchaseRecordId)));
+        const missingInbound = results[2].value.filter((record) => record.loadingType === '海川'
+          && record.poolStatus === 'submitted_to_pool'
+          && record.status !== 'cancelled'
+          && !existingInboundRecordIds.has(record.id)
+          && !legacyActiveRecordIds.has(record.id));
+        if (missingInbound.length > 0) {
+          try {
+            await createHaichuanInboundItems(missingInbound, haichuanProfile);
+            setHaichuanData(await fetchHaichuanData());
+          } catch (error) {
+            console.error('海川待入仓任务补建失败', error);
+            setStatusMessage(`海川待入仓任务补建失败：${formatErrorMessage(error)}`);
+          }
+        }
+      }
+    }
 
     if (errors.length > 0) {
       setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
@@ -218,7 +253,7 @@ function App() {
           setProfile(activeProfile);
         } catch (error) {
           console.error(error);
-          activeProfile = { id: user.id, email: user.email ?? '', role: 'viewer', displayName: user.email ?? '', buyerName: '' };
+          activeProfile = { id: user.id, email: user.email ?? '', role: 'viewer', displayName: user.email ?? '', buyerName: '', logisticsProviderType: '' };
           setProfile(activeProfile);
           setStatusMessage(`账号资料加载失败：${formatErrorMessage(error)}`);
         }
@@ -255,6 +290,7 @@ function App() {
         setPurchaseRecords([]);
         setPurchasePools([]);
         setLogisticsBatches([]);
+        setHaichuanData({ inboundItems: [], warehouseLots: [], loadingBatches: [] });
         setProfiles([]);
         setRepricingAlerts([]);
         setAdAnalysisRuns([]);
@@ -321,8 +357,21 @@ function App() {
 
   async function persistPurchaseRecordUpdates(changedRecords: PurchaseRecord[]) {
     const normalized = normalizePurchaseRecords(assignBuyerEmails(changedRecords)).records;
+    const existingById = new Map(purchaseRecords.map((record) => [record.id, record]));
+    const newlyHaichuan = normalized.filter((record) => record.loadingType === '海川'
+      && record.poolStatus === 'submitted_to_pool'
+      && existingById.get(record.id)?.loadingType !== '海川');
+    const removedFromHaichuan = (profile?.role === 'admin' || profile?.role === 'owner') ? normalized.filter((record) => record.loadingType !== '海川'
+      && existingById.get(record.id)?.loadingType === '海川'
+      && existingById.get(record.id)?.poolStatus === 'submitted_to_pool') : [];
+    const haichuanProfile = profiles.find((item) => item.role === 'logistics' && item.logisticsProviderType === 'haichuan');
+    if (newlyHaichuan.length > 0 && !haichuanProfile) {
+      throw new Error('尚未绑定海川物流商账号，不能将采购池记录改为海川。');
+    }
     try {
       await upsertPurchaseRecords(normalized);
+      if (haichuanProfile && newlyHaichuan.length > 0) await createHaichuanInboundItems(newlyHaichuan, haichuanProfile);
+      if (removedFromHaichuan.length > 0) await deletePendingHaichuanInboundItems(removedFromHaichuan.map((record) => record.id));
       setPurchaseRecords((current) => {
         const existingIds = new Set(current.map((record) => record.id));
         const changedById = new Map(normalized.map((record) => [record.id, record]));
@@ -365,11 +414,17 @@ function App() {
       purchaseBatchId: record.purchaseBatchId || pool.id,
       purchaseBatchName: record.purchaseBatchName || pool.name,
       purchaseBatchDate: record.purchaseBatchDate || pool.containerDate,
-      containerDate: record.loadingType === '冠通' ? '' : record.containerDate,
+      containerDate: record.loadingType === '整柜' || record.loadingType === '' ? record.containerDate : '',
     }));
+    const haichuanRecords = submittedRecords.filter((record) => record.loadingType === '海川');
+    const haichuanProfile = profiles.find((item) => item.role === 'logistics' && item.logisticsProviderType === 'haichuan');
+    if (haichuanRecords.length > 0 && !haichuanProfile) {
+      throw new Error('尚未绑定海川物流商账号，请先在“海川仓库库存 → 物流商绑定”中完成绑定。');
+    }
     try {
       const savedPool = await appendPurchaseRecordsToPool({ ...pool, records: [] }, submittedRecords);
       await upsertPurchaseRecords(submittedRecords);
+      if (haichuanProfile && haichuanRecords.length > 0) await createHaichuanInboundItems(haichuanRecords, haichuanProfile);
       setPurchasePools((current) => {
         const existingIds = new Set(current.map((item) => item.id));
         if (!existingIds.has(savedPool.id)) return [savedPool, ...current];
@@ -533,7 +588,7 @@ function App() {
 
   async function saveProfileBinding(nextProfile: AppProfile) {
     const savedProfile = await updateProfileBinding(nextProfile);
-    setProfile(savedProfile);
+    if (savedProfile.id === profile?.id) setProfile(savedProfile);
     const nextProfiles = profiles.some((item) => item.id === savedProfile.id)
       ? profiles.map((item) => (item.id === savedProfile.id ? savedProfile : item))
       : [...profiles, savedProfile];
@@ -572,11 +627,12 @@ function App() {
     && record.assignedBuyerEmail.trim().toLowerCase() === profile.email.trim().toLowerCase()
   ));
   const pendingTaskCount = purchaseRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase').length;
-  const poolSubmittedCount = purchasePools.reduce((sum, pool) => sum + pool.records.length, 0);
+  const poolSubmittedCount = purchaseRecords.filter((record) => record.status !== 'cancelled' && record.poolStatus === 'submitted_to_pool').length;
   const activeRepricingAlerts = repricingAlerts.filter((alert) => alert.isActive && (alert.alertLevel === 'high' || alert.alertLevel === 'medium'));
   const visibleNavItems = profile.role === 'logistics'
     ? navItems.filter((item) => item.key === 'logistics')
     : navItems.filter((item) => (item.key !== 'logistics' || profile.role === 'admin' || profile.role === 'owner')
+      && (item.key !== 'haichuan-warehouse' || profile.role === 'admin' || profile.role === 'owner')
       && (item.key !== 'profit-analysis' || profile.role === 'admin' || profile.role === 'owner')
       && (item.key !== 'commission' || profile.role === 'admin')
       && (item.key !== 'monthly-profit' || profile.role === 'owner'));
@@ -753,7 +809,18 @@ function App() {
         />
       )}
       {currentPage === 'logistics' && (
-        <LogisticsLoadingPage
+        profile.role === 'logistics' && profile.logisticsProviderType === 'haichuan' ? (
+          <HaichuanWorkflowPage
+            profile={profile}
+            profiles={profiles}
+            data={haichuanData}
+            onRefresh={async () => setHaichuanData(await fetchHaichuanData())}
+            onConfirmReceipt={confirmHaichuanReceipt}
+            onSubmitBatch={submitHaichuanLoadingBatch}
+            onReviewBatch={reviewHaichuanLoadingBatch}
+            onSaveProfile={saveProfileBinding}
+          />
+        ) : <LogisticsLoadingPage
           profile={profile}
           profiles={profiles}
           records={purchaseRecords}
@@ -764,6 +831,25 @@ function App() {
           onApproveBatch={approveLogisticsBatch}
           onRejectBatch={rejectLogisticsBatch}
           onClearLogistics={clearLogisticsData}
+        />
+      )}
+      {currentPage === 'haichuan-warehouse' && (profile.role === 'admin' || profile.role === 'owner') && (
+        <HaichuanWorkflowPage
+          profile={profile}
+          profiles={profiles}
+          data={haichuanData}
+          onRefresh={async () => {
+            setHaichuanData(await fetchHaichuanData());
+            const refreshedProfiles = await fetchProfiles();
+            setProfiles(refreshedProfiles);
+          }}
+          onConfirmReceipt={confirmHaichuanReceipt}
+          onSubmitBatch={submitHaichuanLoadingBatch}
+          onReviewBatch={async (input) => {
+            await reviewHaichuanLoadingBatch(input);
+            await loadCloudData(profile);
+          }}
+          onSaveProfile={saveProfileBinding}
         />
       )}
       </div>

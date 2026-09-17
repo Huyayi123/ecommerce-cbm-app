@@ -3,6 +3,7 @@ import type { MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus,
 import { exportBatchPurchaseOrder, exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
 import { round } from '../utils/number';
 import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseAmountForRecordSku, purchaseQuantityForRecordSku, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
+import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 import { recordsForSelectionAwareExport } from '../utils/selectionAwareExport';
 
 type Props = {
@@ -570,7 +571,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           <table className="inventory-table">
             <thead>
               <tr>
-                <th className="pin-col pin-select">选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">SKU</th><th className="pin-col pin-product">产品名称</th><th>内部编号</th><th>批次</th><th>批次日期</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>是否混装</th><th>混装组</th><th>物流确认</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>采购数量</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>状态</th><th>装货方式</th><th>装柜日期</th><th>单品CBM</th><th>备注</th><th>操作</th>
+                <th className="pin-col pin-select">选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">{labels.sku}</th><th className="pin-col pin-product">{labels.productName}</th><th>{labels.internalCode}</th><th>批次</th><th>批次日期</th><th>{labels.cartonCount}</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>是否混装</th><th>混装组</th><th>物流确认</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>{labels.purchaseTotalQuantity}</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.containerDate}</th><th>{labels.unitCbm}</th><th>{labels.note}</th><th>{labels.actions}</th>
               </tr>
             </thead>
             <tbody>

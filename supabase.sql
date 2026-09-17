@@ -217,6 +217,16 @@ add column if not exists notes text;
 alter table public.profiles
 add column if not exists buyer_name text;
 
+alter table public.profiles
+add column if not exists logistics_provider_type text;
+
+alter table public.profiles
+drop constraint if exists profiles_logistics_provider_type_check;
+
+alter table public.profiles
+add constraint profiles_logistics_provider_type_check
+check (logistics_provider_type is null or logistics_provider_type in ('container', 'haichuan'));
+
 alter table public.sku_items
 add column if not exists cbm_source text default 'missing';
 
@@ -376,6 +386,9 @@ alter table public.purchase_records
 add column if not exists pool_status text not null default 'pending_purchase';
 
 alter table public.purchase_records
+add column if not exists freight_cost numeric not null default 0;
+
+alter table public.purchase_records
 alter column status type text using status::text;
 
 alter table public.purchase_records
@@ -454,6 +467,122 @@ on public.logistics_batches (logistics_user_id, status);
 
 create index if not exists logistics_batch_items_batch_idx
 on public.logistics_batch_items (batch_id, internal_code);
+
+create table if not exists public.haichuan_inbound_items (
+  id text primary key,
+  purchase_record_id text not null unique references public.purchase_records(id) on delete restrict,
+  logistics_user_id uuid references auth.users(id) on delete set null,
+  logistics_email text,
+  internal_code text,
+  manufacturer_name text,
+  sku text,
+  product_name text,
+  english_name text,
+  image_url text,
+  shop_name text,
+  buyer_name text,
+  purchase_total_quantity numeric not null default 0,
+  declared_carton_count integer not null default 0,
+  declared_units_per_carton numeric not null default 0,
+  declared_tail_quantity numeric not null default 0,
+  declared_total_carton_count integer not null default 0,
+  actual_received_carton_count integer,
+  unit_cbm numeric not null default 0,
+  declared_total_cbm numeric not null default 0,
+  has_packing_variance boolean not null default false,
+  status text not null default 'pending_receipt' check (status in ('pending_receipt', 'received')),
+  received_by uuid references auth.users(id) on delete set null,
+  received_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.haichuan_warehouse_lots (
+  id text primary key,
+  inbound_item_id text not null unique references public.haichuan_inbound_items(id) on delete restrict,
+  purchase_record_id text not null references public.purchase_records(id) on delete restrict,
+  logistics_user_id uuid references auth.users(id) on delete set null,
+  logistics_email text,
+  internal_code text,
+  manufacturer_name text,
+  sku text,
+  product_name text,
+  english_name text,
+  image_url text,
+  shop_name text,
+  buyer_name text,
+  declared_carton_count integer not null default 0,
+  declared_units_per_carton numeric not null default 0,
+  declared_tail_quantity numeric not null default 0,
+  initial_carton_count integer not null,
+  remaining_carton_count integer not null,
+  reserved_carton_count integer not null default 0,
+  initial_product_quantity numeric not null,
+  remaining_product_quantity numeric not null,
+  initial_cbm numeric not null default 0,
+  remaining_cbm numeric not null default 0,
+  unit_cbm numeric not null default 0,
+  has_packing_variance boolean not null default false,
+  status text not null default 'available' check (status in ('available', 'partially_reserved', 'fully_reserved', 'depleted')),
+  version integer not null default 1,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (remaining_carton_count >= 0),
+  check (reserved_carton_count >= 0),
+  check (reserved_carton_count <= remaining_carton_count),
+  check (remaining_product_quantity >= 0),
+  check (remaining_cbm >= 0)
+);
+
+create table if not exists public.haichuan_loading_batches (
+  id text primary key,
+  container_date date not null,
+  logistics_user_id uuid references auth.users(id) on delete set null,
+  logistics_email text,
+  status text not null default 'draft' check (status in ('draft', 'submitted', 'approved', 'rejected')),
+  created_by uuid references auth.users(id) on delete set null,
+  submitted_at timestamptz,
+  reviewed_by uuid references auth.users(id) on delete set null,
+  reviewed_at timestamptz,
+  note text not null default '',
+  rejection_reason text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.haichuan_loading_items (
+  id text primary key,
+  batch_id text not null references public.haichuan_loading_batches(id) on delete cascade,
+  warehouse_lot_id text not null references public.haichuan_warehouse_lots(id) on delete restrict,
+  purchase_record_id text not null references public.purchase_records(id) on delete restrict,
+  internal_code text,
+  sku text,
+  product_name text,
+  requested_carton_count integer not null,
+  suggested_product_quantity numeric not null default 0,
+  suggested_cbm numeric not null default 0,
+  is_estimated boolean not null default false,
+  approved_carton_count integer,
+  approved_product_quantity numeric,
+  approved_cbm numeric,
+  warehouse_version integer not null default 1,
+  note text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (batch_id, warehouse_lot_id)
+);
+
+create index if not exists haichuan_inbound_assignee_status_idx
+on public.haichuan_inbound_items (logistics_user_id, status, created_at desc);
+
+create index if not exists haichuan_warehouse_assignee_status_idx
+on public.haichuan_warehouse_lots (logistics_user_id, status, created_at desc);
+
+create index if not exists haichuan_loading_assignee_status_idx
+on public.haichuan_loading_batches (logistics_user_id, status, container_date desc);
+
+create index if not exists haichuan_loading_items_batch_idx
+on public.haichuan_loading_items (batch_id, warehouse_lot_id);
 
 create table if not exists public.purchase_pools (
   id text primary key,
@@ -594,6 +723,336 @@ as $$
   select public.current_role()::text = 'owner'
 $$;
 
+create or replace function public.haichuan_lot_status(p_remaining integer, p_reserved integer)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when p_remaining <= 0 then 'depleted'
+    when p_reserved <= 0 then 'available'
+    when p_reserved >= p_remaining then 'fully_reserved'
+    else 'partially_reserved'
+  end
+$$;
+
+create or replace function public.confirm_haichuan_receipt(p_inbound_id text, p_actual_carton_count integer)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_inbound public.haichuan_inbound_items%rowtype;
+  v_lot_id text;
+begin
+  if p_actual_carton_count is null or p_actual_carton_count <= 0 then
+    raise exception '实际入仓总件数必须大于 0';
+  end if;
+
+  select * into v_inbound
+  from public.haichuan_inbound_items
+  where id = p_inbound_id
+  for update;
+
+  if not found then raise exception '待入仓记录不存在'; end if;
+  if not (
+    public.is_admin()
+    or v_inbound.logistics_user_id = auth.uid()
+    or lower(coalesce(v_inbound.logistics_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+  ) then raise exception '无权确认该入仓记录'; end if;
+
+  v_lot_id := 'hc-lot-' || v_inbound.id;
+  if v_inbound.status = 'received' then return v_lot_id; end if;
+
+  insert into public.haichuan_warehouse_lots (
+    id, inbound_item_id, purchase_record_id, logistics_user_id, logistics_email,
+    internal_code, manufacturer_name, sku, product_name, english_name, image_url, shop_name, buyer_name,
+    declared_carton_count, declared_units_per_carton, declared_tail_quantity,
+    initial_carton_count, remaining_carton_count, reserved_carton_count,
+    initial_product_quantity, remaining_product_quantity, initial_cbm, remaining_cbm, unit_cbm,
+    has_packing_variance, status
+  ) values (
+    v_lot_id, v_inbound.id, v_inbound.purchase_record_id, v_inbound.logistics_user_id, v_inbound.logistics_email,
+    v_inbound.internal_code, v_inbound.manufacturer_name, v_inbound.sku, v_inbound.product_name,
+    v_inbound.english_name, v_inbound.image_url, v_inbound.shop_name, v_inbound.buyer_name,
+    v_inbound.declared_carton_count, v_inbound.declared_units_per_carton, v_inbound.declared_tail_quantity,
+    p_actual_carton_count, p_actual_carton_count, 0,
+    v_inbound.purchase_total_quantity, v_inbound.purchase_total_quantity,
+    v_inbound.declared_total_cbm, v_inbound.declared_total_cbm, v_inbound.unit_cbm,
+    p_actual_carton_count <> v_inbound.declared_total_carton_count, 'available'
+  ) on conflict (inbound_item_id) do nothing;
+
+  update public.haichuan_inbound_items
+  set actual_received_carton_count = p_actual_carton_count,
+      has_packing_variance = p_actual_carton_count <> declared_total_carton_count,
+      status = 'received', received_by = auth.uid(), received_at = now(), updated_at = now()
+  where id = p_inbound_id and status = 'pending_receipt';
+
+  update public.purchase_records
+  set pool_status = 'haichuan_warehouse', updated_at = now()
+  where id = v_inbound.purchase_record_id and pool_status = 'submitted_to_pool';
+
+  return v_lot_id;
+end;
+$$;
+
+create or replace function public.submit_haichuan_loading_batch(
+  p_batch_id text,
+  p_container_date date,
+  p_note text,
+  p_items jsonb
+)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_email text := coalesce(auth.jwt() ->> 'email', '');
+  v_item jsonb;
+  v_lot public.haichuan_warehouse_lots%rowtype;
+  v_requested integer;
+  v_available integer;
+  v_quantity numeric;
+  v_cbm numeric;
+  v_estimated boolean;
+  v_existing_status text;
+begin
+  if coalesce(p_batch_id, '') = '' then raise exception '装柜批次编号不能为空'; end if;
+  if p_container_date is null then raise exception '请填写装柜日期'; end if;
+  if jsonb_array_length(coalesce(p_items, '[]'::jsonb)) = 0 then raise exception '请选择需要装柜的库存'; end if;
+
+  select status into v_existing_status from public.haichuan_loading_batches where id = p_batch_id for update;
+  if v_existing_status in ('submitted', 'approved') then return p_batch_id; end if;
+
+  insert into public.haichuan_loading_batches (
+    id, container_date, logistics_user_id, logistics_email, status, created_by, submitted_at, note, created_at, updated_at
+  ) values (
+    p_batch_id, p_container_date, auth.uid(), v_email, 'draft', auth.uid(), null, coalesce(p_note, ''), now(), now()
+  ) on conflict (id) do update set
+    container_date = excluded.container_date,
+    note = excluded.note,
+    status = 'draft',
+    rejection_reason = '',
+    reviewed_by = null,
+    reviewed_at = null,
+    updated_at = now();
+
+  delete from public.haichuan_loading_items where batch_id = p_batch_id;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    select * into v_lot
+    from public.haichuan_warehouse_lots
+    where id = v_item->>'warehouseLotId'
+    for update;
+    if not found then raise exception '海川仓库记录不存在'; end if;
+    if not (
+      public.is_admin()
+      or v_lot.logistics_user_id = auth.uid()
+      or lower(coalesce(v_lot.logistics_email, '')) = lower(v_email)
+    ) then raise exception '无权操作该仓库记录'; end if;
+
+    v_requested := floor(coalesce((v_item->>'requestedCartonCount')::numeric, 0));
+    v_available := v_lot.remaining_carton_count - v_lot.reserved_carton_count;
+    if v_requested <= 0 or v_requested > v_available then
+      raise exception '装柜件数超过当前可用库存';
+    end if;
+
+    if v_requested = v_lot.remaining_carton_count then
+      v_quantity := v_lot.remaining_product_quantity;
+      v_cbm := v_lot.remaining_cbm;
+      v_estimated := false;
+    elsif v_lot.has_packing_variance then
+      v_quantity := floor(v_lot.remaining_product_quantity * v_requested / nullif(v_lot.remaining_carton_count, 0));
+      v_cbm := v_lot.remaining_cbm * v_requested / nullif(v_lot.remaining_carton_count, 0);
+      v_estimated := true;
+    else
+      v_quantity := least(v_lot.remaining_product_quantity, v_requested * v_lot.declared_units_per_carton);
+      v_cbm := v_quantity * v_lot.unit_cbm;
+      v_estimated := false;
+    end if;
+
+    insert into public.haichuan_loading_items (
+      id, batch_id, warehouse_lot_id, purchase_record_id, internal_code, sku, product_name,
+      requested_carton_count, suggested_product_quantity, suggested_cbm, is_estimated,
+      warehouse_version, note, created_at, updated_at
+    ) values (
+      p_batch_id || '-' || v_lot.id, p_batch_id, v_lot.id, v_lot.purchase_record_id,
+      v_lot.internal_code, v_lot.sku, v_lot.product_name,
+      v_requested, v_quantity, v_cbm, v_estimated, v_lot.version,
+      coalesce(v_item->>'note', ''), now(), now()
+    );
+
+    update public.haichuan_warehouse_lots
+    set reserved_carton_count = reserved_carton_count + v_requested,
+        status = public.haichuan_lot_status(remaining_carton_count, reserved_carton_count + v_requested),
+        version = version + 1, updated_at = now()
+    where id = v_lot.id;
+  end loop;
+
+  update public.haichuan_loading_batches
+  set status = 'submitted', submitted_at = now(), updated_at = now()
+  where id = p_batch_id;
+  return p_batch_id;
+end;
+$$;
+
+create or replace function public.review_haichuan_loading_batch(
+  p_batch_id text,
+  p_container_date date,
+  p_note text,
+  p_items jsonb,
+  p_approve boolean,
+  p_rejection_reason text default ''
+)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_batch public.haichuan_loading_batches%rowtype;
+  v_item jsonb;
+  v_saved public.haichuan_loading_items%rowtype;
+  v_lot public.haichuan_warehouse_lots%rowtype;
+  v_source public.purchase_records%rowtype;
+  v_cartons integer;
+  v_quantity numeric;
+  v_cbm numeric;
+  v_max_cartons integer;
+  v_record_id text;
+  v_source_quantity numeric;
+  v_expected_item_count integer;
+  v_payload_item_count integer;
+  v_payload_distinct_count integer;
+begin
+  if not public.is_admin() then raise exception '只有管理员可以审核海川装柜'; end if;
+  select * into v_batch from public.haichuan_loading_batches where id = p_batch_id for update;
+  if not found then raise exception '海川装柜批次不存在'; end if;
+  if (v_batch.status = 'approved' and p_approve) or (v_batch.status = 'rejected' and not p_approve) then
+    return p_batch_id;
+  end if;
+  if v_batch.status <> 'submitted' then raise exception '该批次不是待审核状态'; end if;
+
+  if not p_approve then
+    for v_saved in select * from public.haichuan_loading_items where batch_id = p_batch_id
+    loop
+      select value into v_item
+      from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
+      where value->>'id' = v_saved.id
+      limit 1;
+      if v_item is not null then
+        update public.haichuan_loading_items
+        set approved_carton_count = coalesce((v_item->>'approvedCartonCount')::numeric, requested_carton_count),
+            approved_product_quantity = coalesce((v_item->>'approvedProductQuantity')::numeric, suggested_product_quantity),
+            approved_cbm = coalesce((v_item->>'approvedCbm')::numeric, suggested_cbm),
+            note = coalesce(v_item->>'note', note),
+            updated_at = now()
+        where id = v_saved.id;
+      end if;
+      select * into v_lot from public.haichuan_warehouse_lots where id = v_saved.warehouse_lot_id for update;
+      update public.haichuan_warehouse_lots
+      set reserved_carton_count = greatest(0, reserved_carton_count - v_saved.requested_carton_count),
+          status = public.haichuan_lot_status(remaining_carton_count, greatest(0, reserved_carton_count - v_saved.requested_carton_count)),
+          version = version + 1, updated_at = now()
+      where id = v_lot.id;
+    end loop;
+    update public.haichuan_loading_batches
+    set status = 'rejected', container_date = coalesce(p_container_date, container_date), note = coalesce(p_note, note),
+        rejection_reason = coalesce(p_rejection_reason, ''), reviewed_by = auth.uid(), reviewed_at = now(), updated_at = now()
+    where id = p_batch_id;
+    return p_batch_id;
+  end if;
+
+  select count(*) into v_expected_item_count from public.haichuan_loading_items where batch_id = p_batch_id;
+  select count(*), count(distinct value->>'id')
+  into v_payload_item_count, v_payload_distinct_count
+  from jsonb_array_elements(coalesce(p_items, '[]'::jsonb));
+  if v_payload_item_count <> v_expected_item_count or v_payload_distinct_count <> v_expected_item_count then
+    raise exception '审核明细不完整或存在重复记录';
+  end if;
+
+  for v_item in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
+  loop
+    select * into v_saved from public.haichuan_loading_items where id = v_item->>'id' and batch_id = p_batch_id for update;
+    if not found then raise exception '装柜明细不存在'; end if;
+    select * into v_lot from public.haichuan_warehouse_lots where id = v_saved.warehouse_lot_id for update;
+    select * into v_source from public.purchase_records where id = v_saved.purchase_record_id;
+
+    v_cartons := floor(coalesce((v_item->>'approvedCartonCount')::numeric, v_saved.requested_carton_count));
+    v_quantity := coalesce((v_item->>'approvedProductQuantity')::numeric, v_saved.suggested_product_quantity);
+    v_cbm := coalesce((v_item->>'approvedCbm')::numeric, v_saved.suggested_cbm);
+    v_max_cartons := v_lot.remaining_carton_count - v_lot.reserved_carton_count + v_saved.requested_carton_count;
+    if v_cartons < 0 or v_cartons > v_max_cartons then raise exception '审核装柜件数超过可用库存'; end if;
+    if v_quantity < 0 or v_quantity > v_lot.remaining_product_quantity then raise exception '审核产品数量超过仓库库存'; end if;
+    if v_cbm < 0 or v_cbm > v_lot.remaining_cbm + 0.000001 then raise exception '审核 CBM 超过仓库库存'; end if;
+    if (v_cartons = 0 and (v_quantity <> 0 or v_cbm <> 0)) or (v_cartons > 0 and v_quantity <= 0) then
+      raise exception '审核件数、产品数量和 CBM 不一致';
+    end if;
+
+    if v_cartons = v_lot.remaining_carton_count then
+      v_quantity := v_lot.remaining_product_quantity;
+      v_cbm := v_lot.remaining_cbm;
+    end if;
+
+    update public.haichuan_loading_items
+    set approved_carton_count = v_cartons, approved_product_quantity = v_quantity, approved_cbm = v_cbm,
+        note = coalesce(v_item->>'note', note), updated_at = now()
+    where id = v_saved.id;
+
+    update public.haichuan_warehouse_lots
+    set remaining_carton_count = remaining_carton_count - v_cartons,
+        reserved_carton_count = greatest(0, reserved_carton_count - v_saved.requested_carton_count),
+        remaining_product_quantity = remaining_product_quantity - v_quantity,
+        remaining_cbm = greatest(0, remaining_cbm - v_cbm),
+        status = public.haichuan_lot_status(
+          remaining_carton_count - v_cartons,
+          greatest(0, reserved_carton_count - v_saved.requested_carton_count)
+        ),
+        version = version + 1, updated_at = now()
+    where id = v_lot.id;
+
+    if v_cartons > 0 and v_quantity > 0 then
+      v_record_id := 'hc-transit-' || v_saved.id;
+      v_source_quantity := greatest(coalesce(v_source.confirmed_purchase_quantity, v_source.purchase_quantity, 0), 1);
+      insert into public.purchase_records (
+        id, internal_code, manufacturer_name, sku, product_name, english_name, image_url,
+        freight_cost, shop_name, buyer_name, assigned_buyer_name, assigned_buyer_email,
+        is_confirmed, purchase_quantity, confirmed_purchase_quantity, purchase_price, total_amount,
+        purchase_date, purchase_pool_id, purchase_pool_name, purchase_pool_date, pool_status,
+        purchase_batch_id, purchase_batch_name, purchase_batch_date, estimated_arrival_date, status,
+        unit_cbm, total_cbm, loading_type, container_date, total_weight_kg,
+        carton_count, units_per_carton, tail_quantity, is_mixed, mixed_groups,
+        logistics_total_cbm, logistics_batch_id, logistics_confirmation_status, logistics_source_record_id,
+        note, created_at, updated_at
+      ) values (
+        v_record_id, v_source.internal_code, v_source.manufacturer_name, v_source.sku, v_source.product_name,
+        v_source.english_name, v_source.image_url,
+        coalesce(v_source.freight_cost, 0) * v_quantity / v_source_quantity,
+        v_source.shop_name, v_source.buyer_name, v_source.assigned_buyer_name, v_source.assigned_buyer_email,
+        true, v_quantity, v_quantity, v_source.purchase_price,
+        coalesce(v_source.total_amount, 0) * v_quantity / v_source_quantity,
+        v_source.purchase_date, v_source.purchase_pool_id, v_source.purchase_pool_name, v_source.purchase_pool_date,
+        'sent_to_inventory', v_source.purchase_batch_id, v_source.purchase_batch_name, v_source.purchase_batch_date,
+        v_source.estimated_arrival_date, 'in_transit', v_source.unit_cbm, v_cbm, '海川',
+        coalesce(p_container_date, v_batch.container_date), v_source.total_weight_kg,
+        v_cartons, v_source.units_per_carton, 0, v_source.is_mixed, v_source.mixed_groups,
+        v_cbm, p_batch_id, 'approved', v_source.id,
+        trim(concat_ws('；', nullif(v_source.note, ''), '海川装柜审核确认')), now(), now()
+      ) on conflict (id) do nothing;
+    end if;
+  end loop;
+
+  update public.haichuan_loading_batches
+  set status = 'approved', container_date = coalesce(p_container_date, container_date), note = coalesce(p_note, note),
+      rejection_reason = '', reviewed_by = auth.uid(), reviewed_at = now(), updated_at = now()
+  where id = p_batch_id;
+  return p_batch_id;
+end;
+$$;
+
 alter table public.profiles enable row level security;
 alter table public.sku_items enable row level security;
 alter table public.purchase_records enable row level security;
@@ -603,6 +1062,10 @@ alter table public.sales_suggestions enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.logistics_batches enable row level security;
 alter table public.logistics_batch_items enable row level security;
+alter table public.haichuan_inbound_items enable row level security;
+alter table public.haichuan_warehouse_lots enable row level security;
+alter table public.haichuan_loading_batches enable row level security;
+alter table public.haichuan_loading_items enable row level security;
 
 drop policy if exists "profiles select own or admin" on public.profiles;
 drop policy if exists "profiles shared select" on public.profiles;
@@ -624,8 +1087,8 @@ with check (public.is_admin());
 drop policy if exists "profiles update own binding" on public.profiles;
 create policy "profiles update own binding" on public.profiles
 for update to authenticated
-using (id = auth.uid())
-with check (id = auth.uid());
+using (id = auth.uid() and coalesce(public.current_role()::text, '') <> 'logistics')
+with check (id = auth.uid() and coalesce(public.current_role()::text, '') <> 'logistics');
 
 drop policy if exists "shared select sku" on public.sku_items;
 create policy "shared select sku" on public.sku_items for select to authenticated using (coalesce(public.current_role()::text, '') <> 'logistics');
@@ -740,6 +1203,68 @@ with check (
       )
   )
 );
+
+drop policy if exists "haichuan inbound select" on public.haichuan_inbound_items;
+create policy "haichuan inbound select" on public.haichuan_inbound_items
+for select to authenticated using (
+  public.is_admin()
+  or logistics_user_id = auth.uid()
+  or lower(coalesce(logistics_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+);
+
+drop policy if exists "editor create haichuan inbound" on public.haichuan_inbound_items;
+create policy "editor create haichuan inbound" on public.haichuan_inbound_items
+for insert to authenticated with check (public.is_editor());
+
+drop policy if exists "admin update haichuan inbound" on public.haichuan_inbound_items;
+create policy "admin update haichuan inbound" on public.haichuan_inbound_items
+for update to authenticated using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "admin delete pending haichuan inbound" on public.haichuan_inbound_items;
+create policy "admin delete pending haichuan inbound" on public.haichuan_inbound_items
+for delete to authenticated using (public.is_admin() and status = 'pending_receipt');
+
+drop policy if exists "haichuan warehouse select" on public.haichuan_warehouse_lots;
+create policy "haichuan warehouse select" on public.haichuan_warehouse_lots
+for select to authenticated using (
+  public.is_admin()
+  or logistics_user_id = auth.uid()
+  or lower(coalesce(logistics_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+);
+
+drop policy if exists "admin write haichuan warehouse" on public.haichuan_warehouse_lots;
+create policy "admin write haichuan warehouse" on public.haichuan_warehouse_lots
+for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "haichuan loading batch select" on public.haichuan_loading_batches;
+create policy "haichuan loading batch select" on public.haichuan_loading_batches
+for select to authenticated using (
+  public.is_admin()
+  or logistics_user_id = auth.uid()
+  or lower(coalesce(logistics_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+);
+
+drop policy if exists "haichuan loading item select" on public.haichuan_loading_items;
+create policy "haichuan loading item select" on public.haichuan_loading_items
+for select to authenticated using (
+  exists (
+    select 1 from public.haichuan_loading_batches b
+    where b.id = batch_id
+      and (
+        public.is_admin()
+        or b.logistics_user_id = auth.uid()
+        or lower(coalesce(b.logistics_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      )
+  )
+);
+
+drop policy if exists "admin write haichuan loading batches" on public.haichuan_loading_batches;
+create policy "admin write haichuan loading batches" on public.haichuan_loading_batches
+for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "admin write haichuan loading items" on public.haichuan_loading_items;
+create policy "admin write haichuan loading items" on public.haichuan_loading_items
+for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists "shared select container" on public.container_rows;
 create policy "shared select container" on public.container_rows for select to authenticated using (coalesce(public.current_role()::text, '') <> 'logistics');
@@ -1050,4 +1575,24 @@ begin
   ) then
     alter publication supabase_realtime add table public.commission_runs;
   end if;
+end $$;
+
+do $$
+declare
+  v_table text;
+begin
+  foreach v_table in array array[
+    'haichuan_inbound_items',
+    'haichuan_warehouse_lots',
+    'haichuan_loading_batches',
+    'haichuan_loading_items'
+  ]
+  loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = v_table
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', v_table);
+    end if;
+  end loop;
 end $$;

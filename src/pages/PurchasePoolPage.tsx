@@ -6,6 +6,7 @@ import { buildLogisticsBatch, logisticsBatchLoadingType } from '../utils/logisti
 import { applyContainerDateToPoolRecords, changePurchasePoolLoadingType, matchesLogisticsLoadingType, normalizeRecordForPurchasePool, prepareDatedGuantongForInventory, type LogisticsLoadingType } from '../utils/purchasePoolFlows';
 import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
 import { calculatedPurchaseTotalAmount, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
+import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 
 type Props = {
   records: PurchaseRecord[];
@@ -60,13 +61,17 @@ function poolDateFromRecord(record: PurchaseRecord): string {
 }
 
 function isPoolPendingRecord(record: PurchaseRecord): boolean {
-  return record.status !== 'cancelled' && record.poolStatus !== 'sent_to_inventory';
+  return record.status !== 'cancelled' && record.poolStatus === 'submitted_to_pool';
 }
 
 function buildPoolOptions(records: PurchaseRecord[], pools: PurchasePool[]): PoolOption[] {
   const options = new Map<string, PoolOption>();
+  const currentRecordsById = new Map(records.map((record) => [record.id, record]));
   for (const pool of pools) {
-    const pendingRecords = pool.records.filter(isPoolPendingRecord).map(normalizeRecordForPurchasePool);
+    const pendingRecords = pool.records
+      .map((record) => currentRecordsById.get(record.id) ?? record)
+      .filter(isPoolPendingRecord)
+      .map(normalizeRecordForPurchasePool);
     options.set(pool.id, {
       ...pool,
       records: pendingRecords,
@@ -200,9 +205,9 @@ export function PurchasePoolPage({
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [poolDateDraft, setPoolDateDraft] = useState('');
   const [logisticsUserId, setLogisticsUserId] = useState('');
-  const [logisticsLoadingType, setLogisticsLoadingType] = useState<LogisticsLoadingType>('整柜');
+  const logisticsLoadingType: LogisticsLoadingType = '整柜';
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
-  const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics'), [profiles]);
+  const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics' && item.logisticsProviderType !== 'haichuan'), [profiles]);
   const sourcePoolOptions = useMemo(() => buildPoolOptions(records, pools), [pools, records]);
   const options = useMemo(() => {
     const aggregatePool = buildAggregatePool(sourcePoolOptions);
@@ -250,7 +255,7 @@ export function PurchasePoolPage({
     }
     const dateResult = applyContainerDateToPoolRecords(submittedRecords, activePool.containerDate, nextDate);
     if (dateResult.updatedCount === 0) {
-      setMessage(`本池没有可统一日期的整柜/海川订单；保留 ${dateResult.preservedManualCount} 条人工日期，跳过 ${dateResult.skippedGuantongCount} 条冠通订单。`);
+      setMessage(`本池没有可统一日期的整柜订单；保留 ${dateResult.preservedManualCount} 条人工日期，跳过 ${dateResult.skippedGuantongCount} 条冠通、${dateResult.skippedHaichuanCount} 条海川订单。`);
       return;
     }
     const nextRecords = dateResult.records.map((record) => withPurchaseTotals({
@@ -286,7 +291,7 @@ export function PurchasePoolPage({
     try {
       if (nextPools.length > 0) await onSavePools(nextPools);
       await onSaveRecords(nextRecords);
-      setMessage(`已统一 ${dateResult.updatedCount} 条整柜/海川订单的装柜日期为 ${nextDate}；保留 ${dateResult.preservedManualCount} 条人工日期，跳过 ${dateResult.skippedGuantongCount} 条冠通订单。`);
+      setMessage(`已统一 ${dateResult.updatedCount} 条整柜订单的装柜日期为 ${nextDate}；保留 ${dateResult.preservedManualCount} 条人工日期，跳过 ${dateResult.skippedGuantongCount} 条冠通、${dateResult.skippedHaichuanCount} 条海川订单。`);
     } catch (error) {
       console.error(error);
       setMessage(`统一装柜日期失败：${formatErrorMessage(error)}`);
@@ -565,14 +570,7 @@ export function PurchasePoolPage({
           })}
         </select></label>
         <label>本池装柜日期<input type="date" value={poolDateDraft} onChange={(event) => setPoolDateDraft(event.target.value)} disabled={!canApplyPoolDate} /></label>
-        {isAdmin && (
-          <label>物流装柜方式
-            <select value={logisticsLoadingType} onChange={(event) => setLogisticsLoadingType(event.target.value as LogisticsLoadingType)}>
-              <option value="整柜">整柜</option>
-              <option value="海川">海川</option>
-            </select>
-          </label>
-        )}
+        {isAdmin && <label>物流装柜方式<input value="整柜" readOnly /></label>}
         {isAdmin && (
           <label>物流商账号
             <select value={logisticsUserId} onChange={(event) => setLogisticsUserId(event.target.value)} disabled={logisticsProfiles.length === 0}>
@@ -602,7 +600,7 @@ export function PurchasePoolPage({
         <table className="inventory-table">
           <thead>
             <tr>
-              <th className="image-sticky-col">图片</th><th>厂家名</th><th>内部编号</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>装柜日期</th><th>计划采购数量</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
+              <th className="image-sticky-col">图片</th><th>厂家名</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.productName}</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>{labels.containerDate}</th><th>计划采购数量</th><th>{labels.cartonCount}</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
             </tr>
           </thead>
           <tbody>

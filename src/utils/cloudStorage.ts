@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, CommissionBuyerSummary, CommissionDetailRow, CommissionRun, LogisticsBatch, LogisticsBatchItem, LogisticsBatchStatus, MonthlyProfitSummary, ProfitAnalysisRow, ProfitAnalysisRun, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
+import type { AdAnalysisRow, AdAnalysisRun, AppProfile, AuditAction, AuditLog, CommissionBuyerSummary, CommissionDetailRow, CommissionRun, LogisticsBatch, LogisticsBatchItem, LogisticsBatchStatus, LogisticsProviderType, MonthlyProfitSummary, ProfitAnalysisRow, ProfitAnalysisRun, PurchasePool, PurchasePoolStatus, PurchaseRecord, PurchaseRecordPoolStatus, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem, UserRole } from '../types';
 import { formatErrorMessage } from './errors';
 import { findMatchingSkuItem, getSkuMatchKey } from './calculations';
 import { assignNewInternalCodes, ensureInternalCodes, formatInternalCode, parseInternalCode } from './internalCodes';
@@ -420,7 +420,7 @@ export async function fetchSkuItemsForImport(importItems: SkuItem[]): Promise<Sk
 function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
   const status = row.status === 'ordered' ? 'in_transit' : row.status;
   const isLegacyInventory = Boolean(row.is_confirmed ?? (row.status !== 'pending')) && (status === 'in_transit' || status === 'arrived');
-  const rawPoolStatus: PurchaseRecordPoolStatus | undefined = row.pool_status === 'submitted_to_pool' || row.pool_status === 'sent_to_inventory' || row.pool_status === 'pending_purchase'
+  const rawPoolStatus: PurchaseRecordPoolStatus | undefined = row.pool_status === 'submitted_to_pool' || row.pool_status === 'haichuan_warehouse' || row.pool_status === 'sent_to_inventory' || row.pool_status === 'pending_purchase'
     ? row.pool_status
     : undefined;
   const poolStatus: PurchaseRecordPoolStatus = isLegacyInventory ? 'sent_to_inventory' : rawPoolStatus ?? 'pending_purchase';
@@ -767,15 +767,21 @@ function toContainerRow(row: PurchaseRow): ContainerRow {
 
 export async function fetchProfile(userId: string, email: string): Promise<AppProfile> {
   const client = requireSupabase();
-  const { data, error } = await client
+  let { data, error } = await client
     .from('profiles')
-    .select('id,email,role,display_name,buyer_name')
+    .select('id,email,role,display_name,buyer_name,logistics_provider_type')
     .eq('id', userId)
     .maybeSingle();
 
+  if (error && isMissingColumnError(error)) {
+    const legacy = await client.from('profiles').select('id,email,role,display_name,buyer_name').eq('id', userId).maybeSingle();
+    data = legacy.data ? { ...legacy.data, logistics_provider_type: null } : null;
+    error = legacy.error;
+  }
+
   if (error) throwSupabaseError(error);
   if (!data) {
-    return { id: userId, email, role: 'viewer', displayName: email, buyerName: '' };
+    return { id: userId, email, role: 'viewer', displayName: email, buyerName: '', logisticsProviderType: '' };
   }
 
   return {
@@ -784,14 +790,21 @@ export async function fetchProfile(userId: string, email: string): Promise<AppPr
     role: (data.role ?? 'viewer') as UserRole,
     displayName: data.display_name ?? data.email ?? email,
     buyerName: data.buyer_name ?? '',
+    logisticsProviderType: (data.logistics_provider_type ?? '') as LogisticsProviderType,
   };
 }
 
 export async function fetchProfiles(): Promise<AppProfile[]> {
-  const { data, error } = await requireSupabase()
+  const client = requireSupabase();
+  let { data, error } = await client
     .from('profiles')
-    .select('id,email,role,display_name,buyer_name')
+    .select('id,email,role,display_name,buyer_name,logistics_provider_type')
     .order('email');
+  if (error && isMissingColumnError(error)) {
+    const legacy = await client.from('profiles').select('id,email,role,display_name,buyer_name').order('email');
+    data = (legacy.data ?? []).map((row) => ({ ...row, logistics_provider_type: null }));
+    error = legacy.error;
+  }
   if (error) throwSupabaseError(error);
   return (data ?? []).map((row) => ({
     id: row.id,
@@ -799,20 +812,33 @@ export async function fetchProfiles(): Promise<AppProfile[]> {
     role: (row.role ?? 'viewer') as UserRole,
     displayName: row.display_name ?? row.email,
     buyerName: row.buyer_name ?? '',
+    logisticsProviderType: (row.logistics_provider_type ?? '') as LogisticsProviderType,
   }));
 }
 
 export async function updateProfileBinding(profile: AppProfile): Promise<AppProfile> {
-  const { data, error } = await requireSupabase()
+  const client = requireSupabase();
+  let { data, error } = await client
     .from('profiles')
     .upsert({
       id: profile.id,
       email: profile.email,
       display_name: profile.displayName,
       buyer_name: profile.buyerName,
+      logistics_provider_type: profile.logisticsProviderType || null,
     }, { onConflict: 'id' })
-    .select('id,email,role,display_name,buyer_name')
+    .select('id,email,role,display_name,buyer_name,logistics_provider_type')
     .single();
+  if (error && isMissingColumnError(error)) {
+    const legacy = await client.from('profiles').upsert({
+      id: profile.id,
+      email: profile.email,
+      display_name: profile.displayName,
+      buyer_name: profile.buyerName,
+    }, { onConflict: 'id' }).select('id,email,role,display_name,buyer_name').single();
+    data = legacy.data ? { ...legacy.data, logistics_provider_type: null } : null;
+    error = legacy.error;
+  }
   if (error) throwSupabaseError(error);
   if (!data) throw new Error('账号绑定保存失败：数据库没有返回保存结果');
 
@@ -822,6 +848,7 @@ export async function updateProfileBinding(profile: AppProfile): Promise<AppProf
     role: (data.role ?? profile.role) as UserRole,
     displayName: data.display_name ?? data.email ?? profile.email,
     buyerName: data.buyer_name ?? '',
+    logisticsProviderType: (data.logistics_provider_type ?? '') as LogisticsProviderType,
   };
 }
 
@@ -1742,6 +1769,10 @@ export function subscribeToSharedTables(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'commission_runs' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'logistics_batches' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'logistics_batch_items' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'haichuan_inbound_items' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'haichuan_warehouse_lots' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'haichuan_loading_batches' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'haichuan_loading_items' }, onChange)
     .subscribe();
 
   return () => {

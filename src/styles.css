@@ -696,6 +696,56 @@ button.danger,
   white-space: nowrap;
 }
 
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.tabs button.active,
+.batch-list button.active {
+  border-color: #16806a;
+  background: #16806a;
+  color: #fff;
+}
+
+.search-bar {
+  display: flex;
+  margin: 10px 0;
+}
+
+.search-bar input {
+  width: min(620px, 100%);
+}
+
+.split-layout {
+  display: grid;
+  grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.batch-list {
+  display: grid;
+  gap: 8px;
+}
+
+.batch-list button {
+  width: 100%;
+  text-align: left;
+}
+
+.batch-detail {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .split-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .logistics-batch-tabs button.active {
   background: #136f63;
   border-color: #136f63;

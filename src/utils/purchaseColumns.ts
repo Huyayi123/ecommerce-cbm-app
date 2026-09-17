@@ -1,0 +1,17 @@
+export const purchaseColumnLabels = {
+  productName: '产品名称',
+  internalCode: '内部编号',
+  sku: 'SKU',
+  purchaseTotalQuantity: '采购总数量',
+  cartonCount: '整箱件数',
+  unitsPerCarton: '每箱数量',
+  tailQuantity: '尾箱数量',
+  totalCartonCount: '总件数',
+  unitCbm: '单品 CBM',
+  totalCbm: '总 CBM',
+  loadingType: '装货方式',
+  containerDate: '装柜日期',
+  status: '状态',
+  note: '备注',
+  actions: '操作',
+} as const;

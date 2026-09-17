@@ -6,6 +6,7 @@ import { parsePurchaseRecordsFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
 import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
 import { mergeImportedPurchaseOrders } from '../utils/purchaseOrderImports';
+import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 import { calculatedPurchaseTotalAmount, effectivePurchaseQuantity, mixedQuantityForOtherSkus, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
 
 type Props = {
@@ -790,9 +791,17 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       return;
     }
     try {
-      const confirmedRecords = records
+      const preparedRecords = records
         .filter((item) => visibleIds.has(item.id))
         .map((item) => confirmedRecord(item));
+      const missingQuantityCount = preparedRecords.filter((item) => effectivePurchaseQuantity(item) <= 0).length;
+      const missingAmountCount = preparedRecords.filter((item) => effectivePurchaseQuantity(item) > 0 && item.totalAmount <= 0).length;
+      const confirmedRecords = preparedRecords.filter((item) => effectivePurchaseQuantity(item) > 0 && item.totalAmount > 0);
+      const submittedIds = new Set(confirmedRecords.map((record) => record.id));
+      if (confirmedRecords.length === 0) {
+        setMessage(`没有符合提交条件的采购订单。实际数量为空或为 0：${missingQuantityCount} 条；总金额为空或为 0：${missingAmountCount} 条。`);
+        return;
+      }
       if (onSubmitToPool) {
         const recordsByPool = new Map<string, { pool: PurchasePool; records: PurchaseRecord[] }>();
         for (const record of confirmedRecords) {
@@ -806,11 +815,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         }
       } else if (onSaveRecords) await onSaveRecords(confirmedRecords);
       else await onChange(records.map((item) => (visibleIds.has(item.id) ? confirmedRecord(item) : item)));
-      draftsRef.current = Object.fromEntries(Object.entries(draftsRef.current).filter(([key]) => !visibleIds.has(key.split(':')[0])));
-      mixedDraftsRef.current = Object.fromEntries(Object.entries(mixedDraftsRef.current).filter(([key]) => !visibleIds.has(key.split(':')[0])));
+      draftsRef.current = Object.fromEntries(Object.entries(draftsRef.current).filter(([key]) => !submittedIds.has(key.split(':')[0])));
+      mixedDraftsRef.current = Object.fromEntries(Object.entries(mixedDraftsRef.current).filter(([key]) => !submittedIds.has(key.split(':')[0])));
       setDrafts(draftsRef.current);
       setMixedDrafts(mixedDraftsRef.current);
-      setMessage(`已提交 ${visibleIds.size} 条采购订单到采购订单池，等待 admin 统一发送到采购 / 在途库存。`);
+      setMessage(`已提交 ${confirmedRecords.length} 条采购订单到采购订单池；跳过 ${missingQuantityCount + missingAmountCount} 条（实际数量为空或为 0：${missingQuantityCount} 条；总金额为空或为 0：${missingAmountCount} 条）。`);
     } catch (error) {
       console.error(error);
       setMessage(`确认失败：${formatErrorMessage(error)}`);
@@ -1144,7 +1153,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <table className="my-orders-table">
           <thead>
             <tr>
-              <th className="image-sticky-col">图片</th><th>厂家名</th><th>内部编号</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th className="my-orders-compact-text">店铺</th><th className="my-orders-compact-text">采购人</th><th>计划采购数量</th><th className="my-orders-narrow-number">整箱件数</th><th className="my-orders-narrow-number">每箱数量</th><th className="my-orders-narrow-number">尾箱数量</th><th>总件数</th><th>实际数量</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">单品CBM</th><th>总CBM</th><th>状态</th><th>装货方式</th><th>备注</th><th>操作</th>
+              <th className="image-sticky-col">图片</th><th>厂家名</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.productName}</th><th>英文名称</th><th className="my-orders-compact-text">店铺</th><th className="my-orders-compact-text">采购人</th><th>计划采购数量</th><th className="my-orders-narrow-number">{labels.cartonCount}</th><th className="my-orders-narrow-number">{labels.unitsPerCarton}</th><th className="my-orders-narrow-number">{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
             </tr>
           </thead>
           <tbody>

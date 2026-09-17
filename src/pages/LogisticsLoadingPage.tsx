@@ -5,6 +5,7 @@ import { parseLogisticsBatchFile } from '../utils/fileParsers';
 import { buildLogisticsBatch, logisticsBatchLoadingType, logisticsItemTotalQuantity, logisticsStatusLabel, normalizeLogisticsItemInput } from '../utils/logistics';
 import { matchesLogisticsLoadingType, type LogisticsLoadingType } from '../utils/purchasePoolFlows';
 import { formatErrorMessage } from '../utils/errors';
+import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 
 type Props = {
   profile: AppProfile;
@@ -95,8 +96,8 @@ export function LogisticsLoadingPage({
   onClearLogistics,
 }: Props) {
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
-  const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics'), [profiles]);
-  const [logisticsLoadingType, setLogisticsLoadingType] = useState<LogisticsLoadingType>('整柜');
+  const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics' && item.logisticsProviderType !== 'haichuan'), [profiles]);
+  const logisticsLoadingType: LogisticsLoadingType = '整柜';
   const containerDates = useMemo(() => Array.from(new Set(records
     .filter((record) => record.poolStatus === 'submitted_to_pool'
       && record.status !== 'cancelled'
@@ -325,10 +326,7 @@ export function LogisticsLoadingPage({
       {isAdmin && (
         <div className="logistics-admin-bar">
           <label>物流装柜方式
-            <select value={logisticsLoadingType} onChange={(event) => setLogisticsLoadingType(event.target.value as LogisticsLoadingType)}>
-              <option value="整柜">整柜</option>
-              <option value="海川">海川</option>
-            </select>
+            <input value="整柜" readOnly />
           </label>
           <label>装柜日期
             <select value={containerDate} onChange={(event) => setContainerDate(event.target.value)}>
@@ -395,7 +393,7 @@ export function LogisticsLoadingPage({
           <table className="logistics-table">
             <thead>
               <tr>
-                <th>内部编号</th>{isAdmin && <th>图片</th>}<th>厂家名</th><th>SKU</th><th>产品名称</th><th>英文名称</th><th>装柜日期</th><th>整箱件数</th><th>每箱数量</th><th>尾箱数量</th><th>总件数</th><th>装货方式</th><th>混装组</th><th>装走整箱</th><th>装走尾数</th><th>留下整箱</th><th>留下尾数</th><th>物流备注</th><th>操作</th>
+                <th>{labels.internalCode}</th>{isAdmin && <th>图片</th>}<th>厂家名</th><th>{labels.sku}</th><th>{labels.productName}</th><th>英文名称</th><th>{labels.containerDate}</th><th>{labels.cartonCount}</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.loadingType}</th><th>混装组</th><th>装走整箱</th><th>装走尾数</th><th>留下整箱</th><th>留下尾数</th><th>物流备注</th><th>{labels.actions}</th>
               </tr>
             </thead>
             <tbody>

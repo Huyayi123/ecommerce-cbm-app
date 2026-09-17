@@ -44,8 +44,9 @@ export type PurchaseRow = {
 
 export type PurchaseStatus = 'pending' | 'in_transit' | 'arrived' | 'cancelled';
 export type PurchasePoolStatus = 'open' | 'sent' | 'closed';
-export type PurchaseRecordPoolStatus = 'pending_purchase' | 'submitted_to_pool' | 'sent_to_inventory';
+export type PurchaseRecordPoolStatus = 'pending_purchase' | 'submitted_to_pool' | 'haichuan_warehouse' | 'sent_to_inventory';
 export type UserRole = 'owner' | 'admin' | 'buyer' | 'viewer' | 'logistics';
+export type LogisticsProviderType = '' | 'container' | 'haichuan';
 export type LogisticsBatchStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 export type LogisticsConfirmationStatus = 'unassigned' | 'draft' | 'submitted' | 'approved' | 'rejected';
 export type AuditAction =
@@ -68,6 +69,115 @@ export type AppProfile = {
   role: UserRole;
   displayName: string;
   buyerName: string;
+  logisticsProviderType: LogisticsProviderType;
+};
+
+export type HaichuanInboundStatus = 'pending_receipt' | 'received';
+export type HaichuanWarehouseStatus = 'available' | 'partially_reserved' | 'fully_reserved' | 'depleted';
+export type HaichuanLoadingStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
+
+export type HaichuanInboundItem = {
+  id: string;
+  purchaseRecordId: string;
+  logisticsUserId: string;
+  logisticsEmail: string;
+  internalCode: string;
+  manufacturerName: string;
+  sku: string;
+  productName: string;
+  englishName: string;
+  imageUrl: string;
+  shopName: string;
+  buyerName: string;
+  purchaseTotalQuantity: number;
+  declaredCartonCount: number;
+  declaredUnitsPerCarton: number;
+  declaredTailQuantity: number;
+  declaredTotalCartonCount: number;
+  actualReceivedCartonCount: number;
+  unitCbm: number;
+  declaredTotalCbm: number;
+  hasPackingVariance: boolean;
+  status: HaichuanInboundStatus;
+  receivedBy: string;
+  receivedAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HaichuanWarehouseLot = {
+  id: string;
+  inboundItemId: string;
+  purchaseRecordId: string;
+  logisticsUserId: string;
+  logisticsEmail: string;
+  internalCode: string;
+  manufacturerName: string;
+  sku: string;
+  productName: string;
+  englishName: string;
+  imageUrl: string;
+  shopName: string;
+  buyerName: string;
+  declaredCartonCount: number;
+  declaredUnitsPerCarton: number;
+  declaredTailQuantity: number;
+  initialCartonCount: number;
+  remainingCartonCount: number;
+  reservedCartonCount: number;
+  initialProductQuantity: number;
+  remainingProductQuantity: number;
+  initialCbm: number;
+  remainingCbm: number;
+  unitCbm: number;
+  hasPackingVariance: boolean;
+  status: HaichuanWarehouseStatus;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HaichuanLoadingItem = {
+  id: string;
+  batchId: string;
+  warehouseLotId: string;
+  purchaseRecordId: string;
+  internalCode: string;
+  sku: string;
+  productName: string;
+  requestedCartonCount: number;
+  suggestedProductQuantity: number;
+  suggestedCbm: number;
+  isEstimated: boolean;
+  approvedCartonCount: number | null;
+  approvedProductQuantity: number | null;
+  approvedCbm: number | null;
+  warehouseVersion: number;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HaichuanLoadingBatch = {
+  id: string;
+  containerDate: string;
+  logisticsUserId: string;
+  logisticsEmail: string;
+  status: HaichuanLoadingStatus;
+  createdBy: string;
+  createdAt: string;
+  submittedAt: string;
+  reviewedBy: string;
+  reviewedAt: string;
+  note: string;
+  rejectionReason: string;
+  items: HaichuanLoadingItem[];
+};
+
+export type HaichuanData = {
+  inboundItems: HaichuanInboundItem[];
+  warehouseLots: HaichuanWarehouseLot[];
+  loadingBatches: HaichuanLoadingBatch[];
 };
 
 export type MixedCartonLine = {

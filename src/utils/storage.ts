@@ -94,7 +94,7 @@ function purchaseStatus(value: unknown): PurchaseStatus {
 }
 
 function poolStatus(value: unknown, status: PurchaseStatus, isConfirmed: boolean): PurchaseRecord['poolStatus'] {
-  if (value === 'pending_purchase' || value === 'submitted_to_pool' || value === 'sent_to_inventory') return value;
+  if (value === 'pending_purchase' || value === 'submitted_to_pool' || value === 'haichuan_warehouse' || value === 'sent_to_inventory') return value;
   return isConfirmed && (status === 'in_transit' || status === 'arrived') ? 'sent_to_inventory' : 'pending_purchase';
 }
 
