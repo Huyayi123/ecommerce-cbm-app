@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { AppProfile, HaichuanData, HaichuanLoadingBatch, HaichuanLoadingItem, HaichuanWarehouseLot } from '../types';
 import { formatErrorMessage } from '../utils/errors';
+import { calculateHaichuanLoadingSuggestion } from '../utils/haichuan';
 import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 
 type LoadingSelection = Record<string, number>;
@@ -193,6 +194,36 @@ export function HaichuanWorkflowPage({
   }
 
   function patchReview(item: HaichuanLoadingItem, field: 'cartons' | 'quantity' | 'cbm' | 'note', value: string) {
+    if (field === 'cartons') {
+      const lot = data.warehouseLots.find((candidate) => candidate.id === item.warehouseLotId);
+      if (!lot) {
+        setMessage('无法找到对应的海川仓库存货，请刷新后重试。');
+        return;
+      }
+      const cartons = Math.min(
+        lot.remainingCartonCount,
+        Math.max(0, Math.trunc(Number(value) || 0)),
+      );
+      const suggestion = calculateHaichuanLoadingSuggestion(lot, cartons);
+      setReviewDrafts((current) => {
+        const existing = current[item.id] ?? {
+          cartons: item.requestedCartonCount,
+          quantity: item.suggestedProductQuantity,
+          cbm: item.suggestedCbm,
+          note: item.note,
+        };
+        return {
+          ...current,
+          [item.id]: {
+            ...existing,
+            cartons,
+            quantity: suggestion.productQuantity,
+            cbm: suggestion.cbm,
+          },
+        };
+      });
+      return;
+    }
     setReviewDrafts((current) => {
       const existing = current[item.id] ?? {
         cartons: item.requestedCartonCount,
@@ -300,7 +331,8 @@ export function HaichuanWorkflowPage({
                 <thead><tr><th>{labels.productName}</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>申报装柜件数</th><th>最终装柜件数</th><th>系统数量</th><th>最终装柜数量</th><th>系统 CBM</th><th>最终 CBM</th><th>{labels.note}</th></tr></thead>
                 <tbody>{activeBatch.items.map((item) => {
                   const draft = reviewDrafts[item.id] ?? { cartons: item.requestedCartonCount, quantity: item.suggestedProductQuantity, cbm: item.suggestedCbm, note: item.note };
-                  return <tr key={item.id}><td>{item.productName}</td><td>{item.internalCode || '-'}</td><td>{item.sku}</td><td>{item.requestedCartonCount}</td><td><input type="number" min="0" step="1" value={draft.cartons} onChange={(event) => patchReview(item, 'cartons', event.target.value)} /></td><td>{valueText(item.suggestedProductQuantity)}{item.isEstimated ? '（系统估算）' : ''}</td><td><input type="number" min="0" value={draft.quantity} onChange={(event) => patchReview(item, 'quantity', event.target.value)} /></td><td>{valueText(item.suggestedCbm)}</td><td><input type="number" min="0" step="0.0001" value={draft.cbm} onChange={(event) => patchReview(item, 'cbm', event.target.value)} /></td><td><input value={draft.note} onChange={(event) => patchReview(item, 'note', event.target.value)} /></td></tr>;
+                  const lot = data.warehouseLots.find((candidate) => candidate.id === item.warehouseLotId);
+                  return <tr key={item.id}><td>{item.productName}</td><td>{item.internalCode || '-'}</td><td>{item.sku}</td><td>{item.requestedCartonCount}</td><td><input type="number" min="0" max={lot?.remainingCartonCount} step="1" value={draft.cartons} onChange={(event) => patchReview(item, 'cartons', event.target.value)} /></td><td>{valueText(item.suggestedProductQuantity)}{item.isEstimated ? '（系统估算）' : ''}</td><td><input type="number" min="0" value={draft.quantity} onChange={(event) => patchReview(item, 'quantity', event.target.value)} /></td><td>{valueText(item.suggestedCbm)}</td><td><input type="number" min="0" step="0.0001" value={draft.cbm} onChange={(event) => patchReview(item, 'cbm', event.target.value)} /></td><td><input value={draft.note} onChange={(event) => patchReview(item, 'note', event.target.value)} /></td></tr>;
                 })}</tbody>
               </table></div>
               <div className="form-actions"><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void reviewBatch(true)}>{busyKey ? '正在处理...' : '确认进入海运在途'}</button><button type="button" disabled={Boolean(busyKey)} onClick={() => void reviewBatch(false)}>退回海川</button></div>
