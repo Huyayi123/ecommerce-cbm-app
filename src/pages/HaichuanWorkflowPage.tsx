@@ -87,6 +87,7 @@ export function HaichuanWorkflowPage({
   const submittedBatches = useMemo(() => data.loadingBatches.filter((batch) => batch.status === 'submitted'), [data.loadingBatches]);
   const approvedBatches = useMemo(() => data.loadingBatches.filter((batch) => batch.status === 'approved'), [data.loadingBatches]);
   const rejectedBatches = useMemo(() => data.loadingBatches.filter((batch) => batch.status === 'rejected'), [data.loadingBatches]);
+  const loadedProducts = useMemo(() => approvedBatches.flatMap((batch) => batch.items.map((item) => ({ batch, item }))), [approvedBatches]);
   const activeBatch = submittedBatches.find((batch) => batch.id === activeBatchId) ?? submittedBatches[0] ?? null;
 
   useEffect(() => {
@@ -343,8 +344,8 @@ export function HaichuanWorkflowPage({
 
       {tab === 'loaded' && (
         <div className="table-wrap"><table>
-          <thead><tr><th>批次</th><th>{labels.containerDate}</th><th>{labels.status}</th><th>产品项数</th><th>装柜总件数</th><th>装柜总数量</th><th>{labels.totalCbm}</th><th>确认时间</th></tr></thead>
-          <tbody>{approvedBatches.map((batch) => <tr key={batch.id}><td>{batch.id}</td><td>{batch.containerDate}</td><td>{loadingStatusLabel(batch.status)}</td><td>{batch.items.length}</td><td>{batch.items.reduce((sum, item) => sum + Number(item.approvedCartonCount ?? item.requestedCartonCount), 0)}</td><td>{valueText(batch.items.reduce((sum, item) => sum + Number(item.approvedProductQuantity ?? item.suggestedProductQuantity), 0))}</td><td>{valueText(batch.items.reduce((sum, item) => sum + Number(item.approvedCbm ?? item.suggestedCbm), 0))}</td><td>{batch.reviewedAt ? new Date(batch.reviewedAt).toLocaleString() : '-'}</td></tr>)}{approvedBatches.length === 0 && <tr><td colSpan={8}>暂无已装柜批次</td></tr>}</tbody>
+          <thead><tr><th>{labels.productName}</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.containerDate}</th><th>最终装柜件数</th><th>最终装柜数量</th><th>最终 CBM</th><th>{labels.status}</th><th>确认时间</th><th>{labels.note}</th></tr></thead>
+          <tbody>{loadedProducts.map(({ batch, item }) => <tr key={`${batch.id}-${item.id}`}><td>{item.productName}</td><td>{item.internalCode || '-'}</td><td>{item.sku}</td><td>{batch.containerDate}</td><td>{item.approvedCartonCount ?? item.requestedCartonCount}</td><td>{valueText(item.approvedProductQuantity ?? item.suggestedProductQuantity)}</td><td>{valueText(item.approvedCbm ?? item.suggestedCbm, 8)}</td><td>{loadingStatusLabel(batch.status)}</td><td>{batch.reviewedAt ? new Date(batch.reviewedAt).toLocaleString() : '-'}</td><td>{item.note || batch.note || '-'}</td></tr>)}{loadedProducts.length === 0 && <tr><td colSpan={10}>暂无已装柜产品</td></tr>}</tbody>
         </table></div>
       )}
 
