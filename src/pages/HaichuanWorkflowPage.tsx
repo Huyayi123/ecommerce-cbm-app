@@ -79,10 +79,12 @@ export function HaichuanWorkflowPage({
   const [reviewDrafts, setReviewDrafts] = useState<ReviewDraft>({});
 
   const pendingInbound = useMemo(() => data.inboundItems.filter((item) => item.status === 'pending_receipt' && includesSearch([
-    item.sku, item.productName, item.internalCode,
+    item.sku, item.productName, item.englishName, item.internalCode,
+    ...item.productDetails.flatMap((detail) => [detail.sku, detail.productName, detail.englishName, detail.internalCode]),
   ], search)), [data.inboundItems, search]);
   const visibleLots = useMemo(() => data.warehouseLots.filter((lot) => lot.remainingCartonCount > 0 && includesSearch([
-    lot.sku, lot.productName, lot.internalCode,
+    lot.sku, lot.productName, lot.englishName, lot.internalCode,
+    ...lot.productDetails.flatMap((detail) => [detail.sku, detail.productName, detail.englishName, detail.internalCode]),
   ], search)), [data.warehouseLots, search]);
   const submittedBatches = useMemo(() => data.loadingBatches.filter((batch) => batch.status === 'submitted'), [data.loadingBatches]);
   const approvedBatches = useMemo(() => data.loadingBatches.filter((batch) => batch.status === 'approved'), [data.loadingBatches]);
@@ -255,17 +257,17 @@ export function HaichuanWorkflowPage({
       {message && <div className="inline-notice">{message}</div>}
 
       {(tab === 'inbound' || tab === 'warehouse') && (
-        <div className="search-bar"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索 SKU、产品名称、内部编号" /></div>
+        <div className="search-bar"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索 SKU、产品名称、英文名称、内部编号" /></div>
       )}
 
       {tab === 'inbound' && isLogistics && (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>{labels.productName}</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>申报总件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>实际收到总件数</th><th>{labels.status}</th><th>{labels.actions}</th></tr></thead>
+            <thead><tr><th>{labels.productName}</th><th>英文名称</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>申报总件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>实际收到总件数</th><th>{labels.status}</th><th>{labels.actions}</th></tr></thead>
             <tbody>
               {pendingInbound.map((item) => (
                 <tr key={item.id}>
-                  <td>{item.productName}</td><td>{item.internalCode || '-'}</td><td>{item.sku}</td>
+                  <td>{item.productDetails.map((detail) => detail.productName || '-').join('；') || item.productName}</td><td>{item.productDetails.map((detail) => detail.englishName || '-').join('；') || item.englishName}</td><td>{item.productDetails.map((detail) => detail.internalCode || '-').join('；') || item.internalCode || '-'}</td><td>{item.productDetails.map((detail) => `${detail.sku}×${valueText(detail.quantity)}`).join('；') || item.sku}</td>
                   <td>{valueText(item.purchaseTotalQuantity)}</td><td>{item.declaredTotalCartonCount}</td>
                   <td>{valueText(item.declaredUnitsPerCarton)}</td><td>{valueText(item.declaredTailQuantity)}</td>
                   <td>{valueText(item.unitCbm, 8)}</td><td>{valueText(item.declaredTotalCbm)}</td>
@@ -274,7 +276,7 @@ export function HaichuanWorkflowPage({
                   <td><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id)}>{busyKey === `receipt-${item.id}` ? '正在确认...' : '确认入仓'}</button></td>
                 </tr>
               ))}
-              {pendingInbound.length === 0 && <tr><td colSpan={12}>暂无待入仓记录</td></tr>}
+              {pendingInbound.length === 0 && <tr><td colSpan={13}>暂无待入仓记录</td></tr>}
             </tbody>
           </table>
         </div>
@@ -291,7 +293,7 @@ export function HaichuanWorkflowPage({
           )}
           <div className="table-wrap">
             <table>
-              <thead><tr>{isLogistics && <th>选择</th>}<th>{labels.productName}</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>入仓总件数</th><th>剩余件数</th><th>冻结件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>剩余数量</th><th>剩余 CBM</th><th>{labels.status}</th>{isLogistics && <th>本次装柜件数</th>}</tr></thead>
+              <thead><tr>{isLogistics && <th>选择</th>}<th>{labels.productName}</th><th>英文名称</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>入仓总件数</th><th>剩余件数</th><th>冻结件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>剩余数量</th><th>剩余 CBM</th><th>{labels.status}</th>{isLogistics && <th>本次装柜件数</th>}</tr></thead>
               <tbody>
                 {visibleLots.map((lot) => {
                   const available = Math.max(0, lot.remainingCartonCount - lot.reservedCartonCount);
@@ -299,16 +301,16 @@ export function HaichuanWorkflowPage({
                   return (
                     <tr key={lot.id}>
                       {isLogistics && <td><input type="checkbox" checked={checked} disabled={available <= 0 || Boolean(busyKey)} onChange={(event) => toggleLot(lot, event.target.checked)} /></td>}
-                      <td>{lot.productName}</td><td>{lot.internalCode || '-'}</td><td>{lot.sku}</td>
+                      <td>{lot.productDetails.map((detail) => detail.productName || '-').join('；') || lot.productName}</td><td>{lot.productDetails.map((detail) => detail.englishName || '-').join('；') || lot.englishName}</td><td>{lot.productDetails.map((detail) => detail.internalCode || '-').join('；') || lot.internalCode || '-'}</td><td>{lot.productDetails.map((detail) => `${detail.sku}×${valueText(detail.quantity)}`).join('；') || lot.sku}</td>
                       <td>{valueText(lot.initialProductQuantity)}</td><td>{lot.initialCartonCount}</td><td>{lot.remainingCartonCount}</td><td>{lot.reservedCartonCount}</td>
                       <td>{valueText(lot.declaredUnitsPerCarton)}</td><td>{valueText(lot.declaredTailQuantity)}</td>
                       <td>{valueText(lot.remainingProductQuantity)}</td><td>{valueText(lot.remainingCbm)}</td>
                       <td>{lot.hasPackingVariance ? '包装件数有差异' : warehouseStatusLabel(lot)}</td>
-                      {isLogistics && <td><input type="number" min="1" max={available} step="1" disabled={!checked || Boolean(busyKey)} value={checked ? selectedLots[lot.id] : available} onChange={(event) => setSelectedLots((current) => ({ ...current, [lot.id]: Number(event.target.value) }))} /></td>}
+                      {isLogistics && <td><input type="number" min={lot.productDetails.length > 1 ? available : 1} max={available} step="1" disabled={!checked || Boolean(busyKey) || lot.productDetails.length > 1} value={checked ? selectedLots[lot.id] : available} title={lot.productDetails.length > 1 ? '混装库存需整批装走，避免拆散同一混装箱内商品' : ''} onChange={(event) => setSelectedLots((current) => ({ ...current, [lot.id]: Number(event.target.value) }))} /></td>}
                     </tr>
                   );
                 })}
-                {visibleLots.length === 0 && <tr><td colSpan={isLogistics ? 14 : 12}>暂无海川仓库存货</td></tr>}
+                {visibleLots.length === 0 && <tr><td colSpan={isLogistics ? 15 : 13}>暂无海川仓库存货</td></tr>}
               </tbody>
             </table>
           </div>
@@ -329,11 +331,11 @@ export function HaichuanWorkflowPage({
                 <label>退回原因<input value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} /></label>
               </div>
               <div className="table-wrap"><table>
-                <thead><tr><th>{labels.productName}</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>申报装柜件数</th><th>最终装柜件数</th><th>系统数量</th><th>最终装柜数量</th><th>系统 CBM</th><th>最终 CBM</th><th>{labels.note}</th></tr></thead>
+                <thead><tr><th>{labels.productName}</th><th>英文名称</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>申报装柜件数</th><th>最终装柜件数</th><th>系统数量</th><th>最终装柜数量</th><th>系统 CBM</th><th>最终 CBM</th><th>{labels.note}</th></tr></thead>
                 <tbody>{activeBatch.items.map((item) => {
                   const draft = reviewDrafts[item.id] ?? { cartons: item.requestedCartonCount, quantity: item.suggestedProductQuantity, cbm: item.suggestedCbm, note: item.note };
                   const lot = data.warehouseLots.find((candidate) => candidate.id === item.warehouseLotId);
-                  return <tr key={item.id}><td>{item.productName}</td><td>{item.internalCode || '-'}</td><td>{item.sku}</td><td>{item.requestedCartonCount}</td><td><input type="number" min="0" max={lot?.remainingCartonCount} step="1" value={draft.cartons} onChange={(event) => patchReview(item, 'cartons', event.target.value)} /></td><td>{valueText(item.suggestedProductQuantity)}{item.isEstimated ? '（系统估算）' : ''}</td><td><input type="number" min="0" value={draft.quantity} onChange={(event) => patchReview(item, 'quantity', event.target.value)} /></td><td>{valueText(item.suggestedCbm)}</td><td><input type="number" min="0" step="0.0001" value={draft.cbm} onChange={(event) => patchReview(item, 'cbm', event.target.value)} /></td><td><input value={draft.note} onChange={(event) => patchReview(item, 'note', event.target.value)} /></td></tr>;
+                  return <tr key={item.id}><td>{item.productDetails.map((detail) => detail.productName || '-').join('；') || item.productName}</td><td>{item.productDetails.map((detail) => detail.englishName || '-').join('；') || '-'}</td><td>{item.productDetails.map((detail) => detail.internalCode || '-').join('；') || item.internalCode || '-'}</td><td>{item.productDetails.map((detail) => `${detail.sku}×${valueText(detail.quantity)}`).join('；') || item.sku}</td><td>{item.requestedCartonCount}</td><td><input type="number" min="0" max={lot?.remainingCartonCount} step="1" value={draft.cartons} onChange={(event) => patchReview(item, 'cartons', event.target.value)} /></td><td>{valueText(item.suggestedProductQuantity)}{item.isEstimated ? '（系统估算）' : ''}</td><td><input type="number" min="0" value={draft.quantity} onChange={(event) => patchReview(item, 'quantity', event.target.value)} /></td><td>{valueText(item.suggestedCbm)}</td><td><input type="number" min="0" step="0.0001" value={draft.cbm} onChange={(event) => patchReview(item, 'cbm', event.target.value)} /></td><td><input value={draft.note} onChange={(event) => patchReview(item, 'note', event.target.value)} /></td></tr>;
                 })}</tbody>
               </table></div>
               <div className="form-actions"><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void reviewBatch(true)}>{busyKey ? '正在处理...' : '确认进入海运在途'}</button><button type="button" disabled={Boolean(busyKey)} onClick={() => void reviewBatch(false)}>退回海川</button></div>
@@ -344,8 +346,8 @@ export function HaichuanWorkflowPage({
 
       {tab === 'loaded' && (
         <div className="table-wrap"><table>
-          <thead><tr><th>{labels.productName}</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.containerDate}</th><th>最终装柜件数</th><th>最终装柜数量</th><th>最终 CBM</th><th>{labels.status}</th><th>确认时间</th><th>{labels.note}</th></tr></thead>
-          <tbody>{loadedProducts.map(({ batch, item }) => <tr key={`${batch.id}-${item.id}`}><td>{item.productName}</td><td>{item.internalCode || '-'}</td><td>{item.sku}</td><td>{batch.containerDate}</td><td>{item.approvedCartonCount ?? item.requestedCartonCount}</td><td>{valueText(item.approvedProductQuantity ?? item.suggestedProductQuantity)}</td><td>{valueText(item.approvedCbm ?? item.suggestedCbm, 8)}</td><td>{loadingStatusLabel(batch.status)}</td><td>{batch.reviewedAt ? new Date(batch.reviewedAt).toLocaleString() : '-'}</td><td>{item.note || batch.note || '-'}</td></tr>)}{loadedProducts.length === 0 && <tr><td colSpan={10}>暂无已装柜产品</td></tr>}</tbody>
+          <thead><tr><th>{labels.productName}</th><th>英文名称</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.containerDate}</th><th>最终装柜件数</th><th>最终装柜数量</th><th>最终 CBM</th><th>{labels.status}</th><th>确认时间</th><th>{labels.note}</th></tr></thead>
+          <tbody>{loadedProducts.map(({ batch, item }) => <tr key={`${batch.id}-${item.id}`}><td>{item.productDetails.map((detail) => detail.productName || '-').join('；') || item.productName}</td><td>{item.productDetails.map((detail) => detail.englishName || '-').join('；') || '-'}</td><td>{item.productDetails.map((detail) => detail.internalCode || '-').join('；') || item.internalCode || '-'}</td><td>{item.productDetails.map((detail) => `${detail.sku}×${valueText(detail.quantity)}`).join('；') || item.sku}</td><td>{batch.containerDate}</td><td>{item.approvedCartonCount ?? item.requestedCartonCount}</td><td>{valueText(item.approvedProductQuantity ?? item.suggestedProductQuantity)}</td><td>{valueText(item.approvedCbm ?? item.suggestedCbm, 8)}</td><td>{loadingStatusLabel(batch.status)}</td><td>{batch.reviewedAt ? new Date(batch.reviewedAt).toLocaleString() : '-'}</td><td>{item.note || batch.note || '-'}</td></tr>)}{loadedProducts.length === 0 && <tr><td colSpan={11}>暂无已装柜产品</td></tr>}</tbody>
         </table></div>
       )}
 

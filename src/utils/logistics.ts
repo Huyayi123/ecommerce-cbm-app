@@ -51,8 +51,8 @@ function findSkuForRecord(
 }
 
 function packingTotalQuantity(cartonCount: number | null, unitsPerCarton: number | null, tailQuantity: number): number | null {
-  return cartonCount !== null && unitsPerCarton !== null && unitsPerCarton > 0
-    ? cartonCount * unitsPerCarton + tailQuantity
+  return cartonCount !== null && ((unitsPerCarton !== null && unitsPerCarton > 0) || tailQuantity > 0)
+    ? cartonCount * Math.max(0, unitsPerCarton ?? 0) + tailQuantity
     : null;
 }
 
@@ -181,7 +181,7 @@ function setPacking(record: PurchaseRecord, cartonCount: number, tailQuantity: n
     ...record,
     cartonCount,
     tailQuantity,
-  }, { recalculateAmount: true });
+  });
 }
 
 function quantityForLogisticsPart(record: PurchaseRecord, item: LogisticsBatchItem, cartonCount: number, tailQuantity: number): number {
@@ -229,6 +229,10 @@ export function applyApprovedLogisticsBatch(
     const allLoaded = leftCartons === 0 && leftTail === 0;
     const allLeft = loadedCartons === 0 && loadedTail === 0;
 
+    if (record.mixedGroups.length > 0 && !allLoaded && !allLeft) {
+      throw new Error(`混装记录 ${record.sku || record.productName || record.id} 不能按部分箱数拆分，请选择全装或全留，避免混装商品同时进入装走和留下记录。`);
+    }
+
     const common = {
       logisticsBatchId: batch.id,
       logisticsConfirmationStatus: 'approved' as const,
@@ -270,6 +274,15 @@ export function applyApprovedLogisticsBatch(
       continue;
     }
 
+    const loadedQuantity = quantityForLogisticsPart(record, item, loadedCartons, loadedTail);
+    const leftQuantity = quantityForLogisticsPart(record, item, leftCartons, leftTail);
+    const splitQuantity = loadedQuantity + leftQuantity;
+    const loadedRatio = splitQuantity > 0 ? loadedQuantity / splitQuantity : 0;
+    const loadedAmount = round(record.totalAmount * loadedRatio, 2);
+    const leftAmount = round(record.totalAmount - loadedAmount, 2);
+    const loadedFreight = round(record.freightCost * loadedRatio, 2);
+    const leftFreight = round(record.freightCost - loadedFreight, 2);
+
     const loadedRecord = setPackingWithQuantity({
       ...record,
       ...common,
@@ -280,6 +293,8 @@ export function applyApprovedLogisticsBatch(
       purchaseBatchDate: batch.containerDate || record.purchaseBatchDate,
       cartonCount: loadedCartons,
       tailQuantity: loadedTail,
+      freightCost: loadedFreight,
+      totalAmount: loadedAmount,
       note: noteWithLogistics(record, item.note, '物流确认部分装柜'),
     }, item, loadedCartons, loadedTail);
 
@@ -299,6 +314,8 @@ export function applyApprovedLogisticsBatch(
       containerDate: '',
       cartonCount: leftCartons,
       tailQuantity: leftTail,
+      freightCost: leftFreight,
+      totalAmount: leftAmount,
       totalWeightKg: record.totalWeightKg === null ? null : round(record.totalWeightKg * ((leftCartons + (leftTail > 0 ? 1 : 0)) / Math.max(1, cartonCount + (tailQuantity > 0 ? 1 : 0))), 2),
       note: noteWithLogistics(record, item.note, '物流拆分留下部分'),
       createdAt: now,

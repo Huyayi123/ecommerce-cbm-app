@@ -222,7 +222,7 @@ function App() {
           && !legacyActiveRecordIds.has(record.id));
         if (missingInbound.length > 0) {
           try {
-            await createHaichuanInboundItems(missingInbound, haichuanProfile);
+            await createHaichuanInboundItems(missingInbound, haichuanProfile, skuItems);
             setHaichuanData(await fetchHaichuanData());
           } catch (error) {
             console.error('海川待入仓任务补建失败', error);
@@ -370,7 +370,7 @@ function App() {
     }
     try {
       await upsertPurchaseRecords(normalized);
-      if (haichuanProfile && newlyHaichuan.length > 0) await createHaichuanInboundItems(newlyHaichuan, haichuanProfile);
+      if (haichuanProfile && newlyHaichuan.length > 0) await createHaichuanInboundItems(newlyHaichuan, haichuanProfile, skuItems);
       if (removedFromHaichuan.length > 0) await deletePendingHaichuanInboundItems(removedFromHaichuan.map((record) => record.id));
       setPurchaseRecords((current) => {
         const existingIds = new Set(current.map((record) => record.id));
@@ -424,7 +424,7 @@ function App() {
     try {
       const savedPool = await appendPurchaseRecordsToPool({ ...pool, records: [] }, submittedRecords);
       await upsertPurchaseRecords(submittedRecords);
-      if (haichuanProfile && haichuanRecords.length > 0) await createHaichuanInboundItems(haichuanRecords, haichuanProfile);
+      if (haichuanProfile && haichuanRecords.length > 0) await createHaichuanInboundItems(haichuanRecords, haichuanProfile, skuItems);
       setPurchasePools((current) => {
         const existingIds = new Set(current.map((item) => item.id));
         if (!existingIds.has(savedPool.id)) return [savedPool, ...current];

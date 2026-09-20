@@ -1,11 +1,53 @@
-import type { HaichuanWarehouseLot, PurchaseRecord } from '../types';
+import type { HaichuanProductDetail, HaichuanWarehouseLot, PurchaseRecord, SkuItem } from '../types';
+import { effectivePurchaseQuantity, purchaseQuantityWithMixed, withPurchaseTotals } from './purchaseRecords';
+import { round } from './number';
 
 export function declaredTotalCartonCount(record: Pick<PurchaseRecord, 'cartonCount' | 'tailQuantity'>): number {
   return Math.max(0, Math.trunc(Number(record.cartonCount) || 0)) + (Number(record.tailQuantity) > 0 ? 1 : 0);
 }
 
-export function haichuanPurchaseTotalQuantity(record: Pick<PurchaseRecord, 'confirmedPurchaseQuantity' | 'purchaseQuantity'>): number {
-  return Math.max(0, Number(record.confirmedPurchaseQuantity ?? record.purchaseQuantity) || 0);
+export function haichuanPurchaseTotalQuantity(record: PurchaseRecord): number {
+  return Math.max(0, purchaseQuantityWithMixed(withPurchaseTotals(record)));
+}
+
+export function haichuanProductDetails(record: PurchaseRecord, skuItems: SkuItem[] = []): HaichuanProductDetail[] {
+  const normalized = withPurchaseTotals(record);
+  const skuByKey = new Map(skuItems.filter((item) => item.sku.trim()).map((item) => [item.sku.trim().toUpperCase(), item]));
+  const mainQuantity = effectivePurchaseQuantity(normalized);
+  const details: HaichuanProductDetail[] = [{
+    id: `main-${normalized.id}`,
+    internalCode: normalized.internalCode,
+    sku: normalized.sku,
+    productName: normalized.productName,
+    englishName: normalized.englishName,
+    quantity: mainQuantity,
+    unitCbm: normalized.unitCbm,
+    totalCbm: round(mainQuantity * normalized.unitCbm, 4),
+    isMixed: false,
+    mixedGroupId: '',
+    mixedGroupName: '',
+    mixedGroupCartonCount: 0,
+  }];
+  for (const group of normalized.mixedGroups) {
+    for (const line of group.lines) {
+      const sku = skuByKey.get(line.sku.trim().toUpperCase());
+      details.push({
+        id: line.id,
+        internalCode: sku?.internalCode || '',
+        sku: line.sku,
+        productName: line.productName || sku?.productName || '',
+        englishName: line.englishName || sku?.englishName || '',
+        quantity: line.quantity,
+        unitCbm: line.unitCbm,
+        totalCbm: line.totalCbm,
+        isMixed: true,
+        mixedGroupId: group.id,
+        mixedGroupName: group.groupName,
+        mixedGroupCartonCount: group.cartonCount,
+      });
+    }
+  }
+  return details.filter((detail) => detail.quantity > 0 || detail.sku || detail.productName);
 }
 
 export function calculateHaichuanLoadingSuggestion(

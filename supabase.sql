@@ -489,6 +489,7 @@ create table if not exists public.haichuan_inbound_items (
   actual_received_carton_count integer,
   unit_cbm numeric not null default 0,
   declared_total_cbm numeric not null default 0,
+  product_details jsonb not null default '[]'::jsonb,
   has_packing_variance boolean not null default false,
   status text not null default 'pending_receipt' check (status in ('pending_receipt', 'received')),
   received_by uuid references auth.users(id) on delete set null,
@@ -522,6 +523,7 @@ create table if not exists public.haichuan_warehouse_lots (
   initial_cbm numeric not null default 0,
   remaining_cbm numeric not null default 0,
   unit_cbm numeric not null default 0,
+  product_details jsonb not null default '[]'::jsonb,
   has_packing_variance boolean not null default false,
   status text not null default 'available' check (status in ('available', 'partially_reserved', 'fully_reserved', 'depleted')),
   version integer not null default 1,
@@ -565,12 +567,22 @@ create table if not exists public.haichuan_loading_items (
   approved_carton_count integer,
   approved_product_quantity numeric,
   approved_cbm numeric,
+  product_details jsonb not null default '[]'::jsonb,
   warehouse_version integer not null default 1,
   note text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (batch_id, warehouse_lot_id)
 );
+
+alter table public.haichuan_inbound_items
+add column if not exists product_details jsonb not null default '[]'::jsonb;
+
+alter table public.haichuan_warehouse_lots
+add column if not exists product_details jsonb not null default '[]'::jsonb;
+
+alter table public.haichuan_loading_items
+add column if not exists product_details jsonb not null default '[]'::jsonb;
 
 create index if not exists haichuan_inbound_assignee_status_idx
 on public.haichuan_inbound_items (logistics_user_id, status, created_at desc);
@@ -770,7 +782,7 @@ begin
     internal_code, manufacturer_name, sku, product_name, english_name, image_url, shop_name, buyer_name,
     declared_carton_count, declared_units_per_carton, declared_tail_quantity,
     initial_carton_count, remaining_carton_count, reserved_carton_count,
-    initial_product_quantity, remaining_product_quantity, initial_cbm, remaining_cbm, unit_cbm,
+    initial_product_quantity, remaining_product_quantity, initial_cbm, remaining_cbm, unit_cbm, product_details,
     has_packing_variance, status
   ) values (
     v_lot_id, v_inbound.id, v_inbound.purchase_record_id, v_inbound.logistics_user_id, v_inbound.logistics_email,
@@ -779,7 +791,7 @@ begin
     v_inbound.declared_carton_count, v_inbound.declared_units_per_carton, v_inbound.declared_tail_quantity,
     p_actual_carton_count, p_actual_carton_count, 0,
     v_inbound.purchase_total_quantity, v_inbound.purchase_total_quantity,
-    v_inbound.declared_total_cbm, v_inbound.declared_total_cbm, v_inbound.unit_cbm,
+    v_inbound.declared_total_cbm, v_inbound.declared_total_cbm, v_inbound.unit_cbm, v_inbound.product_details,
     p_actual_carton_count <> v_inbound.declared_total_carton_count, 'available'
   ) on conflict (inbound_item_id) do nothing;
 
@@ -859,6 +871,10 @@ begin
     if v_requested <= 0 or v_requested > v_available then
       raise exception '装柜件数超过当前可用库存';
     end if;
+    if jsonb_array_length(coalesce(v_lot.product_details, '[]'::jsonb)) > 1
+       and v_requested <> v_lot.remaining_carton_count then
+      raise exception '包含混装商品的海川库存必须整批装走或整批保留，不能部分拆分';
+    end if;
 
     if v_requested = v_lot.remaining_carton_count then
       v_quantity := v_lot.remaining_product_quantity;
@@ -876,12 +892,12 @@ begin
 
     insert into public.haichuan_loading_items (
       id, batch_id, warehouse_lot_id, purchase_record_id, internal_code, sku, product_name,
-      requested_carton_count, suggested_product_quantity, suggested_cbm, is_estimated,
+      requested_carton_count, suggested_product_quantity, suggested_cbm, is_estimated, product_details,
       warehouse_version, note, created_at, updated_at
     ) values (
       p_batch_id || '-' || v_lot.id, p_batch_id, v_lot.id, v_lot.purchase_record_id,
       v_lot.internal_code, v_lot.sku, v_lot.product_name,
-      v_requested, v_quantity, v_cbm, v_estimated, v_lot.version,
+      v_requested, v_quantity, v_cbm, v_estimated, v_lot.product_details, v_lot.version,
       coalesce(v_item->>'note', ''), now(), now()
     );
 
@@ -1016,7 +1032,7 @@ begin
 
     if v_cartons > 0 and v_quantity > 0 then
       v_record_id := 'hc-transit-' || v_saved.id;
-      v_source_quantity := greatest(coalesce(v_source.confirmed_purchase_quantity, v_source.purchase_quantity, 0), 1);
+      v_source_quantity := greatest(v_lot.initial_product_quantity, 1);
       insert into public.purchase_records (
         id, internal_code, manufacturer_name, sku, product_name, english_name, image_url,
         freight_cost, shop_name, buyer_name, assigned_buyer_name, assigned_buyer_email,
@@ -1032,7 +1048,14 @@ begin
         v_source.english_name, v_source.image_url,
         coalesce(v_source.freight_cost, 0) * v_quantity / v_source_quantity,
         v_source.shop_name, v_source.buyer_name, v_source.assigned_buyer_name, v_source.assigned_buyer_email,
-        true, v_quantity, v_quantity, v_source.purchase_price,
+        true,
+        case when jsonb_array_length(coalesce(v_source.mixed_groups, '[]'::jsonb)) > 0
+          then coalesce(v_source.confirmed_purchase_quantity, v_source.purchase_quantity, 0)
+          else v_quantity end,
+        case when jsonb_array_length(coalesce(v_source.mixed_groups, '[]'::jsonb)) > 0
+          then coalesce(v_source.confirmed_purchase_quantity, v_source.purchase_quantity, 0)
+          else v_quantity end,
+        v_source.purchase_price,
         coalesce(v_source.total_amount, 0) * v_quantity / v_source_quantity,
         v_source.purchase_date, v_source.purchase_pool_id, v_source.purchase_pool_name, v_source.purchase_pool_date,
         'sent_to_inventory', v_source.purchase_batch_id, v_source.purchase_batch_name, v_source.purchase_batch_date,

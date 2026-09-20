@@ -5,7 +5,7 @@ import { formatErrorMessage } from '../utils/errors';
 import { buildLogisticsBatch, logisticsBatchLoadingType } from '../utils/logistics';
 import { applyContainerDateToPoolRecords, changePurchasePoolLoadingType, matchesLogisticsLoadingType, normalizeRecordForPurchasePool, prepareDatedGuantongForInventory, type LogisticsLoadingType } from '../utils/purchasePoolFlows';
 import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
-import { calculatedPurchaseTotalAmount, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
+import { calculatedPurchaseTotalAmount, effectivePurchaseQuantity, packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
 import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 
 type Props = {
@@ -231,7 +231,7 @@ export function PurchasePoolPage({
       .map((item) => [skuLookupKey(item.sku), item])),
     [skuItems],
   );
-  const totalQuantity = submittedRecords.reduce((sum, record) => sum + purchaseQuantityForRecordSku(record), 0);
+  const totalQuantity = submittedRecords.reduce((sum, record) => sum + purchaseQuantityWithMixed(withPurchaseTotals(record)), 0);
   const totalAmount = submittedRecords.reduce((sum, record) => sum + record.totalAmount, 0);
   const totalCbm = submittedRecords.reduce((sum, record) => sum + record.totalCbm, 0);
   const totalPackages = submittedRecords.reduce((sum, record) => sum + packageCountFor(record), 0);
@@ -539,9 +539,8 @@ export function PurchasePoolPage({
   }
 
   function mixedChildRows(record: PurchaseRecord) {
-    const mainSku = record.sku.trim().toUpperCase();
     return record.mixedGroups.flatMap((group) => group.lines
-      .filter((line) => line.sku.trim().toUpperCase() && line.sku.trim().toUpperCase() !== mainSku)
+      .filter((line) => line.sku.trim())
       .map((line) => ({ group, line })));
   }
 
@@ -553,7 +552,7 @@ export function PurchasePoolPage({
           <p>buyer 提交后的订单先进入这里；分配物流商确认装柜，admin 审核通过后才进入采购 / 在途库存。</p>
         </div>
         <div className="export-actions">
-          <button type="button" onClick={() => exportPurchaseRecords(submittedRecords, 'xlsx', '采购订单池')} disabled={submittedRecords.length === 0}>导出池中订单</button>
+          <button type="button" onClick={() => exportPurchaseRecords(submittedRecords, 'xlsx', '采购订单池', skuItems)} disabled={submittedRecords.length === 0}>导出池中订单</button>
           <button type="button" onClick={() => exportBatchPurchaseOrder(submittedRecords, 'xlsx')} disabled={submittedRecords.length === 0}>导出本池订货表</button>
         </div>
       </div>
@@ -625,7 +624,7 @@ export function PurchasePoolPage({
                     <td>{editableCell(record, 'unitsPerCarton', 'number')}</td>
                     <td>{editableCell(record, 'tailQuantity', 'number')}</td>
                     <td>{packageCountFor(record)}</td>
-                    <td>{purchaseQuantityForRecordSku(record)}</td>
+                    <td>{effectivePurchaseQuantity(record)}</td>
                     <td>{record.isMixed ? '是' : '否'}</td>
                     <td>{editableCell(record, 'purchasePrice', 'number')}</td>
                     <td>{editableCell(record, 'freightCost', 'number')}</td>
@@ -653,7 +652,7 @@ export function PurchasePoolPage({
                         <td>{skuBySku.get(skuLookupKey(line.sku))?.internalCode || '-'}</td>
                         <td><strong>{line.sku}</strong></td>
                         <td><strong>{line.productName}</strong></td>
-                        <td />
+                        <td>{line.englishName || skuBySku.get(skuLookupKey(line.sku))?.englishName || ''}</td>
                         <td>{record.shopName}</td>
                         <td>{record.assignedBuyerName}</td>
                         <td>{record.containerDate || record.purchaseBatchDate || '-'}</td>
@@ -666,9 +665,9 @@ export function PurchasePoolPage({
                         <td>混装子行</td>
                         <td>{line.purchasePrice}</td>
                         <td />
-                        <td>{line.totalAmount.toFixed(2)}</td>
+                        <td />
                         <td>{line.unitCbm.toFixed(8)}</td>
-                        <td>{line.totalCbm.toFixed(4)}</td>
+                        <td />
                         <td>{record.status}</td>
                         <td>{record.loadingType || '整柜'}</td>
                         <td>{`${group.groupName} ${group.cartonCount}件，与 ${record.sku || record.productName || '主商品'} 混装`}</td>

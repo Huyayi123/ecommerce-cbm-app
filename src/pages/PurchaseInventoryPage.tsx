@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
 import { exportBatchPurchaseOrder, exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
 import { round } from '../utils/number';
-import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseAmountForRecordSku, purchaseQuantityForRecordSku, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
+import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
 import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 import { recordsForSelectionAwareExport } from '../utils/selectionAwareExport';
 
@@ -234,7 +234,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
         }
         const search = filters.search.trim().toLowerCase();
         if (search) {
-          const mixedSearchable = record.mixedGroups.flatMap((group) => group.lines.map((line) => `${line.sku} ${line.productName}`)).join(' ');
+          const mixedSearchable = record.mixedGroups.flatMap((group) => group.lines.map((line) => `${line.sku} ${line.productName} ${line.englishName}`)).join(' ');
           const searchable = [
             record.sku,
             record.manufacturerName,
@@ -316,9 +316,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   }
 
   function mixedChildRows(record: PurchaseRecord): MixedChildRow[] {
-    const mainSku = skuKey(record.sku);
     return record.mixedGroups.flatMap((group) => group.lines
-      .filter((line) => skuKey(line.sku) && skuKey(line.sku) !== mainSku)
+      .filter((line) => skuKey(line.sku))
       .map((line) => ({ group, line })));
   }
 
@@ -489,8 +488,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           <p>只显示采购人已确认回传的数据；物流商字段为空时显示待回传，不影响采购确认。</p>
           </div>
           <div className="export-actions">
-            <button type="button" onClick={() => exportPurchaseRecords(regularExportRecords, 'xlsx')} disabled={regularExportRecords.length === 0}>导出 Excel{selectedRecords.length > 0 ? `（已选 ${selectedRecords.length}）` : ''}</button>
-            <button type="button" onClick={() => exportPurchaseRecords(regularExportRecords, 'csv')} disabled={regularExportRecords.length === 0}>导出 CSV{selectedRecords.length > 0 ? `（已选 ${selectedRecords.length}）` : ''}</button>
+            <button type="button" onClick={() => exportPurchaseRecords(regularExportRecords, 'xlsx', '采购在途库存', skuItems)} disabled={regularExportRecords.length === 0}>导出 Excel{selectedRecords.length > 0 ? `（已选 ${selectedRecords.length}）` : ''}</button>
+            <button type="button" onClick={() => exportPurchaseRecords(regularExportRecords, 'csv', '采购在途库存', skuItems)} disabled={regularExportRecords.length === 0}>导出 CSV{selectedRecords.length > 0 ? `（已选 ${selectedRecords.length}）` : ''}</button>
             <button type="button" onClick={() => exportBatchPurchaseOrder(selectedBatchRecords, 'xlsx')} disabled={selectedBatchRecords.length === 0}>导出本批次订货表</button>
             <button type="button" onClick={exportSelectedInspectionChecklist} disabled={selectedRecords.length === 0}>导出验货单（已选 {selectedRecords.length}）</button>
             <button type="button" onClick={() => setSelectedIds(new Set())} disabled={selectedRecords.length === 0}>清空勾选</button>
@@ -571,7 +570,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           <table className="inventory-table">
             <thead>
               <tr>
-                <th className="pin-col pin-select">选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">{labels.sku}</th><th className="pin-col pin-product">{labels.productName}</th><th>{labels.internalCode}</th><th>批次</th><th>批次日期</th><th>{labels.cartonCount}</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>是否混装</th><th>混装组</th><th>物流确认</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>{labels.purchaseTotalQuantity}</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.containerDate}</th><th>{labels.unitCbm}</th><th>{labels.note}</th><th>{labels.actions}</th>
+                <th className="pin-col pin-select">选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">{labels.sku}</th><th className="pin-col pin-product">{labels.productName}</th><th>英文名称</th><th>{labels.internalCode}</th><th>批次</th><th>批次日期</th><th>{labels.cartonCount}</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>是否混装</th><th>混装组</th><th>物流确认</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>{labels.purchaseTotalQuantity}</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.containerDate}</th><th>{labels.unitCbm}</th><th>{labels.note}</th><th>{labels.actions}</th>
               </tr>
             </thead>
             <tbody>
@@ -586,6 +585,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
                   <td className="pin-col pin-manufacturer"><span className="cell-ellipsis" title={normalized.manufacturerName}>{normalized.manufacturerName}</span></td>
                   <td className="pin-col pin-sku"><span className="cell-ellipsis" title={normalized.sku}>{normalized.sku}</span></td>
                   <td className="pin-col pin-product"><span className="cell-ellipsis" title={normalized.productName}>{normalized.productName}</span></td>
+                  <td><span className="cell-ellipsis" title={normalized.englishName}>{normalized.englishName}</span></td>
                   <td><strong>{normalized.internalCode || '-'}</strong></td>
                   <td>{batchLabel(normalized)}</td>
                   <td>{normalized.purchaseBatchDate || '-'}</td>
@@ -600,10 +600,10 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
                   <td>{needsLogisticsMetrics(normalized) ? logisticsText(normalized.logisticsTotalCbm, 4) : ''}</td>
                   <td>{normalized.shopName}</td>
                   <td>{normalized.assignedBuyerName || normalized.buyerName}</td>
-                  <td>{purchaseQuantityForRecordSku(normalized)}</td>
+                  <td>{effectivePurchaseQuantity(normalized)}</td>
                   <td>{normalized.purchasePrice}</td>
                   <td>{normalized.freightCost}</td>
-                  <td>{purchaseAmountForRecordSku(normalized).toFixed(2)}</td>
+                  <td>{normalized.totalAmount.toFixed(2)}</td>
                   <td>{normalized.purchaseDate}</td>
                   <td>{statusLabels[normalized.status]}</td>
                   <td>{normalized.loadingType || '整柜'}</td>
@@ -624,6 +624,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
                           <td className="pin-col pin-manufacturer"><span className="cell-ellipsis" title={normalized.manufacturerName}>{normalized.manufacturerName}</span></td>
                           <td className="pin-col pin-sku"><span className="cell-ellipsis" title={line.sku}>{line.sku}</span></td>
                           <td className="pin-col pin-product"><span className="cell-ellipsis" title={line.productName}>{line.productName}</span></td>
+                          <td><span className="cell-ellipsis" title={line.englishName || skuBySku.get(skuKey(line.sku))?.englishName || ''}>{line.englishName || skuBySku.get(skuKey(line.sku))?.englishName || ''}</span></td>
                           <td>{skuBySku.get(line.sku.trim().toUpperCase())?.internalCode || '-'}</td>
                           <td>{batchLabel(normalized)}</td>
                           <td>{normalized.purchaseBatchDate || '-'}</td>
@@ -641,7 +642,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
                           <td>{line.quantity}</td>
                           <td>{line.purchasePrice}</td>
                           <td />
-                          <td>{line.totalAmount.toFixed(2)}</td>
+                          <td />
                           <td>{normalized.purchaseDate}</td>
                           <td>{statusLabels[normalized.status]}</td>
                           <td>{normalized.loadingType || '整柜'}</td>
@@ -655,7 +656,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
                   </Fragment>
                 );
               })}
-              {filteredRecords.length === 0 && <tr><td colSpan={30} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
+              {filteredRecords.length === 0 && <tr><td colSpan={31} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
             </tbody>
           </table>
         </div>

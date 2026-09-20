@@ -15,6 +15,7 @@ function mixedGroup(cartonCount) {
       id: 'line-1',
       sku: 'SKU-MIXED',
       productName: 'Mixed product',
+      englishName: 'Mixed product EN',
       quantity: 20,
       purchasePrice: 3,
       unitCbm: 0.002,
@@ -51,10 +52,31 @@ try {
   assert.equal(calculations.packageCountFor(record(3, 10, multipleMixedGroups)), 4);
   assert.equal(calculations.packageCountFor(record(0, 0, oneMixedGroup)), 0);
 
+  assert.equal(calculations.effectivePurchaseQuantity({ cartonCount: 0, unitsPerCarton: 0, tailQuantity: 40, confirmedPurchaseQuantity: 0, purchaseQuantity: 0 }), 40);
+  assert.equal(calculations.effectivePurchaseQuantity({ cartonCount: 2, unitsPerCarton: 20, tailQuantity: 3, confirmedPurchaseQuantity: 0, purchaseQuantity: 0 }), 43);
+
   const mixedRecord = record(0, 40, oneMixedGroup);
   assert.equal(calculations.mixedQuantityFor(mixedRecord), 20);
   assert.equal(calculations.mixedAmountFor(mixedRecord), 60);
   assert.equal(calculations.mixedCbmFor(mixedRecord), 0.04);
+  assert.equal(calculations.purchaseQuantityWithMixed({ ...mixedRecord, unitsPerCarton: 0, confirmedPurchaseQuantity: 0, purchaseQuantity: 0 }), 60);
+
+  const pricedRecord = {
+    ...mixedRecord,
+    unitsPerCarton: 0,
+    confirmedPurchaseQuantity: 40,
+    purchaseQuantity: 40,
+    purchasePrice: 10,
+    freightCost: 25,
+    totalAmount: 999,
+    unitCbm: 0.001,
+  };
+  const preservedManualTotal = calculations.withPurchaseTotals(pricedRecord);
+  assert.equal(preservedManualTotal.totalAmount, 999);
+  assert.equal(preservedManualTotal.totalCbm, 0.08);
+  const recalculatedTotal = calculations.withPurchaseTotals(pricedRecord, { recalculateAmount: true });
+  assert.equal(recalculatedTotal.totalAmount, 485);
+  assert.equal(recalculatedTotal.totalCbm, 0.08);
 
   console.log('purchase record package count tests passed');
 } finally {

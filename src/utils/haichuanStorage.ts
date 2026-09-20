@@ -5,11 +5,13 @@ import type {
   HaichuanInboundItem,
   HaichuanLoadingBatch,
   HaichuanLoadingItem,
+  HaichuanProductDetail,
   HaichuanWarehouseLot,
   PurchaseRecord,
+  SkuItem,
 } from '../types';
 import { formatErrorMessage } from './errors';
-import { declaredTotalCartonCount, haichuanPurchaseTotalQuantity } from './haichuan';
+import { declaredTotalCartonCount, haichuanProductDetails, haichuanPurchaseTotalQuantity } from './haichuan';
 
 function client() {
   if (!supabase) throw new Error('Supabase 尚未配置');
@@ -23,6 +25,27 @@ function numberValue(value: unknown): number {
 
 function textValue(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+function productDetailsValue(value: unknown): HaichuanProductDetail[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item, index) => {
+    const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    return {
+      id: textValue(row.id) || `detail-${index}`,
+      internalCode: textValue(row.internalCode ?? row.internal_code),
+      sku: textValue(row.sku),
+      productName: textValue(row.productName ?? row.product_name),
+      englishName: textValue(row.englishName ?? row.english_name),
+      quantity: numberValue(row.quantity),
+      unitCbm: numberValue(row.unitCbm ?? row.unit_cbm),
+      totalCbm: numberValue(row.totalCbm ?? row.total_cbm),
+      isMixed: Boolean(row.isMixed ?? row.is_mixed),
+      mixedGroupId: textValue(row.mixedGroupId ?? row.mixed_group_id),
+      mixedGroupName: textValue(row.mixedGroupName ?? row.mixed_group_name),
+      mixedGroupCartonCount: numberValue(row.mixedGroupCartonCount ?? row.mixed_group_carton_count),
+    };
+  });
 }
 
 function mapInbound(row: Record<string, unknown>): HaichuanInboundItem {
@@ -47,6 +70,7 @@ function mapInbound(row: Record<string, unknown>): HaichuanInboundItem {
     actualReceivedCartonCount: numberValue(row.actual_received_carton_count),
     unitCbm: numberValue(row.unit_cbm),
     declaredTotalCbm: numberValue(row.declared_total_cbm),
+    productDetails: productDetailsValue(row.product_details),
     hasPackingVariance: Boolean(row.has_packing_variance),
     status: row.status === 'received' ? 'received' : 'pending_receipt',
     receivedBy: textValue(row.received_by),
@@ -72,6 +96,7 @@ function mapWarehouseLot(row: Record<string, unknown>): HaichuanWarehouseLot {
     remainingCartonCount: numberValue(row.remaining_carton_count), reservedCartonCount: numberValue(row.reserved_carton_count),
     initialProductQuantity: numberValue(row.initial_product_quantity), remainingProductQuantity: numberValue(row.remaining_product_quantity),
     initialCbm: numberValue(row.initial_cbm), remainingCbm: numberValue(row.remaining_cbm), unitCbm: numberValue(row.unit_cbm),
+    productDetails: productDetailsValue(row.product_details),
     hasPackingVariance: Boolean(row.has_packing_variance), status, version: numberValue(row.version),
     createdAt: textValue(row.created_at), updatedAt: textValue(row.updated_at),
   };
@@ -87,6 +112,7 @@ function mapLoadingItem(row: Record<string, unknown>): HaichuanLoadingItem {
     approvedCartonCount: row.approved_carton_count == null ? null : numberValue(row.approved_carton_count),
     approvedProductQuantity: row.approved_product_quantity == null ? null : numberValue(row.approved_product_quantity),
     approvedCbm: row.approved_cbm == null ? null : numberValue(row.approved_cbm),
+    productDetails: productDetailsValue(row.product_details),
     warehouseVersion: numberValue(row.warehouse_version), note: textValue(row.note),
     createdAt: textValue(row.created_at), updatedAt: textValue(row.updated_at),
   };
@@ -136,10 +162,13 @@ export async function fetchHaichuanData(): Promise<HaichuanData> {
   };
 }
 
-export async function createHaichuanInboundItems(records: PurchaseRecord[], logisticsProfile: AppProfile): Promise<void> {
+export async function createHaichuanInboundItems(records: PurchaseRecord[], logisticsProfile: AppProfile, skuItems: SkuItem[] = []): Promise<void> {
   if (records.length === 0) return;
   const now = new Date().toISOString();
-  const rows = records.map((record) => ({
+  const rows = records.map((record) => {
+    const productDetails = haichuanProductDetails(record, skuItems);
+    const purchaseTotalQuantity = haichuanPurchaseTotalQuantity(record);
+    return ({
     id: `hc-inbound-${record.id}`,
     purchase_record_id: record.id,
     logistics_user_id: logisticsProfile.id,
@@ -152,21 +181,32 @@ export async function createHaichuanInboundItems(records: PurchaseRecord[], logi
     image_url: record.imageUrl,
     shop_name: record.shopName,
     buyer_name: record.buyerName,
-    purchase_total_quantity: haichuanPurchaseTotalQuantity(record),
+    purchase_total_quantity: purchaseTotalQuantity,
     declared_carton_count: Math.max(0, Math.trunc(Number(record.cartonCount) || 0)),
     declared_units_per_carton: Math.max(0, Number(record.unitsPerCarton) || 0),
     declared_tail_quantity: Math.max(0, Number(record.tailQuantity) || 0),
     declared_total_carton_count: declaredTotalCartonCount(record),
     actual_received_carton_count: null,
-    unit_cbm: Math.max(0, Number(record.unitCbm) || 0),
+    unit_cbm: purchaseTotalQuantity > 0 ? Math.max(0, Number(record.totalCbm) || 0) / purchaseTotalQuantity : 0,
     declared_total_cbm: Math.max(0, Number(record.totalCbm) || 0),
+    product_details: productDetails,
     has_packing_variance: false,
     status: 'pending_receipt',
     created_at: now,
     updated_at: now,
-  }));
+    });
+  });
   const { error } = await client().from('haichuan_inbound_items').upsert(rows, { onConflict: 'purchase_record_id', ignoreDuplicates: true });
   if (error) throw new Error(formatErrorMessage(error));
+  const refreshResults = await Promise.all(rows.map((row) => client().from('haichuan_inbound_items').update({
+    purchase_total_quantity: row.purchase_total_quantity,
+    declared_total_cbm: row.declared_total_cbm,
+    unit_cbm: row.unit_cbm,
+    product_details: row.product_details,
+    updated_at: now,
+  }).eq('purchase_record_id', row.purchase_record_id).eq('status', 'pending_receipt')));
+  const refreshError = refreshResults.find((result) => result.error)?.error;
+  if (refreshError) throw new Error(formatErrorMessage(refreshError));
 }
 
 export async function deletePendingHaichuanInboundItems(purchaseRecordIds: string[]): Promise<void> {

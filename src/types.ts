@@ -76,6 +76,21 @@ export type HaichuanInboundStatus = 'pending_receipt' | 'received';
 export type HaichuanWarehouseStatus = 'available' | 'partially_reserved' | 'fully_reserved' | 'depleted';
 export type HaichuanLoadingStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 
+export type HaichuanProductDetail = {
+  id: string;
+  internalCode: string;
+  sku: string;
+  productName: string;
+  englishName: string;
+  quantity: number;
+  unitCbm: number;
+  totalCbm: number;
+  isMixed: boolean;
+  mixedGroupId: string;
+  mixedGroupName: string;
+  mixedGroupCartonCount: number;
+};
+
 export type HaichuanInboundItem = {
   id: string;
   purchaseRecordId: string;
@@ -97,6 +112,7 @@ export type HaichuanInboundItem = {
   actualReceivedCartonCount: number;
   unitCbm: number;
   declaredTotalCbm: number;
+  productDetails: HaichuanProductDetail[];
   hasPackingVariance: boolean;
   status: HaichuanInboundStatus;
   receivedBy: string;
@@ -130,6 +146,7 @@ export type HaichuanWarehouseLot = {
   initialCbm: number;
   remainingCbm: number;
   unitCbm: number;
+  productDetails: HaichuanProductDetail[];
   hasPackingVariance: boolean;
   status: HaichuanWarehouseStatus;
   version: number;
@@ -152,6 +169,7 @@ export type HaichuanLoadingItem = {
   approvedCartonCount: number | null;
   approvedProductQuantity: number | null;
   approvedCbm: number | null;
+  productDetails: HaichuanProductDetail[];
   warehouseVersion: number;
   note: string;
   createdAt: string;
@@ -184,6 +202,7 @@ export type MixedCartonLine = {
   id: string;
   sku: string;
   productName: string;
+  englishName: string;
   quantity: number;
   purchasePrice: number;
   unitCbm: number;

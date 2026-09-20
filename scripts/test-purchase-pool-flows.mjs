@@ -52,13 +52,14 @@ try {
     record('haichuan', '海川', '2026-09-01'),
     record('guantong', '冠通', ''),
   ], '2026-09-01', '2026-09-10');
-  assert.equal(dateResult.updatedCount, 3);
+  assert.equal(dateResult.updatedCount, 2);
   assert.equal(dateResult.preservedManualCount, 1);
   assert.equal(dateResult.skippedGuantongCount, 1);
+  assert.equal(dateResult.skippedHaichuanCount, 1);
   assert.equal(dateResult.records[0].containerDate, '2026-09-10');
   assert.equal(dateResult.records[1].containerDate, '2026-09-10');
   assert.equal(dateResult.records[2].containerDate, '2026-09-03');
-  assert.equal(dateResult.records[3].containerDate, '2026-09-10');
+  assert.equal(dateResult.records[3].containerDate, '2026-09-01');
   assert.equal(dateResult.records[4].containerDate, '');
 
   assert.equal(flows.changePurchasePoolLoadingType(record('switch', '整柜', '2026-09-01'), '冠通').containerDate, '');

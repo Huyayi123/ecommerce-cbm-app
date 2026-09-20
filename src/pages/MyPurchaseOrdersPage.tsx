@@ -7,7 +7,7 @@ import { round } from '../utils/number';
 import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
 import { mergeImportedPurchaseOrders } from '../utils/purchaseOrderImports';
 import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
-import { calculatedPurchaseTotalAmount, effectivePurchaseQuantity, mixedQuantityForOtherSkus, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from '../utils/purchaseRecords';
+import { calculatedPurchaseTotalAmount, effectivePurchaseQuantity, mixedQuantityFor, packageCountFor, withPurchaseTotals } from '../utils/purchaseRecords';
 
 type Props = {
   records: PurchaseRecord[];
@@ -85,7 +85,7 @@ const editableFields = [
 ] as const;
 
 type EditableField = (typeof editableFields)[number];
-type MixedLineField = 'sku' | 'productName' | 'quantity' | 'purchasePrice' | 'unitCbm';
+type MixedLineField = 'sku' | 'productName' | 'englishName' | 'quantity' | 'purchasePrice' | 'unitCbm';
 type ScrollSnapshot = {
   windowX: number;
   windowY: number;
@@ -175,6 +175,7 @@ function createMixedLine(): MixedCartonLine {
     id: crypto.randomUUID(),
     sku: '',
     productName: '',
+    englishName: '',
     quantity: 0,
     purchasePrice: 0,
     unitCbm: 0,
@@ -503,7 +504,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     await onChange(records.map((item) => (item.id === normalized.id ? normalized : item)));
   }
 
-  function saveRecord(nextRecord: PurchaseRecord, includeMixedChanges = true): Promise<void> {
+  function saveRecord(nextRecord: PurchaseRecord, includeMixedChanges = true, recalculateAmount = false): Promise<void> {
     const recordId = nextRecord.id;
     const snapshot = normalDraftSnapshot(recordId);
     const previous = recordSaveQueues.current.get(recordId) ?? Promise.resolve();
@@ -514,7 +515,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         mixedGroups: nextRecord.mixedGroups,
         isMixed: nextRecord.isMixed,
       } : latest, snapshot);
-      const normalized = withPurchaseTotals(merged);
+      const normalized = withPurchaseTotals(merged, { recalculateAmount });
       await persistRecord(normalized);
       latestSavedRecords.current.set(recordId, normalized);
       draftsRef.current = Object.fromEntries(Object.entries(draftsRef.current).filter(([key, value]) => snapshot[key] !== value));
@@ -534,6 +535,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
 
   function applyMixedDraftsToRecord(record: PurchaseRecord, draftSnapshot: Record<string, string>): PurchaseRecord {
     let hasChanges = false;
+    let shouldRecalculateAmount = false;
     const mixedGroups = record.mixedGroups.map((group) => {
       const nextGroup = { ...group };
       const groupNameKey = groupKey(record.id, group.id, 'groupName');
@@ -550,18 +552,20 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       nextGroup.lines = group.lines.map((line) => {
         let nextLine = { ...line };
         let lineChanged = false;
-        for (const field of ['sku', 'productName', 'quantity', 'purchasePrice', 'unitCbm'] as MixedLineField[]) {
+        for (const field of ['sku', 'productName', 'englishName', 'quantity', 'purchasePrice', 'unitCbm'] as MixedLineField[]) {
           const key = mixedKey(record.id, group.id, line.id, field);
           if (!(key in draftSnapshot)) continue;
           const value = draftSnapshot[key];
           if (field === 'quantity' || field === 'purchasePrice' || field === 'unitCbm') nextLine[field] = parseNumber(value);
           else nextLine[field] = value;
+          if (field === 'sku' || field === 'quantity' || field === 'purchasePrice') shouldRecalculateAmount = true;
           lineChanged = true;
           hasChanges = true;
         }
         if (lineChanged) {
           const skuItem = skuBySku.get(skuLookupKey(nextLine.sku));
           if (skuItem && !nextLine.productName.trim()) nextLine.productName = skuItem.productName;
+          if (skuItem && !nextLine.englishName.trim()) nextLine.englishName = skuItem.englishName;
           if (skuItem && nextLine.purchasePrice === 0) nextLine.purchasePrice = skuItem.purchasePrice;
           if (skuItem && nextLine.unitCbm === 0) nextLine.unitCbm = skuItem.unitCbm;
           nextLine = recalcMixedLine(nextLine);
@@ -571,7 +575,12 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       return nextGroup;
     });
 
-    return hasChanges ? withPurchaseTotals({ ...record, mixedGroups, isMixed: mixedGroups.length > 0 }) : record;
+    return hasChanges
+      ? withPurchaseTotals(
+        { ...record, mixedGroups, isMixed: mixedGroups.length > 0 },
+        { recalculateAmount: shouldRecalculateAmount },
+      )
+      : record;
   }
 
   async function flushMixedDrafts(draftSnapshot: Record<string, string>) {
@@ -580,7 +589,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       const changedRecords = records
         .map((record) => applyMixedDraftsToRecord(record, draftSnapshot))
         .filter((record, index) => record !== records[index]);
-      await Promise.all(changedRecords.map((record) => saveRecord(record)));
+      await Promise.all(changedRecords.map((record) => {
+        const shouldRecalculateAmount = Object.keys(draftSnapshot).some((key) => (
+          key.startsWith(`${record.id}:mixed:`)
+          && (key.endsWith(':sku') || key.endsWith(':quantity') || key.endsWith(':purchasePrice'))
+        ));
+        return saveRecord(record, true, shouldRecalculateAmount);
+      }));
       setMixedDrafts((current) => {
         const next = { ...current };
         for (const [key, value] of Object.entries(draftSnapshot)) {
@@ -740,9 +755,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   }
 
   function mixedChildRows(record: PurchaseRecord) {
-    const mainSku = record.sku.trim().toUpperCase();
     return record.mixedGroups.flatMap((group) => group.lines
-      .filter((line) => line.sku.trim().toUpperCase() && line.sku.trim().toUpperCase() !== mainSku)
+      .filter((line) => line.sku.trim())
       .map((line) => ({ group, line })));
   }
 
@@ -845,14 +859,14 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       isMixed: true,
       mixedGroups: [...record.mixedGroups, createMixedGroup(record.mixedGroups.length)],
     };
-    await saveRecord(nextRecord);
+    await saveRecord(nextRecord, true, true);
     setExpandedRows((current) => new Set(current).add(record.id));
   }
 
   async function deleteMixedGroup(record: PurchaseRecord, groupId: string) {
     if (isViewer) return;
     const mixedGroups = record.mixedGroups.filter((group) => group.id !== groupId);
-    await saveRecord({ ...record, mixedGroups, isMixed: mixedGroups.length > 0 });
+    await saveRecord({ ...record, mixedGroups, isMixed: mixedGroups.length > 0 }, true, true);
   }
 
   async function addMixedLine(record: PurchaseRecord, groupId: string) {
@@ -861,7 +875,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       ...record,
       isMixed: true,
       mixedGroups: record.mixedGroups.map((group) => group.id === groupId ? { ...group, lines: [...group.lines, createMixedLine()] } : group),
-    });
+    }, true, true);
   }
 
   async function deleteMixedLine(record: PurchaseRecord, groupId: string, lineId: string) {
@@ -869,7 +883,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     await saveRecord({
       ...record,
       mixedGroups: record.mixedGroups.map((group) => group.id === groupId ? { ...group, lines: group.lines.filter((line) => line.id !== lineId) } : group),
-    });
+    }, true, true);
   }
 
   async function commitGroup(record: PurchaseRecord, group: MixedCartonGroup, field: 'groupName' | 'cartonCount', explicitValue?: string) {
@@ -909,7 +923,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     if (field === 'sku') {
       const skuItem = skuBySku.get(skuLookupKey(value));
       if (skuItem) {
-        nextLine = { ...nextLine, productName: skuItem.productName, purchasePrice: skuItem.purchasePrice, unitCbm: skuItem.unitCbm };
+        nextLine = { ...nextLine, productName: skuItem.productName, englishName: skuItem.englishName, purchasePrice: skuItem.purchasePrice, unitCbm: skuItem.unitCbm };
       }
     }
     nextLine = recalcMixedLine(nextLine);
@@ -923,7 +937,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       await saveRecord({
         ...record,
         mixedGroups: record.mixedGroups.map((item) => item.id === group.id ? { ...group, lines: group.lines.map((current) => current.id === line.id ? nextLine : current) } : item),
-      });
+      }, true, field === 'sku' || field === 'quantity' || field === 'purchasePrice');
     } catch {
       mixedDraftsRef.current = { ...mixedDraftsRef.current, [key]: value };
       setMixedDrafts(mixedDraftsRef.current);
@@ -1030,8 +1044,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         <td colSpan={24}>
           <div className="packing-panel">
             <div className="packing-summary">
-              <strong>主SKU数量：{purchaseQuantityForRecordSku(normalized)}</strong>
-              <strong>其他SKU混装数量：{mixedQuantityForOtherSkus(normalized)}</strong>
+              <strong>主商品数量：{effectivePurchaseQuantity(normalized)}</strong>
+              <strong>混装商品数量：{mixedQuantityFor(normalized)}</strong>
               <strong>总件数：{packageCountFor(normalized)}</strong>
               {!isViewer && <button type="button" onClick={() => void addMixedGroup(normalized)}>新增混装组</button>}
             </div>
@@ -1046,18 +1060,17 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 </div>
                 <table className="packing-table">
                   <thead>
-                    <tr><th>SKU</th><th>产品名称</th><th>数量</th><th>采购单价</th><th>单品CBM</th><th>金额</th><th>CBM</th><th>操作</th></tr>
+                    <tr><th>SKU</th><th>产品名称</th><th>英文名称</th><th>数量</th><th>采购单价</th><th>单品CBM</th><th>操作</th></tr>
                   </thead>
                   <tbody>
                     {group.lines.map((line) => (
                       <tr key={line.id}>
                         <td>{lineInput(normalized, group, line, 'sku')}</td>
                         <td>{lineInput(normalized, group, line, 'productName')}</td>
+                        <td>{lineInput(normalized, group, line, 'englishName')}</td>
                         <td>{lineInput(normalized, group, line, 'quantity', 'number')}</td>
                         <td>{lineInput(normalized, group, line, 'purchasePrice', 'number')}</td>
                         <td>{lineInput(normalized, group, line, 'unitCbm', 'number')}</td>
-                        <td>{line.totalAmount.toFixed(2)}</td>
-                        <td>{line.totalCbm.toFixed(4)}</td>
                         <td>{!isViewer && <button className="danger" type="button" onClick={() => void deleteMixedLine(normalized, group.id, line.id)}>删除</button>}</td>
                       </tr>
                     ))}
@@ -1097,7 +1110,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
             </label>
           )}
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'xlsx', '我的采购订单', skuItems)} disabled={visibleRecords.length === 0}>导出 Excel</button>
-          <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'csv', '我的采购订单')} disabled={visibleRecords.length === 0}>导出 CSV</button>
+          <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'csv', '我的采购订单', skuItems)} disabled={visibleRecords.length === 0}>导出 CSV</button>
           {!isViewer && <button className="primary" type="button" onClick={() => void confirmVisiblePurchases()}>提交采购订单池{submittableAssignedRecords.length > 0 ? ` (${unconfirmedVisibleCount || submittableAssignedRecords.length})` : ''}</button>}
         </div>
       </div>
@@ -1177,7 +1190,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td className="my-orders-narrow-number">{input(normalized, 'unitsPerCarton', 'number')}</td>
                     <td className="my-orders-narrow-number">{input(normalized, 'tailQuantity', 'number')}</td>
                     <td>{packageCountFor(normalized)}</td>
-                    <td>{purchaseQuantityForRecordSku(normalized)}</td>
+                    <td>{effectivePurchaseQuantity(normalized)}</td>
                     <td>{normalized.isMixed ? '是' : '否'}</td>
                     <td className="my-orders-narrow-number">{input(normalized, 'purchasePrice', 'number')}</td>
                     <td className="my-orders-narrow-number my-orders-medium-number">{input(normalized, 'freightCost', 'number')}</td>
@@ -1204,7 +1217,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                       <td>{internalCodeBySku.get(skuLookupKey(line.sku)) || '-'}</td>
                       <td><strong>{line.sku}</strong></td>
                       <td><strong>{line.productName}</strong></td>
-                      <td />
+                      <td>{line.englishName || skuBySku.get(skuLookupKey(line.sku))?.englishName || ''}</td>
                       <td>{normalized.shopName}</td>
                       <td>{normalized.assignedBuyerName}</td>
                       <td />
@@ -1216,9 +1229,9 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                       <td>混装子行</td>
                       <td>{line.purchasePrice}</td>
                       <td />
-                      <td>{line.totalAmount.toFixed(2)}</td>
+                      <td />
                       <td>{line.unitCbm.toFixed(8)}</td>
-                      <td>{line.totalCbm.toFixed(4)}</td>
+                      <td />
                       <td>{statusLabels[normalized.status]}</td>
                       <td>{normalized.loadingType || '整柜'}</td>
                       <td>{`${group.groupName} ${group.cartonCount}件，与 ${normalized.sku || normalized.productName || '主商品'} 混装`}</td>

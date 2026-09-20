@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx-js-style';
 import type { AdAnalysisRow, AuditLog, CalculationRow, CommissionRun, LogisticsBatch, MonthlyProfitDetail, MonthlyProfitReturnDetail, MonthlyProfitSaleDetail, MonthlyProfitSummary, ProfitAnalysisRow, PurchaseRecord, SkuItem } from '../types';
 import { commissionRateLabel } from './commission';
 import { logisticsItemTotalQuantity } from './logistics';
-import { mixedGroupsSummary, packageCountFor, purchaseQuantityForRecordSku, withPurchaseTotals } from './purchaseRecords';
+import { effectivePurchaseQuantity, mixedGroupsSummary, packageCountFor, withPurchaseTotals } from './purchaseRecords';
 
 type ExportFormat = 'xlsx' | 'csv';
 
@@ -98,7 +98,7 @@ function applyMyPurchaseOrderStyles(worksheet: XLSX.WorkSheet, rowCount: number)
   const left = { horizontal: 'left', vertical: 'center', wrapText: true };
 
   for (let row = 1; row <= rowCount; row += 1) {
-    for (let col = 1; col <= 21; col += 1) {
+    for (let col = 1; col <= 20; col += 1) {
       const address = cellRef(row, col);
       if (!worksheet[address]) worksheet[address] = { t: 's', v: '' };
       worksheet[address].s = {
@@ -131,7 +131,6 @@ function applyMyPurchaseOrderStyles(worksheet: XLSX.WorkSheet, rowCount: number)
     { wch: 10 },
     { wch: 12 },
     { wch: 30 },
-    { wch: 12 },
   ];
 }
 
@@ -156,18 +155,16 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: Sku
     '尾箱数量',
     '采购单价',
     '运费',
-    '混装总金额',
+    '总金额',
     '总CBM',
     '装货方式',
     '件数',
     '是否混装',
     '总重量kg',
     '备注',
-    '混装总数',
   ];
   const rows: unknown[][] = [headers];
   const merges: XLSX.Range[] = [];
-  const formulaSections: Array<{ start: number; end: number; totalCbm: number; totalWeightKg: number | null }> = [];
 
   for (const record of records.map(withPurchaseTotals)) {
     const startRow = rows.length + 1;
@@ -175,7 +172,7 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: Sku
     const loadingType = record.loadingType || '整柜';
     const mixedLines = record.mixedGroups.flatMap((group) => group.lines.map((line) => ({ ...line, groupName: group.groupName, cartonCount: group.cartonCount })));
     const isMixed = mixedLines.length > 0;
-    const baseQuantity = purchaseQuantityForRecordSku(record);
+    const baseQuantity = effectivePurchaseQuantity(record);
     const mixedProductNames = mixedLines.map((line) => line.productName || line.sku);
 
     rows.push([
@@ -192,14 +189,13 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: Sku
       record.tailQuantity,
       record.purchasePrice,
       record.freightCost,
-      '',
+      record.totalAmount,
       record.totalCbm,
       loadingType,
       isMixed ? packageCountFor(record) : packageCountFor(record) || '',
       isMixed ? '是' : '否',
       record.totalWeightKg ?? '',
       isMixed ? mixedWithText(mixedProductNames) : record.note,
-      baseQuantity,
     ]);
 
     for (const line of mixedLines) {
@@ -208,7 +204,7 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: Sku
         itemsBySku.get(skuKey(line.sku))?.internalCode || '',
         line.sku,
         line.productName,
-        '',
+        line.englishName || itemsBySku.get(skuKey(line.sku))?.englishName || '',
         record.shopName,
         buyerName,
         line.quantity,
@@ -224,14 +220,12 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: Sku
         '是',
         '',
         mixedWithText([record.productName || record.sku]),
-        '',
       ]);
     }
 
     const endRow = rows.length;
-    formulaSections.push({ start: startRow, end: endRow, totalCbm: record.totalCbm, totalWeightKg: record.totalWeightKg });
     if (endRow > startRow) {
-      for (const column of [1, 14, 15, 19, 21]) {
+      for (const column of [1, 14, 15, 19]) {
         merges.push({ s: { r: startRow - 1, c: column - 1 }, e: { r: endRow - 1, c: column - 1 } });
       }
     }
@@ -239,15 +233,6 @@ function exportMyPurchaseOrdersTemplate(records: PurchaseRecord[], skuItems: Sku
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows);
   worksheet['!merges'] = merges;
-  for (const section of formulaSections) {
-    const rowRefs = Array.from({ length: section.end - section.start + 1 }, (_, index) => section.start + index);
-    const amountFormula = rowRefs.map((row) => `H${row}*L${row}`).join('+') + '+' + rowRefs.map((row) => `M${row}`).join('+');
-    const quantityFormulaText = rowRefs.map((row) => `H${row}`).join('+');
-    setFormula(worksheet, section.start, 14, amountFormula);
-    setFormula(worksheet, section.start, 21, quantityFormulaText);
-    worksheet[cellRef(section.start, 15)] = { t: 'n', v: section.totalCbm };
-    if (section.totalWeightKg !== null) worksheet[cellRef(section.start, 19)] = { t: 'n', v: section.totalWeightKg };
-  }
   applyMyPurchaseOrderStyles(worksheet, rows.length);
 
   const workbook = XLSX.utils.book_new();
@@ -420,7 +405,6 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
   const itemsBySku = skuLookup(skuItems);
   const includeBuyerEmail = moduleName !== '我的采购订单';
   const includePlanQuantity = moduleName === '我的采购订单';
-  const hideMixedChildAmount = includePlanQuantity && !includeBuyerEmail;
   const exportRows = records.flatMap((record) => {
     const normalized = withPurchaseTotals(record);
     const baseRow = {
@@ -436,18 +420,17 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
       采购人: normalized.assignedBuyerName || normalized.buyerName,
       ...(includeBuyerEmail ? { 采购人邮箱: normalized.assignedBuyerEmail } : {}),
       ...(includePlanQuantity ? { 计划采购数量: normalized.purchaseQuantity } : {}),
-      实际采购数量: normalized.confirmedPurchaseQuantity ?? '',
+      实际采购数量: effectivePurchaseQuantity(normalized),
       整箱件数: normalized.cartonCount ?? '',
       每箱数量: normalized.unitsPerCarton ?? '',
       尾箱数量: normalized.tailQuantity,
-      含本SKU混装采购数量: purchaseQuantityForRecordSku(normalized),
       采购单价: normalized.purchasePrice,
       运费: normalized.freightCost,
-      含混装总金额: normalized.totalAmount,
+      总金额: normalized.totalAmount,
       单品CBM: normalized.unitCbm,
       采购日期: normalized.purchaseDate,
       状态: normalized.status,
-      '含混装总 CBM': normalized.totalCbm,
+      '总 CBM': normalized.totalCbm,
       装货方式: normalized.loadingType,
       装柜日期: normalized.containerDate,
       件数: packageCountFor(normalized) || '',
@@ -465,7 +448,7 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
       内部编号: itemsBySku.get(skuKey(line.sku))?.internalCode || '',
       SKU: line.sku,
       产品名称: line.productName,
-      英文名称: '',
+      英文名称: line.englishName || itemsBySku.get(skuKey(line.sku))?.englishName || '',
       图片链接: '',
       店铺: normalized.shopName,
       采购人: normalized.assignedBuyerName || normalized.buyerName,
@@ -475,14 +458,13 @@ export function exportPurchaseRecords(records: PurchaseRecord[], format: ExportF
       整箱件数: '',
       每箱数量: '',
       尾箱数量: '',
-      含本SKU混装采购数量: line.quantity,
       采购单价: line.purchasePrice,
       运费: '',
-      含混装总金额: hideMixedChildAmount ? '' : line.totalAmount,
+      总金额: '',
       单品CBM: line.unitCbm,
       采购日期: normalized.purchaseDate,
       状态: normalized.status,
-      '含混装总 CBM': line.totalCbm,
+      '总 CBM': '',
       装货方式: normalized.loadingType,
       装柜日期: normalized.containerDate,
       件数: '',
@@ -885,7 +867,7 @@ export function exportInspectionChecklist(records: PurchaseRecord[], format: Exp
         serial,
         englishNameFor(normalized),
         barcodeFor(normalized.sku),
-        baseQuantityText || `${purchaseQuantityForRecordSku(normalized)}PCS`,
+        baseQuantityText || `${effectivePurchaseQuantity(normalized)}PCS`,
         '',
         '',
         '',
