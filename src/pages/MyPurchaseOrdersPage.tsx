@@ -1211,7 +1211,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                       <td />
                       <td />
                       <td />
-                      <td>{group.cartonCount}</td>
+                      <td />
                       <td>{line.quantity}</td>
                       <td>混装子行</td>
                       <td>{line.purchasePrice}</td>
