@@ -1,4 +1,4 @@
-import type { PurchaseRecord, PurchaseRecordImport } from '../types';
+import type { PurchaseRecord, PurchaseRecordImport, SkuItem } from '../types';
 import { withPurchaseTotals } from './purchaseRecords';
 
 type ImportMergeResult = {
@@ -41,12 +41,36 @@ function newestRecord(records: PurchaseRecord[]): PurchaseRecord | undefined {
   }, undefined);
 }
 
+function matchingSkuItem(record: PurchaseRecord, skuItems: SkuItem[]): SkuItem | undefined {
+  const sku = normalizedSku(record.sku);
+  if (!sku || sku === 'NEW') return undefined;
+  const candidates = skuItems.filter((item) => normalizedSku(item.sku) === sku);
+  const shop = normalizedShop(record.shopName);
+  return (shop ? candidates.find((item) => normalizedShop(item.shopName) === shop) : undefined) ?? candidates[0];
+}
+
+export function enrichImportedPurchaseOrderCbms(
+  importedRecords: PurchaseRecordImport[],
+  skuItems: SkuItem[],
+): PurchaseRecordImport[] {
+  return importedRecords.map((entry) => {
+    if (entry.record.unitCbm > 0) return entry;
+    const skuItem = matchingSkuItem(entry.record, skuItems);
+    if (!skuItem || skuItem.unitCbm <= 0) return entry;
+    return {
+      ...entry,
+      record: withPurchaseTotals({ ...entry.record, unitCbm: skuItem.unitCbm }),
+    };
+  });
+}
+
 function mergeImportedRecord(current: PurchaseRecord, imported: PurchaseRecordImport): PurchaseRecord {
   const provided = new Set(imported.providedFields);
   const next = { ...current };
   for (const field of imported.providedFields) {
     next[field] = imported.record[field] as never;
   }
+  if (next.unitCbm <= 0 && imported.record.unitCbm > 0) next.unitCbm = imported.record.unitCbm;
   const amountInputsChanged = provided.has('purchaseQuantity')
     || provided.has('confirmedPurchaseQuantity')
     || provided.has('purchasePrice')

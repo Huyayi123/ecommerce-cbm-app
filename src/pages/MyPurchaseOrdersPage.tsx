@@ -5,7 +5,7 @@ import { exportPurchaseRecords } from '../utils/exporters';
 import { parsePurchaseRecordsFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
 import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
-import { mergeImportedPurchaseOrders } from '../utils/purchaseOrderImports';
+import { enrichImportedPurchaseOrderCbms, mergeImportedPurchaseOrders } from '../utils/purchaseOrderImports';
 import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 import { calculatedPurchaseTotalAmount, effectivePurchaseQuantity, mixedQuantityFor, packageCountFor, withPurchaseTotals } from '../utils/purchaseRecords';
 
@@ -699,7 +699,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   async function importOrders(file: File | undefined) {
     if (!file || isViewer) return;
     try {
-      const imported = (await parsePurchaseRecordsFile(file, profile)).map((entry) => ({
+      const imported = enrichImportedPurchaseOrderCbms(await parsePurchaseRecordsFile(file, profile), skuItems).map((entry) => ({
         ...entry,
         record: withPurchaseTotals({
           ...entry.record,

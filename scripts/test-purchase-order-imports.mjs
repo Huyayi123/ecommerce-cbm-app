@@ -57,7 +57,30 @@ try {
   await compile('purchaseOrderImports.ts', 'purchaseOrderImports.mjs', (source) => (
     source.replace("'./purchaseRecords'", "'./purchaseRecords.mjs'")
   ));
-  const { mergeImportedPurchaseOrders } = await import(`file:///${join(tempDir, 'purchaseOrderImports.mjs').replaceAll('\\', '/')}`);
+  const { enrichImportedPurchaseOrderCbms, mergeImportedPurchaseOrders } = await import(`file:///${join(tempDir, 'purchaseOrderImports.mjs').replaceAll('\\', '/')}`);
+
+  const skuItems = [
+    { sku: 'SKU-1', shopName: 'Bestby', unitCbm: 0.015 },
+    { sku: 'SKU-1', shopName: 'Arfast', unitCbm: 0.025 },
+  ];
+  let enriched = enrichImportedPurchaseOrderCbms([
+    { ...imported('missing-cbm', '整柜', 20), record: { ...record('missing-cbm', '整柜', 20), unitCbm: 0, totalCbm: 0 } },
+  ], skuItems);
+  assert.equal(enriched[0].record.unitCbm, 0.015);
+  assert.equal(enriched[0].record.totalCbm, 0.3);
+  assert.equal(enriched[0].providedFields.includes('unitCbm'), false);
+
+  enriched = enrichImportedPurchaseOrderCbms([
+    { ...imported('shop-match', '整柜', 20), record: { ...record('shop-match', '整柜', 20), shopName: 'Arfast', unitCbm: 0, totalCbm: 0 } },
+  ], skuItems);
+  assert.equal(enriched[0].record.unitCbm, 0.025);
+  assert.equal(enriched[0].record.totalCbm, 0.5);
+
+  enriched = enrichImportedPurchaseOrderCbms([
+    { ...imported('explicit-cbm', '整柜', 20), record: { ...record('explicit-cbm', '整柜', 20), unitCbm: 0.02, totalCbm: 0.4 }, providedFields: ['sku', 'shopName', 'loadingType', 'purchaseQuantity', 'unitCbm'] },
+  ], skuItems);
+  assert.equal(enriched[0].record.unitCbm, 0.02);
+  assert.equal(enriched[0].record.totalCbm, 0.4);
 
   let result = mergeImportedPurchaseOrders(
     [record('2026-01-01', '整柜')],
@@ -86,6 +109,27 @@ try {
   assert.equal(result.records[0].id, '2026-01-01');
   assert.equal(result.records[0].purchaseQuantity, 30);
 
+  const existingWithCbm = record('existing-cbm', '整柜', 10);
+  result = mergeImportedPurchaseOrders(
+    [existingWithCbm],
+    enrichImportedPurchaseOrderCbms([
+      { ...imported('ignored-id', '整柜', 30), record: { ...record('ignored-id', '整柜', 30), unitCbm: 0, totalCbm: 0 } },
+    ], skuItems),
+    'buyer@example.com',
+  );
+  assert.equal(result.records[0].unitCbm, 0.01);
+  assert.equal(result.records[0].totalCbm, 0.3);
+
+  result = mergeImportedPurchaseOrders(
+    [{ ...record('existing-zero-cbm', '整柜', 10), unitCbm: 0, totalCbm: 0 }],
+    enrichImportedPurchaseOrderCbms([
+      { ...imported('ignored-id', '整柜', 30), record: { ...record('ignored-id', '整柜', 30), unitCbm: 0, totalCbm: 0 } },
+    ], skuItems),
+    'buyer@example.com',
+  );
+  assert.equal(result.records[0].unitCbm, 0.015);
+  assert.equal(result.records[0].totalCbm, 0.45);
+
   result = mergeImportedPurchaseOrders(
     [record('2026-01-01', '整柜')],
     [imported('ignored-id', '')],
@@ -111,7 +155,7 @@ try {
   assert.equal(result.createdCount, 1);
   assert.equal(result.records[0].id, 'new-haichuan');
 
-  console.log('purchase order loading type import tests passed');
+  console.log('purchase order import tests passed');
 } finally {
   await rm(tempDir, { recursive: true, force: true });
 }
