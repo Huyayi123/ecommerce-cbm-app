@@ -1087,6 +1087,70 @@ button.danger,
   box-shadow: 1px 0 0 #d8c987;
 }
 
+.haichuan-table-wrap {
+  max-height: 620px;
+}
+
+.haichuan-table {
+  min-width: 1500px;
+}
+
+.haichuan-table th {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: #eaf2f6;
+}
+
+.haichuan-table .haichuan-pin {
+  position: sticky;
+  z-index: 4;
+  background: #ffffff;
+  box-shadow: 1px 0 0 #dce4ea;
+  overflow: hidden;
+}
+
+.haichuan-table th.haichuan-pin {
+  z-index: 8;
+  background: #eaf2f6;
+}
+
+.haichuan-table .haichuan-pin-product {
+  left: 0;
+  min-width: 260px;
+  max-width: 260px;
+}
+
+.haichuan-table .haichuan-pin-english {
+  left: 260px;
+  min-width: 320px;
+  max-width: 320px;
+}
+
+.haichuan-table .haichuan-pin-code {
+  left: 580px;
+  min-width: 120px;
+  max-width: 120px;
+}
+
+.haichuan-table .haichuan-pin-sku {
+  left: 700px;
+  min-width: 180px;
+  max-width: 180px;
+}
+
+.haichuan-table .cell-ellipsis {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.haichuan-table .mixed-child-row .haichuan-pin {
+  background: #f8fbfc;
+}
+
 .my-orders-table-wrap {
   max-height: 620px;
 }
