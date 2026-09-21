@@ -87,6 +87,28 @@ try {
   assert.equal(flows.isRecordEligibleForLogistics(record('container', '整柜', '2026-09-05'), '2026-09-05', '海川'), false);
   assert.equal(flows.isRecordEligibleForLogistics(record('guantong', '冠通', '2026-09-05'), '2026-09-05'), false);
 
+  const submittedHaichuan = record('submitted-haichuan', '海川');
+  assert.equal(flows.shouldDeletePendingHaichuanInbound(
+    submittedHaichuan,
+    { ...submittedHaichuan, poolStatus: 'pending_purchase' },
+  ), true);
+  assert.equal(flows.shouldDeletePendingHaichuanInbound(
+    submittedHaichuan,
+    { ...submittedHaichuan, loadingType: '整柜' },
+  ), true);
+  assert.equal(flows.shouldDeletePendingHaichuanInbound(
+    submittedHaichuan,
+    submittedHaichuan,
+  ), false);
+  assert.equal(flows.shouldDeletePendingHaichuanInbound(
+    record('submitted-container', '整柜'),
+    { ...record('submitted-container', '整柜'), poolStatus: 'pending_purchase' },
+  ), false);
+  assert.equal(flows.shouldDeletePendingHaichuanInbound(
+    undefined,
+    { ...submittedHaichuan, poolStatus: 'pending_purchase' },
+  ), false);
+
   const stalePoolRecord = { ...record('stale-pool-record', '整柜'), poolStatus: 'pending_purchase', isConfirmed: false };
   const normalizedPoolRecord = flows.normalizeRecordForPurchasePool(stalePoolRecord);
   assert.equal(normalizedPoolRecord.poolStatus, 'submitted_to_pool');

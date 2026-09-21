@@ -56,7 +56,7 @@ import { confirmHaichuanReceipt, createHaichuanInboundItems, deletePendingHaichu
 import { formatErrorMessage } from './utils/errors';
 import { applyApprovedLogisticsBatch } from './utils/logistics';
 import { canDelete, canEdit } from './utils/permissions';
-import { repairPurchasePoolMembership } from './utils/purchasePoolFlows';
+import { repairPurchasePoolMembership, shouldDeletePendingHaichuanInbound } from './utils/purchasePoolFlows';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
 type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics' | 'haichuan-warehouse';
@@ -361,9 +361,9 @@ function App() {
     const newlyHaichuan = normalized.filter((record) => record.loadingType === '海川'
       && record.poolStatus === 'submitted_to_pool'
       && existingById.get(record.id)?.loadingType !== '海川');
-    const removedFromHaichuan = (profile?.role === 'admin' || profile?.role === 'owner') ? normalized.filter((record) => record.loadingType !== '海川'
-      && existingById.get(record.id)?.loadingType === '海川'
-      && existingById.get(record.id)?.poolStatus === 'submitted_to_pool') : [];
+    const removedFromHaichuan = (profile?.role === 'admin' || profile?.role === 'owner')
+      ? normalized.filter((record) => shouldDeletePendingHaichuanInbound(existingById.get(record.id), record))
+      : [];
     const haichuanProfile = profiles.find((item) => item.role === 'logistics' && item.logisticsProviderType === 'haichuan');
     if (newlyHaichuan.length > 0 && !haichuanProfile) {
       throw new Error('尚未绑定海川物流商账号，不能将采购池记录改为海川。');
@@ -445,6 +445,12 @@ function App() {
     const deleteIds = new Set(ids);
     setPurchaseRecords((current) => current.filter((record) => !deleteIds.has(record.id)));
     try {
+      if (profile?.role === 'admin' || profile?.role === 'owner') {
+        const haichuanIds = purchaseRecords
+          .filter((record) => deleteIds.has(record.id) && record.loadingType === '海川')
+          .map((record) => record.id);
+        if (haichuanIds.length > 0) await deletePendingHaichuanInboundItems(haichuanIds);
+      }
       await deletePurchaseRecords(ids);
     } catch (error) {
       await loadCloudData();

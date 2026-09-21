@@ -16,6 +16,14 @@ export function matchesLogisticsLoadingType(
     : record.loadingType === '海川';
 }
 
+export function shouldDeletePendingHaichuanInbound(
+  previous: Pick<PurchaseRecord, 'loadingType' | 'poolStatus'> | undefined,
+  next: Pick<PurchaseRecord, 'loadingType' | 'poolStatus'>,
+): boolean {
+  if (!previous || previous.loadingType !== '海川' || previous.poolStatus !== 'submitted_to_pool') return false;
+  return next.loadingType !== '海川' || next.poolStatus === 'pending_purchase';
+}
+
 export function normalizeRecordForPurchasePool(record: PurchaseRecord): PurchaseRecord {
   return withPurchaseTotals({
     ...record,
