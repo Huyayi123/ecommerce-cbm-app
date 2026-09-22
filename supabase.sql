@@ -809,6 +809,148 @@ begin
 end;
 $$;
 
+create or replace function public.scale_haichuan_product_details(p_details jsonb, p_new_total numeric)
+returns jsonb
+language plpgsql
+immutable
+as $$
+declare
+  v_count integer := jsonb_array_length(coalesce(p_details, '[]'::jsonb));
+  v_old_total numeric := 0;
+  v_accumulated numeric := 0;
+  v_quantity numeric;
+  v_unit_cbm numeric;
+  v_detail jsonb;
+  v_result jsonb := '[]'::jsonb;
+  v_index integer := 0;
+begin
+  if v_count = 0 then return '[]'::jsonb; end if;
+  select coalesce(sum(coalesce(nullif(value->>'quantity', '')::numeric, 0)), 0)
+  into v_old_total from jsonb_array_elements(p_details);
+
+  for v_detail in select value from jsonb_array_elements(p_details)
+  loop
+    v_index := v_index + 1;
+    if v_index = v_count then
+      v_quantity := greatest(0, p_new_total - v_accumulated);
+    elsif v_old_total > 0 then
+      v_quantity := round(coalesce(nullif(v_detail->>'quantity', '')::numeric, 0) * p_new_total / v_old_total, 4);
+    else
+      v_quantity := 0;
+    end if;
+    v_accumulated := v_accumulated + v_quantity;
+    v_unit_cbm := coalesce(
+      nullif(v_detail->>'unitCbm', '')::numeric,
+      nullif(v_detail->>'unit_cbm', '')::numeric,
+      case when coalesce(nullif(v_detail->>'quantity', '')::numeric, 0) > 0
+        then coalesce(nullif(v_detail->>'totalCbm', '')::numeric, nullif(v_detail->>'total_cbm', '')::numeric, 0)
+          / nullif(v_detail->>'quantity', '')::numeric
+        else 0 end,
+      0
+    );
+    v_result := v_result || jsonb_build_array(
+      jsonb_set(
+        jsonb_set(v_detail, '{quantity}', to_jsonb(v_quantity), true),
+        '{totalCbm}', to_jsonb(round(v_quantity * v_unit_cbm, 8)), true
+      )
+    );
+  end loop;
+  return v_result;
+end;
+$$;
+
+create or replace function public.update_haichuan_warehouse_quantity(p_lot_id text, p_new_total numeric)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_lot public.haichuan_warehouse_lots%rowtype;
+  v_consumed numeric;
+  v_remaining numeric;
+  v_unit_cbm numeric;
+  v_initial_cbm numeric;
+  v_remaining_cbm numeric;
+  v_details jsonb;
+begin
+  if not public.is_admin() then raise exception '只有管理员可以修改海川仓库数量'; end if;
+  if p_new_total is null or p_new_total < 0 then raise exception '采购总数量不能小于 0'; end if;
+
+  select * into v_lot from public.haichuan_warehouse_lots where id = p_lot_id for update;
+  if not found then raise exception '海川仓库记录不存在'; end if;
+  if v_lot.reserved_carton_count > 0 then raise exception '该库存存在冻结件数，不能修改'; end if;
+  if exists (
+    select 1 from public.haichuan_loading_items i
+    join public.haichuan_loading_batches b on b.id = i.batch_id
+    where i.warehouse_lot_id = p_lot_id and b.status in ('draft', 'submitted')
+  ) then raise exception '该库存存在审核中的装柜批次，不能修改'; end if;
+
+  v_consumed := greatest(0, v_lot.initial_product_quantity - v_lot.remaining_product_quantity);
+  if p_new_total < v_consumed then raise exception '新采购总数量不能小于已装柜数量 %', v_consumed; end if;
+  v_remaining := p_new_total - v_consumed;
+  v_unit_cbm := case when v_lot.initial_product_quantity > 0
+    then v_lot.initial_cbm / v_lot.initial_product_quantity else greatest(0, v_lot.unit_cbm) end;
+  v_initial_cbm := round(p_new_total * v_unit_cbm, 8);
+  v_remaining_cbm := round(v_remaining * v_unit_cbm, 8);
+  v_details := public.scale_haichuan_product_details(v_lot.product_details, p_new_total);
+
+  update public.haichuan_warehouse_lots
+  set initial_product_quantity = p_new_total,
+      remaining_product_quantity = v_remaining,
+      initial_cbm = v_initial_cbm,
+      remaining_cbm = v_remaining_cbm,
+      product_details = v_details,
+      has_packing_variance = true,
+      version = version + 1,
+      updated_at = now()
+  where id = p_lot_id;
+
+  update public.haichuan_inbound_items
+  set purchase_total_quantity = p_new_total,
+      declared_total_cbm = v_initial_cbm,
+      unit_cbm = v_unit_cbm,
+      product_details = v_details,
+      has_packing_variance = true,
+      updated_at = now()
+  where id = v_lot.inbound_item_id;
+end;
+$$;
+
+create or replace function public.delete_haichuan_warehouse_lot(p_lot_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_lot public.haichuan_warehouse_lots%rowtype;
+begin
+  if not public.is_admin() then raise exception '只有管理员可以删除海川仓库记录'; end if;
+  select * into v_lot from public.haichuan_warehouse_lots where id = p_lot_id for update;
+  if not found then raise exception '海川仓库记录不存在'; end if;
+  if v_lot.remaining_product_quantity <> v_lot.initial_product_quantity then raise exception '该库存已有装柜数量，不能删除'; end if;
+  if v_lot.reserved_carton_count > 0 then raise exception '该库存存在冻结件数，不能删除'; end if;
+  if exists (
+    select 1 from public.haichuan_loading_items i
+    join public.haichuan_loading_batches b on b.id = i.batch_id
+    where i.warehouse_lot_id = p_lot_id and b.status in ('draft', 'submitted', 'approved')
+  ) then raise exception '该库存已有装柜批次，不能删除'; end if;
+
+  delete from public.haichuan_loading_items i using public.haichuan_loading_batches b
+  where i.batch_id = b.id and i.warehouse_lot_id = p_lot_id and b.status = 'rejected';
+  delete from public.haichuan_warehouse_lots where id = p_lot_id;
+  delete from public.haichuan_inbound_items where id = v_lot.inbound_item_id;
+  update public.purchase_records
+  set pool_status = 'pending_purchase', status = 'pending', is_confirmed = false,
+      confirmed_purchase_quantity = null, updated_at = now()
+  where id = v_lot.purchase_record_id;
+end;
+$$;
+
+grant execute on function public.update_haichuan_warehouse_quantity(text, numeric) to authenticated;
+grant execute on function public.delete_haichuan_warehouse_lot(text) to authenticated;
+
 create or replace function public.submit_haichuan_loading_batch(
   p_batch_id text,
   p_container_date date,

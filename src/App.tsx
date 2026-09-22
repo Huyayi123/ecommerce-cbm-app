@@ -52,7 +52,7 @@ import {
   upsertPurchasePools,
   upsertPurchaseRecords,
 } from './utils/cloudStorage';
-import { confirmHaichuanReceipt, createHaichuanInboundItems, deletePendingHaichuanInboundItems, fetchHaichuanData, reviewHaichuanLoadingBatch, submitHaichuanLoadingBatch } from './utils/haichuanStorage';
+import { confirmHaichuanReceipt, createHaichuanInboundItems, deleteHaichuanWarehouseLot, deletePendingHaichuanInboundItems, fetchHaichuanData, reviewHaichuanLoadingBatch, submitHaichuanLoadingBatch, updateHaichuanWarehouseQuantity } from './utils/haichuanStorage';
 import { formatErrorMessage } from './utils/errors';
 import { applyApprovedLogisticsBatch } from './utils/logistics';
 import { canDelete, canEdit } from './utils/permissions';
@@ -824,6 +824,8 @@ function App() {
             onConfirmReceipt={confirmHaichuanReceipt}
             onSubmitBatch={submitHaichuanLoadingBatch}
             onReviewBatch={reviewHaichuanLoadingBatch}
+            onUpdateWarehouseQuantity={updateHaichuanWarehouseQuantity}
+            onDeleteWarehouseLot={deleteHaichuanWarehouseLot}
             onSaveProfile={saveProfileBinding}
           />
         ) : <LogisticsLoadingPage
@@ -853,6 +855,14 @@ function App() {
           onSubmitBatch={submitHaichuanLoadingBatch}
           onReviewBatch={async (input) => {
             await reviewHaichuanLoadingBatch(input);
+            await loadCloudData(profile);
+          }}
+          onUpdateWarehouseQuantity={async (lotId, newTotal) => {
+            await updateHaichuanWarehouseQuantity(lotId, newTotal);
+            await loadCloudData(profile);
+          }}
+          onDeleteWarehouseLot={async (lotId) => {
+            await deleteHaichuanWarehouseLot(lotId);
             await loadCloudData(profile);
           }}
           onSaveProfile={saveProfileBinding}

@@ -89,3 +89,32 @@ export function haichuanWarehouseStatus(
   if (reservedCartonCount >= remainingCartonCount) return 'fully_reserved';
   return 'partially_reserved';
 }
+
+export function selectableHaichuanWarehouseLots<T extends Pick<HaichuanWarehouseLot, 'id' | 'remainingCartonCount' | 'reservedCartonCount'>>(lots: T[]): T[] {
+  return lots.filter((lot) => lot.remainingCartonCount > 0 && lot.reservedCartonCount === 0);
+}
+
+export function toggleAllHaichuanWarehouseLots(
+  current: Record<string, number>,
+  visibleLots: Array<Pick<HaichuanWarehouseLot, 'id' | 'remainingCartonCount' | 'reservedCartonCount'>>,
+): Record<string, number> {
+  const selectable = selectableHaichuanWarehouseLots(visibleLots);
+  const allSelected = selectable.length > 0 && selectable.every((lot) => current[lot.id] !== undefined);
+  const next = { ...current };
+  for (const lot of selectable) {
+    if (allSelected) delete next[lot.id];
+    else next[lot.id] = lot.remainingCartonCount;
+  }
+  return next;
+}
+
+export function previewHaichuanWarehouseQuantity(
+  lot: Pick<HaichuanWarehouseLot, 'initialProductQuantity' | 'remainingProductQuantity' | 'initialCbm' | 'unitCbm'>,
+  newTotal: number,
+): { consumed: number; remaining: number; remainingCbm: number; valid: boolean } {
+  const consumed = Math.max(0, lot.initialProductQuantity - lot.remainingProductQuantity);
+  const valid = Number.isFinite(newTotal) && newTotal >= consumed;
+  const remaining = valid ? newTotal - consumed : 0;
+  const unitCbm = lot.initialProductQuantity > 0 ? lot.initialCbm / lot.initialProductQuantity : lot.unitCbm;
+  return { consumed, remaining, remainingCbm: remaining * unitCbm, valid };
+}

@@ -1151,6 +1151,67 @@ button.danger,
   background: #f8fbfc;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(15 23 42 / 42%);
+}
+
+.confirm-modal {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid #d9e3e8;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 20px 60px rgb(15 23 42 / 24%);
+}
+
+.confirm-modal h3 {
+  margin: 0 0 12px;
+}
+
+.confirm-modal label {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.confirm-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.confirm-summary span {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f4f8fa;
+  color: #526471;
+}
+
+.confirm-summary strong {
+  color: #153d47;
+  font-size: 16px;
+}
+
+.inline-error {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
 .my-orders-table-wrap {
   max-height: 620px;
 }

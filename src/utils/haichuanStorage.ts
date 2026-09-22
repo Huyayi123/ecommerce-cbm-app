@@ -226,6 +226,19 @@ export async function confirmHaichuanReceipt(inboundId: string, actualCartonCoun
   if (error) throw new Error(formatErrorMessage(error));
 }
 
+export async function updateHaichuanWarehouseQuantity(lotId: string, newTotal: number): Promise<void> {
+  const { error } = await client().rpc('update_haichuan_warehouse_quantity', {
+    p_lot_id: lotId,
+    p_new_total: newTotal,
+  });
+  if (error) throw new Error(formatErrorMessage(error));
+}
+
+export async function deleteHaichuanWarehouseLot(lotId: string): Promise<void> {
+  const { error } = await client().rpc('delete_haichuan_warehouse_lot', { p_lot_id: lotId });
+  if (error) throw new Error(formatErrorMessage(error));
+}
+
 export async function submitHaichuanLoadingBatch(input: {
   id: string;
   containerDate: string;

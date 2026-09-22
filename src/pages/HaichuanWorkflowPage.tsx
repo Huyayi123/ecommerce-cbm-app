@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { AppProfile, HaichuanData, HaichuanLoadingBatch, HaichuanLoadingItem, HaichuanProductDetail, HaichuanWarehouseLot } from '../types';
 import { formatErrorMessage } from '../utils/errors';
-import { calculateHaichuanLoadingSuggestion } from '../utils/haichuan';
+import { calculateHaichuanLoadingSuggestion, previewHaichuanWarehouseQuantity, selectableHaichuanWarehouseLots, toggleAllHaichuanWarehouseLots } from '../utils/haichuan';
 import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 
 type LoadingSelection = Record<string, number>;
@@ -27,6 +27,8 @@ type Props = {
     rejectionReason?: string;
     items: Array<{ id: string; approvedCartonCount: number; approvedProductQuantity: number; approvedCbm: number; note?: string }>;
   }) => Promise<void>;
+  onUpdateWarehouseQuantity: (lotId: string, newTotal: number) => Promise<void>;
+  onDeleteWarehouseLot: (lotId: string) => Promise<void>;
   onSaveProfile: (profile: AppProfile) => Promise<void>;
 };
 
@@ -88,6 +90,8 @@ export function HaichuanWorkflowPage({
   onConfirmReceipt,
   onSubmitBatch,
   onReviewBatch,
+  onUpdateWarehouseQuantity,
+  onDeleteWarehouseLot,
   onSaveProfile,
 }: Props) {
   const isLogistics = profile.role === 'logistics';
@@ -104,6 +108,9 @@ export function HaichuanWorkflowPage({
   const [reviewNote, setReviewNote] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [reviewDrafts, setReviewDrafts] = useState<ReviewDraft>({});
+  const [quantityLot, setQuantityLot] = useState<HaichuanWarehouseLot | null>(null);
+  const [quantityDraft, setQuantityDraft] = useState('');
+  const [deleteLot, setDeleteLot] = useState<HaichuanWarehouseLot | null>(null);
 
   const pendingInbound = useMemo(() => data.inboundItems.filter((item) => item.status === 'pending_receipt' && includesSearch([
     item.sku, item.productName, item.englishName, item.internalCode,
@@ -118,6 +125,8 @@ export function HaichuanWorkflowPage({
   const rejectedBatches = useMemo(() => data.loadingBatches.filter((batch) => batch.status === 'rejected'), [data.loadingBatches]);
   const loadedProducts = useMemo(() => approvedBatches.flatMap((batch) => batch.items.map((item) => ({ batch, item }))), [approvedBatches]);
   const activeBatch = submittedBatches.find((batch) => batch.id === activeBatchId) ?? submittedBatches[0] ?? null;
+  const selectableVisibleLots = selectableHaichuanWarehouseLots(visibleLots);
+  const allVisibleLotsSelected = selectableVisibleLots.length > 0 && selectableVisibleLots.every((lot) => selectedLots[lot.id] !== undefined);
 
   useEffect(() => {
     setReceiptDrafts((current) => {
@@ -142,16 +151,18 @@ export function HaichuanWorkflowPage({
     }])));
   }, [activeBatch?.id]);
 
-  async function runAction(key: string, action: () => Promise<void>, successMessage: string) {
-    if (busyKey) return;
+  async function runAction(key: string, action: () => Promise<void>, successMessage: string): Promise<boolean> {
+    if (busyKey) return false;
     setBusyKey(key);
     setMessage(key.startsWith('review') ? '正在处理审核...' : '正在提交...');
     try {
       await action();
       setMessage(successMessage);
       await onRefresh();
+      return true;
     } catch (error) {
       setMessage(`操作失败：${formatErrorMessage(error)}`);
+      return false;
     } finally {
       setBusyKey('');
     }
@@ -169,6 +180,33 @@ export function HaichuanWorkflowPage({
       else delete next[lot.id];
       return next;
     });
+  }
+
+  function toggleAllVisibleLots() {
+    setSelectedLots((current) => toggleAllHaichuanWarehouseLots(current, visibleLots));
+  }
+
+  function openQuantityDialog(lot: HaichuanWarehouseLot) {
+    setQuantityLot(lot);
+    setQuantityDraft(valueText(lot.initialProductQuantity));
+  }
+
+  async function saveWarehouseQuantity() {
+    if (!quantityLot) return;
+    const nextTotal = Number(quantityDraft);
+    const preview = previewHaichuanWarehouseQuantity(quantityLot, nextTotal);
+    if (!preview.valid) {
+      setMessage(`新采购总数量不能小于已装柜数量 ${valueText(preview.consumed)}。`);
+      return;
+    }
+    const saved = await runAction(`quantity-${quantityLot.id}`, () => onUpdateWarehouseQuantity(quantityLot.id, nextTotal), '海川仓库采购总数量已更新。');
+    if (saved) setQuantityLot(null);
+  }
+
+  async function confirmDeleteWarehouseLot() {
+    if (!deleteLot) return;
+    const deleted = await runAction(`delete-${deleteLot.id}`, () => onDeleteWarehouseLot(deleteLot.id), '海川仓库记录已删除，采购订单已退回待采购。');
+    if (deleted) setDeleteLot(null);
   }
 
   async function submitLoading() {
@@ -321,12 +359,12 @@ export function HaichuanWorkflowPage({
             <div className="record-form">
               <label>{labels.containerDate}<input type="date" value={containerDate} onChange={(event) => setContainerDate(event.target.value)} /></label>
               <label>{labels.note}<input value={batchNote} onChange={(event) => setBatchNote(event.target.value)} /></label>
-              <div className="form-actions"><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void submitLoading()}>{busyKey === 'submit-loading' ? '正在提交...' : '提交装柜审核'}</button></div>
+              <div className="form-actions"><button type="button" disabled={selectableVisibleLots.length === 0 || Boolean(busyKey)} onClick={toggleAllVisibleLots}>{allVisibleLotsSelected ? '取消全部选择' : `全部选择（${selectableVisibleLots.length}）`}</button><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void submitLoading()}>{busyKey === 'submit-loading' ? '正在提交...' : '提交装柜审核'}</button></div>
             </div>
           )}
           <div className="table-wrap haichuan-table-wrap">
             <table className="haichuan-table">
-              <thead><tr>{isLogistics && <th>选择</th>}<th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>入仓总件数</th><th>剩余件数</th><th>冻结件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>剩余数量</th><th>剩余 CBM</th><th>{labels.status}</th>{isLogistics && <th>本次装柜件数</th>}</tr></thead>
+              <thead><tr>{isLogistics && <th>选择</th>}<th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>入仓总件数</th><th>剩余件数</th><th>冻结件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>剩余数量</th><th>剩余 CBM</th><th>{labels.status}</th>{isLogistics ? <th>本次装柜件数</th> : <th>{labels.actions}</th>}</tr></thead>
               <tbody>
                 {visibleLots.map((lot) => {
                   const available = Math.max(0, lot.remainingCartonCount - lot.reservedCartonCount);
@@ -341,15 +379,15 @@ export function HaichuanWorkflowPage({
                         <td>{valueText(lot.declaredUnitsPerCarton)}</td><td>{valueText(lot.declaredTailQuantity)}</td>
                         <td>{valueText(lot.remainingProductQuantity)}</td><td>{valueText(lot.remainingCbm)}</td>
                         <td>{lot.hasPackingVariance ? '包装件数有差异' : warehouseStatusLabel(lot)}</td>
-                        {isLogistics && <td><input type="number" min={lot.productDetails.length > 1 ? available : 1} max={available} step="1" disabled={!checked || Boolean(busyKey) || lot.productDetails.length > 1} value={checked ? selectedLots[lot.id] : available} title={lot.productDetails.length > 1 ? '混装库存需整批装走，避免拆散同一混装箱内商品' : ''} onChange={(event) => setSelectedLots((current) => ({ ...current, [lot.id]: Number(event.target.value) }))} /></td>}
+                        {isLogistics ? <td><input type="number" min={lot.productDetails.length > 1 ? available : 1} max={available} step="1" disabled={!checked || Boolean(busyKey) || lot.productDetails.length > 1} value={checked ? selectedLots[lot.id] : available} title={lot.productDetails.length > 1 ? '混装库存需整批装走，避免拆散同一混装箱内商品' : ''} onChange={(event) => setSelectedLots((current) => ({ ...current, [lot.id]: Number(event.target.value) }))} /></td> : <td className="row-actions"><button type="button" disabled={Boolean(busyKey)} onClick={() => openQuantityDialog(lot)}>修改数量</button><button className="danger" type="button" disabled={Boolean(busyKey)} onClick={() => setDeleteLot(lot)}>删除</button></td>}
                       </tr>
                       {mixedProductDetails(lot.productDetails).map((detail) => <tr className="mixed-child-row" key={`${lot.id}:${detail.id}`}>
-                        {isLogistics && <td />}{productCells(detail, lot)}<td>{valueText(detail.quantity)}</td><td /><td /><td /><td /><td /><td>{valueText(detail.quantity)}</td><td>{valueText(detail.totalCbm)}</td><td>{mixedNote(detail)}</td>{isLogistics && <td />}
+                        {isLogistics && <td />}{productCells(detail, lot)}<td>{valueText(detail.quantity)}</td><td /><td /><td /><td /><td /><td>{valueText(detail.quantity)}</td><td>{valueText(detail.totalCbm)}</td><td>{mixedNote(detail)}</td><td />
                       </tr>)}
                     </Fragment>
                   );
                 })}
-                {visibleLots.length === 0 && <tr><td colSpan={isLogistics ? 15 : 13}>暂无海川仓库存货</td></tr>}
+                {visibleLots.length === 0 && <tr><td colSpan={15}>暂无海川仓库存货</td></tr>}
               </tbody>
             </table>
           </div>
@@ -407,7 +445,7 @@ export function HaichuanWorkflowPage({
       {tab === 'binding' && !isLogistics && (
         <div className="table-wrap"><table>
           <thead><tr><th>显示名称</th><th>登录邮箱</th><th>角色</th><th>物流商类型</th><th>{labels.actions}</th></tr></thead>
-          <tbody>{profiles.filter((item) => item.role === 'logistics').map((item) => <LogisticsBindingRow key={item.id} profile={item} busy={Boolean(busyKey)} onSave={(next) => runAction(`profile-${item.id}`, () => onSaveProfile(next), '物流商账号绑定已保存。')} />)}{profiles.every((item) => item.role !== 'logistics') && <tr><td colSpan={5}>暂无物流商账号</td></tr>}</tbody>
+          <tbody>{profiles.filter((item) => item.role === 'logistics').map((item) => <LogisticsBindingRow key={item.id} profile={item} busy={Boolean(busyKey)} onSave={async (next) => { await runAction(`profile-${item.id}`, () => onSaveProfile(next), '物流商账号绑定已保存。'); }} />)}{profiles.every((item) => item.role !== 'logistics') && <tr><td colSpan={5}>暂无物流商账号</td></tr>}</tbody>
         </table></div>
       )}
 
@@ -420,6 +458,37 @@ export function HaichuanWorkflowPage({
           </table>
         </div>
       )}
+
+      {quantityLot && (() => {
+        const nextTotal = Number(quantityDraft);
+        const preview = previewHaichuanWarehouseQuantity(quantityLot, nextTotal);
+        return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busyKey) setQuantityLot(null); }}>
+          <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="haichuan-quantity-title">
+            <h3 id="haichuan-quantity-title">修改采购总数量</h3>
+            <p><strong>{quantityLot.productName || quantityLot.sku}</strong></p>
+            <div className="confirm-summary">
+              <span>原采购总数量<strong>{valueText(quantityLot.initialProductQuantity)}</strong></span>
+              <span>已装柜数量<strong>{valueText(preview.consumed)}</strong></span>
+              <span>修改后剩余数量<strong>{valueText(preview.remaining)}</strong></span>
+              <span>修改后剩余 CBM<strong>{valueText(preview.remainingCbm, 8)}</strong></span>
+            </div>
+            <label>新采购总数量<input type="number" min={preview.consumed} step="1" value={quantityDraft} autoFocus onChange={(event) => setQuantityDraft(event.target.value)} /></label>
+            {(quantityLot.reservedCartonCount > 0) && <div className="inline-error">该库存存在冻结件数，暂时不能修改。</div>}
+            <div className="form-actions"><button type="button" disabled={Boolean(busyKey)} onClick={() => setQuantityLot(null)}>取消</button><button className="primary" type="button" disabled={Boolean(busyKey) || quantityLot.reservedCartonCount > 0 || !preview.valid} onClick={() => void saveWarehouseQuantity()}>{busyKey ? '正在保存...' : '确认修改'}</button></div>
+          </div>
+        </div>;
+      })()}
+
+      {deleteLot && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busyKey) setDeleteLot(null); }}>
+        <div className="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="haichuan-delete-title">
+          <h3 id="haichuan-delete-title">确认删除海川仓库记录？</h3>
+          <p><strong>{deleteLot.productName || '-'}</strong></p>
+          <p>SKU：{deleteLot.sku || '-'}</p>
+          <div className="inline-error">删除后不可恢复；如果这是混装记录，主产品及全部混装子产品会整组删除，并将采购订单退回“我的采购订单”。</div>
+          {(deleteLot.remainingProductQuantity !== deleteLot.initialProductQuantity || deleteLot.reservedCartonCount > 0) && <div className="inline-error">该记录已有装柜数量或冻结件数，当前不能删除。</div>}
+          <div className="form-actions"><button type="button" disabled={Boolean(busyKey)} onClick={() => setDeleteLot(null)}>取消</button><button className="danger" type="button" disabled={Boolean(busyKey) || deleteLot.remainingProductQuantity !== deleteLot.initialProductQuantity || deleteLot.reservedCartonCount > 0} onClick={() => void confirmDeleteWarehouseLot()}>{busyKey ? '正在删除...' : '确认删除'}</button></div>
+        </div>
+      </div>}
     </section>
   );
 }
