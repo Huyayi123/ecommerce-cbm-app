@@ -78,6 +78,14 @@ try {
   assert.equal(recalculatedTotal.totalAmount, 485);
   assert.equal(recalculatedTotal.totalCbm, 0.08);
 
+  const logisticsOnlyChange = { ...pricedRecord, logisticsTotalCbm: 1.25, totalWeightKg: 80, note: '物流回传' };
+  assert.equal(calculations.purchaseAmountInputsChanged(pricedRecord, logisticsOnlyChange), false);
+  assert.equal(calculations.purchaseAmountInputsChanged(pricedRecord, { ...pricedRecord, purchasePrice: 11 }), true);
+  assert.equal(calculations.purchaseAmountInputsChanged(pricedRecord, {
+    ...pricedRecord,
+    mixedGroups: [{ ...oneMixedGroup[0], lines: [{ ...oneMixedGroup[0].lines[0], quantity: 21 }] }],
+  }), true);
+
   console.log('purchase record package count tests passed');
 } finally {
   await rm(tempDir, { recursive: true, force: true });

@@ -105,6 +105,21 @@ export function calculatedPurchaseTotalAmount(record: PurchaseRecord): number {
   return round(effectivePurchaseQuantity(record) * record.purchasePrice + record.freightCost + mixedAmountFor(normalizedRecord), 2);
 }
 
+function mixedAmountInputs(record: Pick<PurchaseRecord, 'mixedGroups'>): Array<Array<[number, number]>> {
+  return normalizeMixedGroups(record.mixedGroups).map((group) => group.lines.map((line) => [line.quantity, line.purchasePrice]));
+}
+
+export function purchaseAmountInputsChanged(
+  previous: Pick<PurchaseRecord, 'purchaseQuantity' | 'confirmedPurchaseQuantity' | 'purchasePrice' | 'freightCost' | 'mixedGroups'>,
+  next: Pick<PurchaseRecord, 'purchaseQuantity' | 'confirmedPurchaseQuantity' | 'purchasePrice' | 'freightCost' | 'mixedGroups'>,
+): boolean {
+  return previous.purchaseQuantity !== next.purchaseQuantity
+    || previous.confirmedPurchaseQuantity !== next.confirmedPurchaseQuantity
+    || previous.purchasePrice !== next.purchasePrice
+    || previous.freightCost !== next.freightCost
+    || JSON.stringify(mixedAmountInputs(previous)) !== JSON.stringify(mixedAmountInputs(next));
+}
+
 export function calculatedPurchaseTotalCbm(record: PurchaseRecord): number {
   const mixedGroups = normalizeMixedGroups(record.mixedGroups);
   const normalizedRecord = { ...record, mixedGroups };

@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
 import { exportBatchPurchaseOrder, exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
 import { round } from '../utils/number';
-import { effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
+import { calculatedPurchaseTotalAmount, effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseAmountInputsChanged, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
 import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 import { recordsForSelectionAwareExport } from '../utils/selectionAwareExport';
 
@@ -128,16 +128,18 @@ function recentMonthOptions(count = 3): string[] {
   });
 }
 
-function withTotalAmount(record: DraftRecord): PurchaseRecord {
-  return withPurchaseTotals({
+function withTotalAmount(record: DraftRecord, original: PurchaseRecord | null): PurchaseRecord {
+  const next: PurchaseRecord = {
     ...record,
     isConfirmed: true,
     purchasePoolId: record.purchasePoolId || record.purchaseBatchId,
     purchasePoolName: record.purchasePoolName || record.purchaseBatchName,
     purchasePoolDate: record.purchasePoolDate || record.purchaseBatchDate,
     poolStatus: 'sent_to_inventory',
-    totalAmount: round(effectivePurchaseQuantity(record) * record.purchasePrice + record.freightCost, 2),
-    totalCbm: record.totalCbm || round(effectivePurchaseQuantity(record) * record.unitCbm, 4),
+    totalAmount: original?.totalAmount ?? 0,
+  };
+  return withPurchaseTotals(next, {
+    recalculateAmount: !original || purchaseAmountInputsChanged(original, next),
   });
 }
 
@@ -175,6 +177,7 @@ function skuKey(value: string): string {
 export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecord, onDeleteRecords, canEditData = true, canDeleteData = true, canSaveMissingSkuHistory = false }: Props) {
   const [draft, setDraft] = useState<DraftRecord>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingOriginal, setEditingOriginal] = useState<PurchaseRecord | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchDraft, setSearchDraft] = useState('');
   const [page, setPage] = useState(1);
@@ -182,6 +185,10 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   const [message, setMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const canSaveDraft = Boolean(draft.sku.trim()) || Boolean(editingId && canSaveMissingSkuHistory);
+  const draftRecordForAmount = { ...draft, totalAmount: editingOriginal?.totalAmount ?? 0 };
+  const draftTotalAmount = editingOriginal && !purchaseAmountInputsChanged(editingOriginal, draftRecordForAmount)
+    ? editingOriginal.totalAmount
+    : calculatedPurchaseTotalAmount(draftRecordForAmount);
   const [filters, setFilters] = useState({
     manufacturerName: '',
     shopName: '',
@@ -347,6 +354,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   function resetDraft() {
     setDraft(emptyDraft);
     setEditingId(null);
+    setEditingOriginal(null);
   }
 
   async function saveRecord() {
@@ -359,7 +367,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
       setMessage('请先填写 SKU，再新增采购记录。');
       return;
     }
-    const record = withTotalAmount({ ...draft, id: editingId ?? crypto.randomUUID(), sku: draft.sku.trim() });
+    const record = withTotalAmount({ ...draft, id: editingId ?? crypto.randomUUID(), sku: draft.sku.trim() }, editingOriginal);
     try {
       setIsSaving(true);
       setMessage(`正在保存采购记录：${record.sku}，请稍候...`);
@@ -382,6 +390,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   }
 
   function editRecord(record: PurchaseRecord) {
+    setEditingOriginal(record);
     setDraft({
       id: record.id,
       internalCode: record.internalCode,
@@ -535,7 +544,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           <label>采购数量<input type="number" min="0" value={draft.confirmedPurchaseQuantity ?? ''} onChange={(event) => patchDraft('confirmedPurchaseQuantity', event.target.value === '' ? null : Number(event.target.value))} /></label>
           <label>采购单价<input type="number" min="0" step="0.01" value={draft.purchasePrice} onChange={(event) => patchDraft('purchasePrice', Number(event.target.value))} /></label>
           <label>运费<input type="number" min="0" step="0.01" value={draft.freightCost} onChange={(event) => patchDraft('freightCost', Number(event.target.value))} /></label>
-          <label>总金额<input value={round(effectivePurchaseQuantity(draft) * draft.purchasePrice + draft.freightCost, 2)} readOnly /></label>
+          <label>总金额<input value={draftTotalAmount.toFixed(2)} readOnly /></label>
           <label>采购日期<input type="date" value={draft.purchaseDate} onChange={(event) => patchDraft('purchaseDate', event.target.value)} /></label>
           <label>批次日期<input type="date" value={draft.purchaseBatchDate} onChange={(event) => patchDraft('purchaseBatchDate', event.target.value)} /></label>
           <label>批次<input value={draft.purchaseBatchName} onChange={(event) => patchDraft('purchaseBatchName', event.target.value)} /></label>
