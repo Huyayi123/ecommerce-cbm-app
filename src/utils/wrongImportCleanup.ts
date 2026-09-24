@@ -42,34 +42,39 @@ export function wrongImportBusinessKey(record: PurchaseRecord): string {
   ].join('|');
 }
 
-function inWindow(value: string | undefined, start: number, end: number): boolean {
-  const timestamp = Date.parse(value ?? '');
-  return Number.isFinite(timestamp) && timestamp >= start && timestamp < end;
+function comparable(value: unknown): string {
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (Array.isArray(value) || (value && typeof value === 'object')) return JSON.stringify(value);
+  return text(value);
+}
+
+function matchesImportedFields(record: PurchaseRecord, imported: PurchaseRecordImport): boolean {
+  if (wrongImportBusinessKey(record) !== wrongImportBusinessKey(imported.record)) return false;
+  return imported.providedFields.every((field) => comparable(record[field]) === comparable(imported.record[field]));
 }
 
 export function previewWrongImportCleanup(
   records: PurchaseRecord[],
   imports: PurchaseRecordImport[],
 ): WrongImportCleanupPreview {
-  const start = Date.parse(WRONG_IMPORT_WINDOW.startIso);
-  const end = Date.parse(WRONG_IMPORT_WINDOW.endIso);
-  const importedKeys = new Set(imports.map((entry) => wrongImportBusinessKey(entry.record)));
-  const matchedKeys = new Set<string>();
+  const matchedImportIndexes = new Set<number>();
+  const importsByKey = new Map<string, Array<{ entry: PurchaseRecordImport; index: number }>>();
+  imports.forEach((entry, index) => {
+    const key = wrongImportBusinessKey(entry.record);
+    importsByKey.set(key, [...(importsByKey.get(key) ?? []), { entry, index }]);
+  });
   const createdCandidates: PurchaseRecord[] = [];
   const updatedExistingCandidates: PurchaseRecord[] = [];
   const matchingRecords: PurchaseRecord[] = [];
 
   for (const record of records) {
-    const key = wrongImportBusinessKey(record);
-    if (!importedKeys.has(key)) continue;
+    const matchingIndexes = (importsByKey.get(wrongImportBusinessKey(record)) ?? [])
+      .flatMap(({ entry, index }) => matchesImportedFields(record, entry) ? [index] : []);
+    if (matchingIndexes.length === 0) continue;
+    matchingIndexes.forEach((index) => matchedImportIndexes.add(index));
     matchingRecords.push(record);
-    if (inWindow(record.createdAt, start, end)) {
-      createdCandidates.push(record);
-      matchedKeys.add(key);
-    } else if (inWindow(record.updatedAt, start, end)) {
-      updatedExistingCandidates.push(record);
-      matchedKeys.add(key);
-    }
+    createdCandidates.push(record);
   }
 
   const matchingCreatedTimes = matchingRecords
@@ -90,7 +95,7 @@ export function previewWrongImportCleanup(
     createdCandidates,
     updatedExistingCandidates,
     importedRowCount: imports.length,
-    unmatchedImportedRows: imports.filter((entry) => !matchedKeys.has(wrongImportBusinessKey(entry.record))).length,
+    unmatchedImportedRows: imports.length - matchedImportIndexes.size,
     matchingRecordCount: matchingRecords.length,
     matchingRecordsWithoutCreatedAt: matchingRecords.length - matchingCreatedTimes.length,
     earliestMatchingCreatedAt: matchingCreatedTimes[0] ?? '',

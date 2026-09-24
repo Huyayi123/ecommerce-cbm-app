@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { AppProfile, PurchaseRecord, PurchaseRecordImport } from '../types';
 import { parsePurchaseRecordsFile } from '../utils/fileParsers';
-import { downloadWrongImportBackup, previewWrongImportCleanup, WRONG_IMPORT_WINDOW } from '../utils/wrongImportCleanup';
+import { downloadWrongImportBackup, previewWrongImportCleanup } from '../utils/wrongImportCleanup';
 
 type Props = {
   profile: AppProfile;
@@ -47,8 +47,7 @@ export function WrongImportCleanupPanel({ profile, records, onDeleteRecords }: P
   async function deleteCandidates() {
     if (!backupReady || preview.createdCandidates.length === 0) return;
     const confirmed = window.confirm(
-      `将永久删除 ${preview.createdCandidates.length} 条云端采购记录。时间范围：${WRONG_IMPORT_WINDOW.label}。\n\n` +
-      `${preview.updatedExistingCandidates.length} 条较早创建但在窗口内更新的记录不会删除。确认继续吗？`,
+      `将永久删除 ${preview.createdCandidates.length} 条与两份错误 Excel 完整字段匹配的云端采购记录。\n\n确认继续吗？`,
     );
     if (!confirmed) return;
     setLoading(true);
@@ -70,7 +69,7 @@ export function WrongImportCleanupPanel({ profile, records, onDeleteRecords }: P
     <details className="cleanup-panel" open>
       <summary>管理员：清理 9 月 23 日错误导入</summary>
       <div className="cleanup-panel-body">
-        <p>只检查 {WRONG_IMPORT_WINDOW.label} 内写入的数据，并与所选错误 Excel 的业务字段交叉匹配。</p>
+        <p>读取两份错误 Excel，并按完整业务字段匹配数据库记录；数据库写入时间不参与判断。</p>
         <label className="cleanup-file-picker">
           选择 `111.xlsx` 和 `111 - 副本.xlsx`
           <input type="file" accept=".xlsx,.xls,.csv" multiple onChange={(event) => void loadFiles(event.target.files)} disabled={loading} />
@@ -79,12 +78,11 @@ export function WrongImportCleanupPanel({ profile, records, onDeleteRecords }: P
         {imports.length > 0 && <div className="cleanup-metrics">
           <span>Excel 原始行：<strong>{preview.importedRowCount}</strong></span>
           <span>业务字段匹配记录：<strong>{preview.matchingRecordCount}</strong></span>
-          <span>待删除新建记录：<strong>{preview.createdCandidates.length}</strong></span>
-          <span>旧记录受影响候选：<strong>{preview.updatedExistingCandidates.length}</strong></span>
+          <span>待删除匹配记录：<strong>{preview.createdCandidates.length}</strong></span>
           <span>未匹配原始行：<strong>{preview.unmatchedImportedRows}</strong></span>
         </div>}
         {imports.length > 0 && <p>
-          匹配记录创建时间范围：{localTime(preview.earliestMatchingCreatedAt)} ～ {localTime(preview.latestMatchingCreatedAt)}；
+          匹配记录原创建时间范围（仅供核对）：{localTime(preview.earliestMatchingCreatedAt)} ～ {localTime(preview.latestMatchingCreatedAt)}；
           缺少创建时间：{preview.matchingRecordsWithoutCreatedAt} 条。
         </p>}
         {imports.length > 0 && <p>
