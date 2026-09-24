@@ -87,6 +87,9 @@ export function WrongImportCleanupPanel({ profile, records, onDeleteRecords }: P
           匹配记录创建时间范围：{localTime(preview.earliestMatchingCreatedAt)} ～ {localTime(preview.latestMatchingCreatedAt)}；
           缺少创建时间：{preview.matchingRecordsWithoutCreatedAt} 条。
         </p>}
+        {imports.length > 0 && <p>
+          最近创建小时分布：{preview.matchingCreatedHourCounts.slice(0, 12).map((item) => `${item.hour}：${item.count} 条`).join('；') || '无'}
+        </p>}
         {message && <p className="cleanup-message">{message}</p>}
         <div className="cleanup-actions">
           <button type="button" onClick={createBackup} disabled={loading || preview.createdCandidates.length === 0}>下载备份并准备删除</button>

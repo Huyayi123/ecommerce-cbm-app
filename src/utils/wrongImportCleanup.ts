@@ -15,6 +15,7 @@ export type WrongImportCleanupPreview = {
   matchingRecordsWithoutCreatedAt: number;
   earliestMatchingCreatedAt: string;
   latestMatchingCreatedAt: string;
+  matchingCreatedHourCounts: Array<{ hour: string; count: number }>;
 };
 
 function text(value: unknown): string {
@@ -75,6 +76,15 @@ export function previewWrongImportCleanup(
     .map((record) => record.createdAt ?? '')
     .filter((value) => Number.isFinite(Date.parse(value)))
     .sort((left, right) => Date.parse(left) - Date.parse(right));
+  const hourCounts = new Map<string, number>();
+  for (const value of matchingCreatedTimes) {
+    const date = new Date(value);
+    const hour = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', hour12: false,
+    }).format(date);
+    hourCounts.set(hour, (hourCounts.get(hour) ?? 0) + 1);
+  }
 
   return {
     createdCandidates,
@@ -85,6 +95,8 @@ export function previewWrongImportCleanup(
     matchingRecordsWithoutCreatedAt: matchingRecords.length - matchingCreatedTimes.length,
     earliestMatchingCreatedAt: matchingCreatedTimes[0] ?? '',
     latestMatchingCreatedAt: matchingCreatedTimes.at(-1) ?? '',
+    matchingCreatedHourCounts: Array.from(hourCounts, ([hour, count]) => ({ hour, count }))
+      .sort((left, right) => right.hour.localeCompare(left.hour)),
   };
 }
 
