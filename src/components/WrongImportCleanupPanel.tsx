@@ -67,7 +67,7 @@ export function WrongImportCleanupPanel({ profile, records, onDeleteRecords }: P
   }
 
   return (
-    <details className="cleanup-panel">
+    <details className="cleanup-panel" open>
       <summary>管理员：清理 9 月 23 日错误导入</summary>
       <div className="cleanup-panel-body">
         <p>只检查 {WRONG_IMPORT_WINDOW.label} 内写入的数据，并与所选错误 Excel 的业务字段交叉匹配。</p>

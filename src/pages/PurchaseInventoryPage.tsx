@@ -482,6 +482,11 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
     });
   }
 
+  const cleanupOnly = new URLSearchParams(window.location.search).has('cleanup');
+  if (cleanupOnly && profile && (profile.role === 'admin' || profile.role === 'owner') && onDeleteRecords) {
+    return <WrongImportCleanupPanel profile={profile} records={records} onDeleteRecords={onDeleteRecords} />;
+  }
+
   return (
     <>
       <section className="summary-grid inventory-summary" aria-label="在途库存汇总">

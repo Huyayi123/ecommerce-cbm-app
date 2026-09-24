@@ -1,9 +1,9 @@
 import type { PurchaseRecord, PurchaseRecordImport } from '../types';
 
 export const WRONG_IMPORT_WINDOW = {
-  startIso: '2026-09-23T08:30:00.000Z',
+  startIso: '2026-09-23T08:00:00.000Z',
   endIso: '2026-09-23T10:00:00.000Z',
-  label: '2026-09-23 16:30—18:00（北京时间）',
+  label: '2026-09-23 16:00–18:00（北京时间）',
 } as const;
 
 export type WrongImportCleanupPreview = {
