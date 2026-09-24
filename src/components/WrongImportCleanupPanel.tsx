@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { AppProfile, PurchaseRecord, PurchaseRecordImport } from '../types';
 import { parsePurchaseRecordsFile } from '../utils/fileParsers';
-import { downloadWrongImportBackup, previewWrongImportCleanup } from '../utils/wrongImportCleanup';
+import { downloadWrongImportBackup, previewWrongImportCleanup, WRONG_IMPORT_WINDOW } from '../utils/wrongImportCleanup';
 
 type Props = {
   profile: AppProfile;
@@ -47,7 +47,7 @@ export function WrongImportCleanupPanel({ profile, records, onDeleteRecords }: P
   async function deleteCandidates() {
     if (!backupReady || preview.createdCandidates.length === 0) return;
     const confirmed = window.confirm(
-      `将永久删除 ${preview.createdCandidates.length} 条与两份错误 Excel 完整字段匹配的云端采购记录。\n\n确认继续吗？`,
+      `将永久删除 ${preview.createdCandidates.length} 条与两份错误 Excel 完整字段匹配，且创建于 ${WRONG_IMPORT_WINDOW.label} 的云端采购记录。\n\n确认继续吗？`,
     );
     if (!confirmed) return;
     setLoading(true);
@@ -69,7 +69,7 @@ export function WrongImportCleanupPanel({ profile, records, onDeleteRecords }: P
     <details className="cleanup-panel" open>
       <summary>管理员：清理 9 月 23 日错误导入</summary>
       <div className="cleanup-panel-body">
-        <p>读取两份错误 Excel，并按完整业务字段匹配数据库记录；数据库写入时间不参与判断。</p>
+        <p>读取两份错误 Excel，并删除完整业务字段匹配且创建于 {WRONG_IMPORT_WINDOW.label} 的数据库记录。</p>
         <label className="cleanup-file-picker">
           选择 `111.xlsx` 和 `111 - 副本.xlsx`
           <input type="file" accept=".xlsx,.xls,.csv" multiple onChange={(event) => void loadFiles(event.target.files)} disabled={loading} />
