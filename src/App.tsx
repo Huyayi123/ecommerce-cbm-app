@@ -737,6 +737,7 @@ function App() {
           canEditData={editable}
           canDeleteData={deletable}
           canSaveMissingSkuHistory={profile.role === 'admin' || profile.role === 'owner'}
+          profile={profile}
         />
       )}
 

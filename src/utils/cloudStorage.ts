@@ -1185,11 +1185,15 @@ export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<
 export async function deletePurchaseRecords(ids: string[]): Promise<void> {
   const deleteIds = ids.map((id) => id.trim()).filter(Boolean);
   if (deleteIds.length === 0) return;
-  const { data, error } = await requireSupabase().from('purchase_records').delete().in('id', deleteIds).select('id');
-  if (error) throwSupabaseError(error);
-  const deletedCount = data?.length ?? 0;
-  if (deletedCount !== deleteIds.length) {
-    throw new Error(`删除失败：云端只删除了 ${deletedCount}/${deleteIds.length} 条采购订单。请检查 purchase_records 的删除权限，buyer 需要允许删除分配给自己的订单。`);
+  let deletedCount = 0;
+  for (let offset = 0; offset < deleteIds.length; offset += 100) {
+    const chunk = deleteIds.slice(offset, offset + 100);
+    const { data, error } = await requireSupabase().from('purchase_records').delete().in('id', chunk).select('id');
+    if (error) throwSupabaseError(error);
+    deletedCount += data?.length ?? 0;
+    if ((data?.length ?? 0) !== chunk.length) {
+      throw new Error(`删除失败：云端只删除了 ${deletedCount}/${deleteIds.length} 条采购订单。请检查 purchase_records 的删除权限，buyer 需要允许删除分配给自己的订单。`);
+    }
   }
 }
 

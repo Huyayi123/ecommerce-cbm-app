@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import type { MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
+import type { AppProfile, MixedCartonGroup, MixedCartonLine, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
+import { WrongImportCleanupPanel } from '../components/WrongImportCleanupPanel';
 import { exportBatchPurchaseOrder, exportInspectionChecklist, exportPurchaseRecords } from '../utils/exporters';
 import { round } from '../utils/number';
 import { calculatedPurchaseTotalAmount, effectivePurchaseQuantity, isInventoryRecord, logisticsCbmFor, logisticsText, mixedGroupsSummary, packageCountFor, purchaseAmountInputsChanged, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
@@ -15,6 +16,7 @@ type Props = {
   canEditData?: boolean;
   canDeleteData?: boolean;
   canSaveMissingSkuHistory?: boolean;
+  profile?: AppProfile;
 };
 
 type DraftRecord = Omit<PurchaseRecord, 'totalAmount'>;
@@ -174,7 +176,7 @@ function skuKey(value: string): string {
   return value.trim().toUpperCase();
 }
 
-export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecord, onDeleteRecords, canEditData = true, canDeleteData = true, canSaveMissingSkuHistory = false }: Props) {
+export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecord, onDeleteRecords, canEditData = true, canDeleteData = true, canSaveMissingSkuHistory = false, profile }: Props) {
   const [draft, setDraft] = useState<DraftRecord>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingOriginal, setEditingOriginal] = useState<PurchaseRecord | null>(null);
@@ -489,6 +491,10 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
         <div className="metric"><span>在途总 CBM</span><strong>{inTransitCbm.toFixed(4)}</strong></div>
         <div className="metric"><span>装柜批次数</span><strong>{loadingBatchCount}</strong></div>
       </section>
+
+      {profile && (profile.role === 'admin' || profile.role === 'owner') && onDeleteRecords && (
+        <WrongImportCleanupPanel profile={profile} records={records} onDeleteRecords={onDeleteRecords} />
+      )}
 
       <section className="panel">
         <div className="section-heading">

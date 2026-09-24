@@ -211,11 +211,13 @@ export async function createHaichuanInboundItems(records: PurchaseRecord[], logi
 
 export async function deletePendingHaichuanInboundItems(purchaseRecordIds: string[]): Promise<void> {
   if (purchaseRecordIds.length === 0) return;
-  const { error } = await client().from('haichuan_inbound_items')
-    .delete()
-    .in('purchase_record_id', purchaseRecordIds)
-    .eq('status', 'pending_receipt');
-  if (error) throw new Error(formatErrorMessage(error));
+  for (let offset = 0; offset < purchaseRecordIds.length; offset += 100) {
+    const { error } = await client().from('haichuan_inbound_items')
+      .delete()
+      .in('purchase_record_id', purchaseRecordIds.slice(offset, offset + 100))
+      .eq('status', 'pending_receipt');
+    if (error) throw new Error(formatErrorMessage(error));
+  }
 }
 
 export async function confirmHaichuanReceipt(inboundId: string, actualCartonCount: number): Promise<void> {
