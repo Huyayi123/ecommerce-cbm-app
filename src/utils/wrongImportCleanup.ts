@@ -11,6 +11,10 @@ export type WrongImportCleanupPreview = {
   updatedExistingCandidates: PurchaseRecord[];
   unmatchedImportedRows: number;
   importedRowCount: number;
+  matchingRecordCount: number;
+  matchingRecordsWithoutCreatedAt: number;
+  earliestMatchingCreatedAt: string;
+  latestMatchingCreatedAt: string;
 };
 
 function text(value: unknown): string {
@@ -52,10 +56,12 @@ export function previewWrongImportCleanup(
   const matchedKeys = new Set<string>();
   const createdCandidates: PurchaseRecord[] = [];
   const updatedExistingCandidates: PurchaseRecord[] = [];
+  const matchingRecords: PurchaseRecord[] = [];
 
   for (const record of records) {
     const key = wrongImportBusinessKey(record);
     if (!importedKeys.has(key)) continue;
+    matchingRecords.push(record);
     if (inWindow(record.createdAt, start, end)) {
       createdCandidates.push(record);
       matchedKeys.add(key);
@@ -65,11 +71,20 @@ export function previewWrongImportCleanup(
     }
   }
 
+  const matchingCreatedTimes = matchingRecords
+    .map((record) => record.createdAt ?? '')
+    .filter((value) => Number.isFinite(Date.parse(value)))
+    .sort((left, right) => Date.parse(left) - Date.parse(right));
+
   return {
     createdCandidates,
     updatedExistingCandidates,
     importedRowCount: imports.length,
     unmatchedImportedRows: imports.filter((entry) => !matchedKeys.has(wrongImportBusinessKey(entry.record))).length,
+    matchingRecordCount: matchingRecords.length,
+    matchingRecordsWithoutCreatedAt: matchingRecords.length - matchingCreatedTimes.length,
+    earliestMatchingCreatedAt: matchingCreatedTimes[0] ?? '',
+    latestMatchingCreatedAt: matchingCreatedTimes.at(-1) ?? '',
   };
 }
 

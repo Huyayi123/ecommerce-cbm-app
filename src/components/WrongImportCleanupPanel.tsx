@@ -16,6 +16,7 @@ export function WrongImportCleanupPanel({ profile, records, onDeleteRecords }: P
   const [loading, setLoading] = useState(false);
   const [backupReady, setBackupReady] = useState(false);
   const preview = useMemo(() => previewWrongImportCleanup(records, imports), [records, imports]);
+  const localTime = (value: string) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '无';
 
   async function loadFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -77,10 +78,15 @@ export function WrongImportCleanupPanel({ profile, records, onDeleteRecords }: P
         {fileNames.length > 0 && <p>已选文件：{fileNames.join('、')}</p>}
         {imports.length > 0 && <div className="cleanup-metrics">
           <span>Excel 原始行：<strong>{preview.importedRowCount}</strong></span>
+          <span>业务字段匹配记录：<strong>{preview.matchingRecordCount}</strong></span>
           <span>待删除新建记录：<strong>{preview.createdCandidates.length}</strong></span>
           <span>旧记录受影响候选：<strong>{preview.updatedExistingCandidates.length}</strong></span>
           <span>未匹配原始行：<strong>{preview.unmatchedImportedRows}</strong></span>
         </div>}
+        {imports.length > 0 && <p>
+          匹配记录创建时间范围：{localTime(preview.earliestMatchingCreatedAt)} ～ {localTime(preview.latestMatchingCreatedAt)}；
+          缺少创建时间：{preview.matchingRecordsWithoutCreatedAt} 条。
+        </p>}
         {message && <p className="cleanup-message">{message}</p>}
         <div className="cleanup-actions">
           <button type="button" onClick={createBackup} disabled={loading || preview.createdCandidates.length === 0}>下载备份并准备删除</button>
