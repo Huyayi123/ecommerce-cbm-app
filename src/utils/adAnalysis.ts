@@ -83,7 +83,7 @@ function productAgeStatus(shopName: string, rank: number | null): AdAnalysisRow[
 
 function applyNewProductPolicy(label: AdStrategyLabel, ageStatus: AdAnalysisRow['productAgeStatus'], profitRate: number | null): AdStrategyLabel {
   if (ageStatus === 'protection') return 'new_test';
-  if (ageStatus === 'new' && profitRate !== null && profitRate >= -0.15) return 'loss_product';
+  if (ageStatus === 'new' && profitRate !== null && profitRate < -0.15) return 'loss_product';
   if (ageStatus === 'new') return 'new_optimize';
   return label;
 }
