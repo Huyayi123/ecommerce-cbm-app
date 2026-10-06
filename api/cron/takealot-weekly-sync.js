@@ -1,4 +1,4 @@
-const DEFAULT_SYNC_STORES = ['MegaValue', 'KeepFit'];
+const DEFAULT_SYNC_STORES = ['Bestby', 'Aicom', 'Arfast'];
 const LOCAL_STOCK_BUFFER = 4;
 const NEW_PRODUCT_RULES = {
   Bestby: [
@@ -18,11 +18,6 @@ const NEW_PRODUCT_RULES = {
 function numberValue(value) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function syncStoresFromEnv() {
-  const raw = process.env.TAKEALOT_SYNC_STORES || '';
-  return raw.split(',').map((store) => store.trim()).filter(Boolean);
 }
 
 function envStoreConfig() {
@@ -81,9 +76,52 @@ function sumSalesUnits(value) {
   return numberValue(value);
 }
 
-function stockMonthsForMonthlySales(monthlySales) {
+function shanghaiMonthAndDay(orderDate) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(orderDate);
+  return {
+    month: Number(parts.find((part) => part.type === 'month')?.value ?? 0),
+    day: Number(parts.find((part) => part.type === 'day')?.value ?? 0),
+  };
+}
+
+function stockMonthsForMonthlySales(monthlySales, orderDate = new Date()) {
+  const { month, day } = shanghaiMonthAndDay(orderDate);
+
+  if (month === 7 || month === 9) {
+    if (monthlySales > 100) return 7;
+    if (monthlySales >= 80) return 6;
+    if (monthlySales >= 50) return 5;
+    if (monthlySales >= 20) return 4;
+    if (monthlySales >= 10) return 3;
+    return 2;
+  }
+
+  if (month === 8) {
+    if (monthlySales > 100) return 8;
+    if (monthlySales >= 80) return 7;
+    if (monthlySales >= 20) return 6;
+    if (monthlySales >= 10) return 4;
+    return 3;
+  }
+
+  if (month === 10) {
+    if (day <= 15) return monthlySales >= 50 ? 5 : 4.5;
+    return monthlySales >= 50 ? 4 : 3.5;
+  }
+
+  if (month === 11) {
+    if (day <= 15) return monthlySales >= 50 ? 4 : 3.5;
+    if (monthlySales > 50) return 4;
+    if (monthlySales >= 20) return 3;
+    return 2;
+  }
+
   if (monthlySales > 50) return 4;
-  if (monthlySales >= 21) return 3;
+  if (monthlySales >= 20) return 3;
   return 2;
 }
 
@@ -96,29 +134,34 @@ function newProductMultiplierForRank(storeName, rank) {
   return rule?.multiplier ?? 1;
 }
 
-function aicomDirectSuggestedQuantity(rank, rawMonthlySales) {
+function applySuggestedQuantityMinimum(monthlySales, quantity) {
+  if (monthlySales > 5 && quantity > 0 && quantity < 30) return 30;
+  return quantity;
+}
+
+function aicomDirectTargetQuantity(rank, rawMonthlySales) {
   if (rank <= 0 || rank > 15) return null;
   if (rawMonthlySales <= 3) {
     return {
-      suggestedQuantity: 0,
+      targetQuantity: 0,
       message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，未超过 3，暂不补订`,
     };
   }
   if (rawMonthlySales <= 5) {
     return {
-      suggestedQuantity: 40,
-      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，建议采购数量直接 40 个`,
+      targetQuantity: 40,
+      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，目标补货 40 个`,
     };
   }
   if (rawMonthlySales <= 8) {
     return {
-      suggestedQuantity: 50,
-      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，建议采购数量直接 50 个`,
+      targetQuantity: 50,
+      message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，目标补货 50 个`,
     };
   }
   return {
-    suggestedQuantity: 60,
-    message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，建议采购数量直接 60 个`,
+    targetQuantity: 60,
+    message: `新品预测：第 ${rank} 新，原始销量 ${rawMonthlySales}，目标补货 60 个`,
   };
 }
 
@@ -265,7 +308,7 @@ async function replaceSalesSuggestions(rows, storeNames = []) {
   const insertResponse = await fetch(supabaseUrl('sales_suggestions'), {
     method: 'POST',
     headers: { ...supabaseHeaders(), Prefer: 'return=minimal' },
-    body: JSON.stringify(rows),
+    body: JSON.stringify(rows.map(({ _container, ...row }) => row)),
   });
   if (!insertResponse.ok) {
     const payload = await insertResponse.json().catch(() => ({}));
@@ -273,12 +316,78 @@ async function replaceSalesSuggestions(rows, storeNames = []) {
   }
 }
 
+function buildContainerRows(suggestions, scannedAt = new Date().toISOString()) {
+  return suggestions
+    .filter((row) => numberValue(row.suggested_quantity) > 0)
+    .map((row, index) => ({
+      id: `weekly-${row.shop_name}-${row.sku || index + 1}`,
+      row_number: index + 2,
+      internal_code: row._container?.internalCode || null,
+      sku: row.sku || '',
+      product_name: row.product_name || '',
+      english_name: row._container?.englishName || '',
+      manufacturer_name: row.manufacturer_name || '',
+      purchase_quantity: numberValue(row.suggested_quantity),
+      raw: {
+        source: 'weekly-sales-suggestion',
+        scannedAt,
+        shopName: row.shop_name || '',
+        buyerName: row.buyer_name || '',
+        imageUrl: row._container?.imageUrl || '',
+        monthlySales: numberValue(row.monthly_sales),
+        stockMonths: numberValue(row.stock_months),
+        messages: Array.isArray(row.messages) ? row.messages : [],
+      },
+    }));
+}
+
+async function insertRows(table, rows) {
+  for (let offset = 0; offset < rows.length; offset += 500) {
+    const response = await fetch(supabaseUrl(table), {
+      method: 'POST',
+      headers: { ...supabaseHeaders(), Prefer: 'return=minimal' },
+      body: JSON.stringify(rows.slice(offset, offset + 500)),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.message || `写入 ${table} 失败：${response.status}`);
+    }
+  }
+}
+
+async function deleteAllContainerRows() {
+  const response = await fetch(supabaseUrl('container_rows?id=neq.never-match'), {
+    method: 'DELETE',
+    headers: supabaseHeaders(),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.message || `清空装柜计算失败：${response.status}`);
+  }
+}
+
+async function replaceContainerRows(rows) {
+  const previousRows = await supabaseSelectAll('container_rows?select=id,row_number,internal_code,sku,product_name,english_name,manufacturer_name,purchase_quantity,raw');
+  await deleteAllContainerRows();
+  try {
+    await insertRows('container_rows', rows);
+  } catch (error) {
+    try {
+      await deleteAllContainerRows();
+      await insertRows('container_rows', previousRows);
+    } catch (rollbackError) {
+      throw new Error(`${error instanceof Error ? error.message : '写入装柜计算失败'}；恢复原装柜数据也失败：${rollbackError instanceof Error ? rollbackError.message : '未知错误'}`);
+    }
+    throw error;
+  }
+}
+
 async function fetchSkuItemsForSync() {
   try {
-    return await supabaseSelectAll('sku_items?select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,is_seasonal,units_per_carton,unit_cbm,total_cbm,total_quantity');
+    return await supabaseSelectAll('sku_items?select=sku,internal_code,product_name,english_name,image_url,manufacturer_name,shop_name,buyer_name,is_seasonal,units_per_carton,unit_cbm,total_cbm,total_quantity');
   } catch (error) {
     if (!String(error?.message ?? error).includes('is_seasonal')) throw error;
-    return supabaseSelectAll('sku_items?select=sku,product_name,english_name,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity');
+    return supabaseSelectAll('sku_items?select=sku,internal_code,product_name,english_name,image_url,manufacturer_name,shop_name,buyer_name,units_per_carton,unit_cbm,total_cbm,total_quantity');
   }
 }
 
@@ -331,11 +440,11 @@ async function buildStoreSuggestions(storeName) {
     const takealotStockQuantity = row.stock_at_takealot_total === undefined ? sumQuantityAvailable(row.stock_at_takealot) : numberValue(row.stock_at_takealot_total);
     const stockOnWayQuantity = row.total_stock_on_way === undefined ? sumQuantityAvailable(row.stock_on_way) : numberValue(row.total_stock_on_way);
     const inTransitQuantity = inTransitMap.get(key) ?? 0;
-    const targetQuantity = round(monthlySales * stockMonths, 2);
-    const directSuggestion = storeName === 'Aicom' ? aicomDirectSuggestedQuantity(newProductRank, rawMonthlySales) : null;
-    const suggestedQuantity = directSuggestion
-      ? directSuggestion.suggestedQuantity
-      : Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
+    const calculatedTargetQuantity = round(monthlySales * stockMonths, 2);
+    const directTarget = storeName === 'Aicom' ? aicomDirectTargetQuantity(newProductRank, rawMonthlySales) : null;
+    const targetQuantity = directTarget?.targetQuantity ?? calculatedTargetQuantity;
+    const rawSuggestedQuantity = Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
+    const suggestedQuantity = applySuggestedQuantityMinimum(monthlySales, rawSuggestedQuantity);
     const manualUnitCbm = numberValue(skuItem?.unit_cbm);
     const totalCbm = numberValue(skuItem?.total_cbm);
     const totalQuantity = numberValue(skuItem?.total_quantity);
@@ -362,8 +471,13 @@ async function buildStoreSuggestions(storeName) {
       messages: [
         ...(skuItem ? [] : ['未录入 SKU 资料']),
         ...(skuItem?.is_seasonal ? ['季节性产品，请结合旺季/淡季人工确认采购量'] : []),
-        ...(directSuggestion?.message ? [directSuggestion.message] : forecast.message ? [forecast.message] : []),
+        ...(directTarget?.message ? [`${directTarget.message}，扣减库存和海运在途后建议 ${suggestedQuantity} 个`] : forecast.message ? [forecast.message] : []),
       ],
+      _container: {
+        internalCode: skuItem?.internal_code || '',
+        englishName: skuItem?.english_name || '',
+        imageUrl: skuItem?.image_url || '',
+      },
     };
   });
 
@@ -403,7 +517,7 @@ async function runSync(request) {
   try {
     const url = new URL(request.url);
     const requestedStore = url.searchParams.get('store')?.trim();
-    const stores = requestedStore ? [requestedStore] : (syncStoresFromEnv().length > 0 ? syncStoresFromEnv() : DEFAULT_SYNC_STORES);
+    const stores = requestedStore ? [requestedStore] : DEFAULT_SYNC_STORES;
     const results = [];
     const errors = [];
     const allSuggestions = [];
@@ -439,12 +553,29 @@ async function runSync(request) {
     if (allSuggestions.length === 0 && errors.length > 0) return jsonResponse({ ok: false, errors }, 500);
 
     await replaceSalesSuggestions(allSuggestions, requestedStore ? stores : []);
-    return jsonResponse({ ok: errors.length === 0, stores: results, errors, rows: allSuggestions.length });
+
+    let containerRows = null;
+    if (!requestedStore && errors.length === 0) {
+      const rows = buildContainerRows(allSuggestions);
+      await replaceContainerRows(rows);
+      containerRows = rows.length;
+    }
+
+    return jsonResponse({
+      ok: errors.length === 0,
+      stores: results,
+      errors,
+      rows: allSuggestions.length,
+      positiveSuggestionRows: allSuggestions.filter((row) => numberValue(row.suggested_quantity) > 0).length,
+      containerRows,
+    });
   } catch (error) {
     console.error(error);
     return jsonResponse({ error: error instanceof Error ? error.message : '自动同步失败' }, 500);
   }
 }
+
+export { buildContainerRows, stockMonthsForMonthlySales };
 
 export default {
   fetch: runSync,
