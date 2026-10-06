@@ -91,7 +91,8 @@ function rawField(row: TakealotInventoryRow, keys: string[]): string {
 }
 
 function applySuggestedQuantityMinimum(monthlySales: number, quantity: number): number {
-  if (monthlySales > 5 && quantity > 0 && quantity < 30) return 30;
+  if (monthlySales >= 10 && quantity > 0 && quantity < 50) return 50;
+  if (monthlySales >= 5 && monthlySales < 10 && quantity > 0 && quantity < 30) return 30;
   return quantity;
 }
 
@@ -322,9 +323,14 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       const key = skuKey(row.sku);
       const skuItem = skuMap.get(key);
       const inventory = row.inventory ?? inventoryMap.get(key);
-      const rawMonthlySales = inventory?.apiSalesQuantity ?? row.purchaseQuantity ?? 0;
+      const isNotBuyable = inventory?.availabilityStatus === 'not_buyable';
+      const rawMonthlySales = isNotBuyable
+        ? inventory?.historicalMonthlySales ?? 0
+        : inventory?.apiSalesQuantity ?? row.purchaseQuantity ?? 0;
       const newProductRank = newProductRankMap.get(key) ?? 0;
-      const forecast = forecastMonthlySales(selectedStore, newProductRank, rawMonthlySales);
+      const forecast = isNotBuyable
+        ? { monthlySales: rawMonthlySales, message: inventory?.historicalSalesMessage ?? '' }
+        : forecastMonthlySales(selectedStore, newProductRank, rawMonthlySales);
       const monthlySales = forecast.monthlySales;
       const stockMonths = stockMonthsForMonthlySales(monthlySales);
       const calculatedTargetQuantity = round(monthlySales * stockMonths, 2);
@@ -333,7 +339,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       const stockOnWayQuantity = inventory?.stockOnWayQuantity ?? 0;
       const inTransitQuantity = inTransitBySku.get(key) ?? 0;
       const pendingPoolQuantity = pendingPoolBySku.get(key) ?? 0;
-      const directTarget = selectedStore === 'Aicom' ? aicomDirectTargetQuantity(newProductRank, rawMonthlySales) : null;
+      const directTarget = !isNotBuyable && selectedStore === 'Aicom' ? aicomDirectTargetQuantity(newProductRank, rawMonthlySales) : null;
       const targetQuantity = directTarget?.targetQuantity ?? calculatedTargetQuantity;
       const rawAutoSuggestedQuantity = Math.max(round(
         targetQuantity

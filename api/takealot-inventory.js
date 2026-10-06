@@ -1,3 +1,5 @@
+import { enrichOffersWithHistoricalSales } from './_lib/takealotHistoricalSales.js';
+
 function envStoreConfig() {
   try {
     const parsed = JSON.parse(process.env.TAKEALOT_STORES_JSON || '[]');
@@ -6,7 +8,6 @@ function envStoreConfig() {
     return [];
   }
 }
-
 function apiKeyForStore(storeName) {
   const config = envStoreConfig().find((item) => item && item.name === storeName);
   if (config?.apiKeyEnv && process.env[config.apiKeyEnv]) return process.env[config.apiKeyEnv];
@@ -35,10 +36,6 @@ function tsinFor(row) {
 
 function rowKey(row) {
   return String(row?.offer_id ?? row?.sku ?? row?.barcode ?? JSON.stringify(row)).trim();
-}
-
-function isDisabledRow(row) {
-  return String(row?.status ?? '').trim().toLowerCase().startsWith('disabled');
 }
 
 function numberFromEnv(name, fallback) {
@@ -102,7 +99,6 @@ export default async function handler(request, response) {
         if (!key || seenKeys.has(key)) continue;
         seenKeys.add(key);
         newRowsOnPage += 1;
-        if (isDisabledRow(row)) continue;
         if (requestedSkus.size === 0 || requestedSkus.has(skuFor(row)) || requestedSkus.has(tsinFor(row))) allRows.push(row);
       }
 
@@ -111,7 +107,8 @@ export default async function handler(request, response) {
       if (totalResults !== null && seenKeys.size >= totalResults) break;
     }
 
-    response.status(200).json({ store, rows: allRows, totalResults, pagesFetched });
+    const enrichedRows = await enrichOffersWithHistoricalSales(allRows, store, apiKey);
+    response.status(200).json({ store, rows: enrichedRows, totalResults, pagesFetched });
   } catch (error) {
     console.error(error);
     response.status(500).json({ error: error instanceof Error ? error.message : 'Takealot API 连接失败' });

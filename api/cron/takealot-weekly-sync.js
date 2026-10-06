@@ -1,3 +1,5 @@
+import { availabilityStatusFor, enrichOffersWithHistoricalSales } from '../_lib/takealotHistoricalSales.js';
+
 const DEFAULT_SYNC_STORES = ['Bestby', 'Aicom', 'Arfast'];
 const LOCAL_STOCK_BUFFER = 4;
 const NEW_PRODUCT_RULES = {
@@ -53,10 +55,6 @@ function skuFor(row) {
 
 function rowKey(row) {
   return String(row?.offer_id ?? row?.sku ?? row?.barcode ?? JSON.stringify(row)).trim();
-}
-
-function isDisabledRow(row) {
-  return String(row?.status ?? '').trim().toLowerCase().startsWith('disabled');
 }
 
 function numberFromEnv(name, fallback) {
@@ -135,7 +133,8 @@ function newProductMultiplierForRank(storeName, rank) {
 }
 
 function applySuggestedQuantityMinimum(monthlySales, quantity) {
-  if (monthlySales > 5 && quantity > 0 && quantity < 30) return 30;
+  if (monthlySales >= 10 && quantity > 0 && quantity < 50) return 50;
+  if (monthlySales >= 5 && monthlySales < 10 && quantity > 0 && quantity < 30) return 30;
   return quantity;
 }
 
@@ -239,7 +238,7 @@ async function fetchTakealotRows(storeName) {
       }
       seenKeys.add(key);
       newRowsOnPage += 1;
-      if (isDisabledRow(row)) {
+      if (availabilityStatusFor(row) === 'disabled') {
         disabledRows += 1;
       } else {
         allRows.push(row);
@@ -251,7 +250,8 @@ async function fetchTakealotRows(storeName) {
     if (totalResults !== null && seenKeys.size >= totalResults) break;
   }
 
-  return { rows: allRows, pagesFetched, totalResults, fetchedRows, activeRows: allRows.length, disabledRows, duplicateRows };
+  const enrichedRows = await enrichOffersWithHistoricalSales(allRows, storeName, apiKey);
+  return { rows: enrichedRows, pagesFetched, totalResults, fetchedRows, activeRows: enrichedRows.length, disabledRows, duplicateRows };
 }
 
 function supabaseHeaders() {
@@ -431,9 +431,12 @@ async function buildStoreSuggestions(storeName) {
     const sku = skuFor(row);
     const key = skuKey(sku);
     const skuItem = skuMap.get(key);
-    const rawMonthlySales = sumSalesUnits(row.sales_units);
+    const isNotBuyable = row.__availabilityStatus === 'not_buyable';
+    const rawMonthlySales = isNotBuyable ? numberValue(row.__historicalMonthlySales) : sumSalesUnits(row.sales_units);
     const newProductRank = newProductRankMap.get(key) ?? 0;
-    const forecast = forecastMonthlySales(storeName, newProductRank, rawMonthlySales);
+    const forecast = isNotBuyable
+      ? { monthlySales: rawMonthlySales, message: String(row.__historicalSalesMessage || '') }
+      : forecastMonthlySales(storeName, newProductRank, rawMonthlySales);
     const monthlySales = forecast.monthlySales;
     const stockMonths = stockMonthsForMonthlySales(monthlySales);
     const localStockQuantity = sumQuantityAvailable(row.leadtime_stock ?? row.quantity_available) + LOCAL_STOCK_BUFFER;
@@ -441,7 +444,7 @@ async function buildStoreSuggestions(storeName) {
     const stockOnWayQuantity = row.total_stock_on_way === undefined ? sumQuantityAvailable(row.stock_on_way) : numberValue(row.total_stock_on_way);
     const inTransitQuantity = inTransitMap.get(key) ?? 0;
     const calculatedTargetQuantity = round(monthlySales * stockMonths, 2);
-    const directTarget = storeName === 'Aicom' ? aicomDirectTargetQuantity(newProductRank, rawMonthlySales) : null;
+    const directTarget = !isNotBuyable && storeName === 'Aicom' ? aicomDirectTargetQuantity(newProductRank, rawMonthlySales) : null;
     const targetQuantity = directTarget?.targetQuantity ?? calculatedTargetQuantity;
     const rawSuggestedQuantity = Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
     const suggestedQuantity = applySuggestedQuantityMinimum(monthlySales, rawSuggestedQuantity);
@@ -575,7 +578,7 @@ async function runSync(request) {
   }
 }
 
-export { buildContainerRows, stockMonthsForMonthlySales };
+export { applySuggestedQuantityMinimum, buildContainerRows, stockMonthsForMonthlySales };
 
 export default {
   fetch: runSync,

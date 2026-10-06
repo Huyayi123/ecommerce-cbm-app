@@ -9,6 +9,9 @@ export type TakealotInventoryRow = {
   localStockQuantity: number;
   takealotStockQuantity: number;
   stockOnWayQuantity: number;
+  availabilityStatus: 'buyable' | 'not_buyable' | 'unknown';
+  historicalMonthlySales: number | null;
+  historicalSalesMessage: string;
   raw?: unknown;
 };
 
@@ -123,6 +126,15 @@ export function normalizeTakealotInventoryRow(input: Record<string, unknown>, sh
     localStockQuantity,
     takealotStockQuantity,
     stockOnWayQuantity,
+    availabilityStatus: input.__availabilityStatus === 'not_buyable'
+      ? 'not_buyable'
+      : input.__availabilityStatus === 'buyable'
+        ? 'buyable'
+        : 'unknown',
+    historicalMonthlySales: input.__historicalMonthlySales === undefined || input.__historicalMonthlySales === null
+      ? null
+      : numberValue(input.__historicalMonthlySales),
+    historicalSalesMessage: String(input.__historicalSalesMessage ?? ''),
     raw: input,
   };
 }
