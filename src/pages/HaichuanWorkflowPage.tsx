@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { AppProfile, HaichuanData, HaichuanLoadingBatch, HaichuanLoadingItem, HaichuanProductDetail, HaichuanWarehouseLot } from '../types';
 import { formatErrorMessage } from '../utils/errors';
+import { exportHaichuanTable } from '../utils/exporters';
 import { calculateHaichuanLoadingSuggestion, previewHaichuanWarehouseQuantity, selectableHaichuanWarehouseLots, toggleAllHaichuanWarehouseLots } from '../utils/haichuan';
 import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 
@@ -80,6 +81,15 @@ function mixedNote(detail: HaichuanProductDetail): string {
   const group = detail.mixedGroupName || '混装组';
   const cartons = detail.mixedGroupCartonCount > 0 ? ` ${detail.mixedGroupCartonCount}件` : '';
   return `${group}${cartons} · 混装子行`;
+}
+
+function productExportValues(detail: HaichuanProductDetail | undefined, fallback: { productName: string; englishName?: string; internalCode: string; sku: string }) {
+  return {
+    产品名称: detail?.productName || fallback.productName || '-',
+    英文名称: detail?.englishName || fallback.englishName || '-',
+    内部编号: detail?.internalCode || fallback.internalCode || '-',
+    SKU: detail?.sku || fallback.sku || '-',
+  };
 }
 
 export function HaichuanWorkflowPage({
@@ -303,6 +313,105 @@ export function HaichuanWorkflowPage({
     });
   }
 
+  function runExport(action: () => void, successMessage: string) {
+    try {
+      action();
+      setMessage(successMessage);
+    } catch (error) {
+      setMessage(`导出失败：${formatErrorMessage(error)}`);
+    }
+  }
+
+  function exportWarehouse() {
+    const rows = visibleLots.flatMap((lot) => {
+      const mainRow = {
+        ...productExportValues(mainProductDetail(lot.productDetails), lot),
+        采购总数量: lot.initialProductQuantity,
+        入仓总件数: lot.initialCartonCount,
+        剩余件数: lot.remainingCartonCount,
+        冻结件数: lot.reservedCartonCount,
+        每箱数量: lot.declaredUnitsPerCarton,
+        尾箱数量: lot.declaredTailQuantity,
+        剩余数量: lot.remainingProductQuantity,
+        '剩余 CBM': lot.remainingCbm,
+        状态: lot.hasPackingVariance ? '包装件数有差异' : warehouseStatusLabel(lot),
+      };
+      const mixedRows = mixedProductDetails(lot.productDetails).map((detail) => ({
+        ...productExportValues(detail, lot),
+        采购总数量: detail.quantity,
+        入仓总件数: '',
+        剩余件数: '',
+        冻结件数: '',
+        每箱数量: '',
+        尾箱数量: '',
+        剩余数量: detail.quantity,
+        '剩余 CBM': detail.totalCbm,
+        状态: mixedNote(detail),
+      }));
+      return [mainRow, ...mixedRows];
+    });
+    runExport(() => exportHaichuanTable(rows, '海川仓库库存'), `已导出海川仓库库存 ${rows.length} 行。`);
+  }
+
+  function exportReviewBatch() {
+    if (!activeBatch) return;
+    const rows = activeBatch.items.flatMap((item) => {
+      const draft = reviewDrafts[item.id] ?? { cartons: item.requestedCartonCount, quantity: item.suggestedProductQuantity, cbm: item.suggestedCbm, note: item.note };
+      const fallback = { productName: item.productName, internalCode: item.internalCode, sku: item.sku };
+      const mainRow = {
+        ...productExportValues(mainProductDetail(item.productDetails), fallback),
+        申报装柜件数: item.requestedCartonCount,
+        最终装柜件数: draft.cartons,
+        系统数量: item.suggestedProductQuantity,
+        最终装柜数量: draft.quantity,
+        '系统 CBM': item.suggestedCbm,
+        '最终 CBM': draft.cbm,
+        备注: draft.note,
+      };
+      const mixedRows = mixedProductDetails(item.productDetails).map((detail) => ({
+        ...productExportValues(detail, fallback),
+        申报装柜件数: '',
+        最终装柜件数: '',
+        系统数量: detail.quantity,
+        最终装柜数量: '',
+        '系统 CBM': detail.totalCbm,
+        '最终 CBM': '',
+        备注: mixedNote(detail),
+      }));
+      return [mainRow, ...mixedRows];
+    });
+    const moduleName = `海川装柜审核_${reviewDate || activeBatch.containerDate || '未填日期'}`;
+    runExport(() => exportHaichuanTable(rows, moduleName), `已导出当前装柜审核批次 ${rows.length} 行。`);
+  }
+
+  function exportLoaded() {
+    const rows = loadedProducts.flatMap(({ batch, item }) => {
+      const fallback = { productName: item.productName, internalCode: item.internalCode, sku: item.sku };
+      const mainRow = {
+        ...productExportValues(mainProductDetail(item.productDetails), fallback),
+        装柜日期: batch.containerDate,
+        最终装柜件数: item.approvedCartonCount ?? item.requestedCartonCount,
+        最终装柜数量: item.approvedProductQuantity ?? item.suggestedProductQuantity,
+        '最终 CBM': item.approvedCbm ?? item.suggestedCbm,
+        状态: loadingStatusLabel(batch.status),
+        确认时间: batch.reviewedAt ? new Date(batch.reviewedAt).toLocaleString() : '-',
+        备注: item.note || batch.note || '-',
+      };
+      const mixedRows = mixedProductDetails(item.productDetails).map((detail) => ({
+        ...productExportValues(detail, fallback),
+        装柜日期: batch.containerDate,
+        最终装柜件数: '',
+        最终装柜数量: detail.quantity,
+        '最终 CBM': detail.totalCbm,
+        状态: '混装子行',
+        确认时间: '',
+        备注: mixedNote(detail),
+      }));
+      return [mainRow, ...mixedRows];
+    });
+    runExport(() => exportHaichuanTable(rows, '海川已装柜'), `已导出已装柜产品 ${rows.length} 行。`);
+  }
+
   const tabs = isLogistics
     ? [['inbound', '待入仓'], ['warehouse', '仓库存货'], ['loaded', '已装柜']] as const
     : [['warehouse', '海川仓库库存'], ['review', '海川装柜审核'], ['loaded', '已装柜'], ['binding', '物流商绑定']] as const;
@@ -355,6 +464,7 @@ export function HaichuanWorkflowPage({
 
       {tab === 'warehouse' && (
         <>
+          {!isLogistics && <div className="form-actions"><button type="button" disabled={visibleLots.length === 0} onClick={exportWarehouse}>导出 Excel</button></div>}
           {isLogistics && (
             <div className="record-form">
               <label>{labels.containerDate}<input type="date" value={containerDate} onChange={(event) => setContainerDate(event.target.value)} /></label>
@@ -402,6 +512,7 @@ export function HaichuanWorkflowPage({
           </div>
           {activeBatch && (
             <div className="batch-detail">
+              <div className="form-actions"><button type="button" disabled={activeBatch.items.length === 0} onClick={exportReviewBatch}>导出当前批次 Excel</button></div>
               <div className="record-form">
                 <label>{labels.containerDate}<input type="date" value={reviewDate} onChange={(event) => setReviewDate(event.target.value)} /></label>
                 <label>审核备注<input value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} /></label>
@@ -428,6 +539,7 @@ export function HaichuanWorkflowPage({
       )}
 
       {tab === 'loaded' && (
+        <>{!isLogistics && <div className="form-actions"><button type="button" disabled={loadedProducts.length === 0} onClick={exportLoaded}>导出 Excel</button></div>}
         <div className="table-wrap haichuan-table-wrap"><table className="haichuan-table">
           <thead><tr><th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.containerDate}</th><th>最终装柜件数</th><th>最终装柜数量</th><th>最终 CBM</th><th>{labels.status}</th><th>确认时间</th><th>{labels.note}</th></tr></thead>
           <tbody>{loadedProducts.map(({ batch, item }) => {
@@ -439,7 +551,7 @@ export function HaichuanWorkflowPage({
               </tr>)}
             </Fragment>;
           })}{loadedProducts.length === 0 && <tr><td colSpan={11}>暂无已装柜产品</td></tr>}</tbody>
-        </table></div>
+        </table></div></>
       )}
 
       {tab === 'binding' && !isLogistics && (

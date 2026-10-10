@@ -41,6 +41,44 @@ function writeWorkbook(workbook: XLSX.WorkBook, moduleName: string, format: Expo
   XLSX.writeFile(workbook, `${moduleName}_${dateStamp()}.${format}`, { bookType: format });
 }
 
+function applySimpleTableStyles(worksheet: XLSX.WorkSheet, rows: Record<string, unknown>[]): void {
+  if (!worksheet['!ref']) return;
+  const range = XLSX.utils.decode_range(worksheet['!ref']);
+  const borderSide = { style: 'thin', color: { rgb: 'DCE4EA' } };
+  const border = { top: borderSide, right: borderSide, bottom: borderSide, left: borderSide };
+
+  for (let row = range.s.r; row <= range.e.r; row += 1) {
+    for (let column = range.s.c; column <= range.e.c; column += 1) {
+      const address = XLSX.utils.encode_cell({ r: row, c: column });
+      const cell = worksheet[address];
+      if (!cell) continue;
+      cell.s = {
+        border,
+        alignment: { vertical: 'center', wrapText: true },
+        font: row === 0 ? { bold: true, color: { rgb: '17324D' } } : undefined,
+        fill: row === 0 ? { patternType: 'solid', fgColor: { rgb: 'EAF2F6' } } : undefined,
+      };
+    }
+  }
+
+  const headers = Object.keys(rows[0] ?? {});
+  worksheet['!cols'] = headers.map((header) => {
+    const longestValue = rows.reduce((longest, row) => Math.max(longest, String(row[header] ?? '').length), header.length);
+    return { wch: Math.min(Math.max(longestValue + 2, 10), 42) };
+  });
+  worksheet['!rows'] = [{ hpt: 24 }];
+  worksheet['!autofilter'] = { ref: worksheet['!ref'] };
+}
+
+export function exportHaichuanTable(rows: Record<string, unknown>[], moduleName: string): void {
+  if (rows.length === 0) return;
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+  applySimpleTableStyles(worksheet, rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, moduleName.slice(0, 31));
+  writeWorkbook(workbook, moduleName, 'xlsx');
+}
+
 function skuKey(value: string): string {
   return value.trim().toUpperCase();
 }
