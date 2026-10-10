@@ -1269,8 +1269,7 @@ button.danger,
   padding-right: 4px;
 }
 
-.my-orders-table .image-sticky-col,
-.purchase-pool-table-wrap .image-sticky-col {
+.my-orders-table .image-sticky-col {
   position: sticky;
   left: 0;
   z-index: 5;
@@ -1281,19 +1280,100 @@ button.danger,
   background-clip: padding-box;
 }
 
-.my-orders-table th.image-sticky-col,
-.purchase-pool-table-wrap th.image-sticky-col {
+.my-orders-table th.image-sticky-col {
   z-index: 8;
   background: #eaf2f6;
 }
 
-.my-orders-table .mixed-child-row .image-sticky-col,
-.purchase-pool-table-wrap .mixed-child-row .image-sticky-col {
+.my-orders-table .mixed-child-row .image-sticky-col {
   background: #f8fbfc;
 }
 
-.purchase-pool-table-wrap tr.has-note-row .image-sticky-col {
+.purchase-pool-table-wrap .pool-pin {
+  position: sticky;
+  z-index: 5;
+  overflow: hidden;
+  background: #ffffff;
+  background-clip: padding-box;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.purchase-pool-table-wrap th.pool-pin {
+  z-index: 8;
+  background: #eaf2f6;
+}
+
+.purchase-pool-table-wrap .pool-pin-image {
+  left: 0;
+  min-width: 82px;
+  max-width: 82px;
+}
+
+.purchase-pool-table-wrap .pool-pin-manufacturer {
+  left: 82px;
+  min-width: 150px;
+  max-width: 150px;
+}
+
+.purchase-pool-table-wrap .pool-pin-code {
+  left: 232px;
+  min-width: 110px;
+  max-width: 110px;
+}
+
+.purchase-pool-table-wrap .pool-pin-sku {
+  left: 342px;
+  min-width: 140px;
+  max-width: 140px;
+}
+
+.purchase-pool-table-wrap .pool-pin-product {
+  left: 482px;
+  min-width: 280px;
+  max-width: 280px;
+}
+
+.purchase-pool-table-wrap .pool-pin-english {
+  left: 762px;
+  min-width: 340px;
+  max-width: 340px;
+}
+
+.purchase-pool-table-wrap .pool-pin-shop {
+  left: 1102px;
+  min-width: 90px;
+  max-width: 90px;
+}
+
+.purchase-pool-table-wrap .pool-pin-buyer {
+  left: 1192px;
+  min-width: 100px;
+  max-width: 100px;
+}
+
+.purchase-pool-table-wrap .pool-pin-date {
+  left: 1292px;
+  min-width: 130px;
+  max-width: 130px;
+  box-shadow: 2px 0 0 #c5d2da;
+}
+
+.purchase-pool-table-wrap .pool-pin input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.purchase-pool-table-wrap .mixed-child-row .pool-pin {
+  background: #f8fbfc;
+}
+
+.purchase-pool-table-wrap tr.has-note-row .pool-pin {
   background: #fff8df;
+}
+
+.purchase-pool-table-wrap tr.has-note-row .pool-pin-date {
+  box-shadow: 2px 0 0 #d8c987;
 }
 
 .sku-table-wrap {
