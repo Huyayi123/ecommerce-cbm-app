@@ -1166,7 +1166,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'xlsx', '我的采购订单', skuItems)} disabled={visibleRecords.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'csv', '我的采购订单', skuItems)} disabled={visibleRecords.length === 0}>导出 CSV</button>
           {!isViewer && <button className="danger" type="button" disabled={selectedVisibleIds.length === 0 || isDeletingRecords} onClick={() => void deleteRecordsInBulk(selectedVisibleIds, '删除选中的订单')}>删除选中{selectedVisibleIds.length > 0 ? ` (${selectedVisibleIds.length})` : ''}</button>}
-          {!isViewer && <button className="danger" type="button" disabled={visibleRecords.length === 0 || isDeletingRecords} onClick={() => void deleteRecordsInBulk(visibleRecords.map((record) => record.id), '删除当前筛选结果中的全部订单')}>删除当前筛选全部</button>}
           {!isViewer && <button className="primary" type="button" onClick={() => void confirmVisiblePurchases()}>提交采购订单池{submittableAssignedRecords.length > 0 ? ` (${unconfirmedVisibleCount || submittableAssignedRecords.length})` : ''}</button>}
         </div>
       </div>
