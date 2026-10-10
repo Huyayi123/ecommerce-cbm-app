@@ -46,6 +46,7 @@ type PurchaseRecordRow = {
   buyer_name: string | null;
   assigned_buyer_name: string | null;
   assigned_buyer_email: string | null;
+  monthly_sales?: number | null;
   is_confirmed?: boolean | null;
   purchase_quantity: number | null;
   confirmed_purchase_quantity?: number | null;
@@ -435,6 +436,7 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     buyerName: row.buyer_name ?? '',
     assignedBuyerName: row.assigned_buyer_name ?? row.buyer_name ?? '',
     assignedBuyerEmail: row.assigned_buyer_email ?? '',
+    monthlySales: row.monthly_sales === null || row.monthly_sales === undefined ? null : Number(row.monthly_sales),
     isConfirmed: Boolean(row.is_confirmed ?? (row.status !== 'pending')),
     englishName: row.english_name ?? '',
     purchaseQuantity: Number(row.purchase_quantity ?? 0),
@@ -636,6 +638,7 @@ function normalizePoolRecord(value: unknown): PurchaseRecord {
     buyer_name: String(payload.buyerName ?? payload.buyer_name ?? ''),
     assigned_buyer_name: String(payload.assignedBuyerName ?? payload.assigned_buyer_name ?? ''),
     assigned_buyer_email: String(payload.assignedBuyerEmail ?? payload.assigned_buyer_email ?? ''),
+    monthly_sales: nullableNumber(payload.monthlySales ?? payload.monthly_sales),
     is_confirmed: Boolean(payload.isConfirmed ?? payload.is_confirmed ?? false),
     purchase_quantity: Number(payload.purchaseQuantity ?? payload.purchase_quantity ?? 0),
     confirmed_purchase_quantity: nullableNumber(payload.confirmedPurchaseQuantity ?? payload.confirmed_purchase_quantity),
@@ -695,6 +698,7 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     buyer_name: normalized.buyerName,
     assigned_buyer_name: normalized.assignedBuyerName,
     assigned_buyer_email: normalized.assignedBuyerEmail,
+    monthly_sales: normalized.monthlySales ?? null,
     is_confirmed: normalized.isConfirmed,
     purchase_quantity: normalized.purchaseQuantity,
     confirmed_purchase_quantity: normalized.confirmedPurchaseQuantity,
@@ -745,6 +749,7 @@ function mapContainerRow(row: ContainerRow): PurchaseRow {
     imageUrl: typeof row.raw?.imageUrl === 'string' ? row.raw.imageUrl : '',
     manufacturerName: row.manufacturer_name ?? '',
     shopName: typeof row.raw?.shopName === 'string' ? row.raw.shopName : '',
+    monthlySales: nullableNumber(row.raw?.monthlySales),
     purchaseQuantity: row.purchase_quantity,
     manualTotalCbm: typeof row.raw?.manualTotalCbm === 'number' ? row.raw.manualTotalCbm : null,
     raw: row.raw ?? {},
@@ -761,7 +766,7 @@ function toContainerRow(row: PurchaseRow): ContainerRow {
     english_name: row.englishName,
     manufacturer_name: row.manufacturerName,
     purchase_quantity: row.purchaseQuantity,
-    raw: { ...row.raw, internalCode: row.internalCode ?? row.raw.internalCode ?? '', shopName: row.shopName ?? row.raw.shopName ?? '', imageUrl: row.imageUrl ?? row.raw.imageUrl ?? '', manualTotalCbm: row.manualTotalCbm ?? null },
+    raw: { ...row.raw, internalCode: row.internalCode ?? row.raw.internalCode ?? '', shopName: row.shopName ?? row.raw.shopName ?? '', imageUrl: row.imageUrl ?? row.raw.imageUrl ?? '', monthlySales: row.monthlySales ?? null, manualTotalCbm: row.manualTotalCbm ?? null },
   };
 }
 
@@ -1280,26 +1285,32 @@ export async function fetchSalesSuggestions(): Promise<SalesSuggestionRow[]> {
     if (rows.length < pageSize) break;
   }
 
-  return allRows.map((row) => ({
-    rowId: row.id,
-    sku: row.sku ?? '',
-    productName: row.product_name ?? '',
-    shopName: row.shop_name ?? '',
-    manufacturerName: row.manufacturer_name ?? '',
-    buyerName: row.buyer_name ?? '',
-    monthlySales: Number(row.monthly_sales ?? 0),
-    stockMonths: Number(row.stock_months ?? 2),
-    targetQuantity: Number(row.target_quantity ?? 0),
-    localStockQuantity: Number(row.local_stock_quantity ?? 0),
-    takealotStockQuantity: Number(row.takealot_stock_quantity ?? 0),
-    stockOnWayQuantity: Number(row.stock_on_way_quantity ?? 0),
-    inTransitQuantity: Number(row.in_transit_quantity ?? 0),
-    suggestedQuantity: Number(row.suggested_quantity ?? 0),
-    unitsPerCarton: row.units_per_carton === null ? null : Number(row.units_per_carton ?? 0),
-    estimatedCartons: row.estimated_cartons === null ? null : Number(row.estimated_cartons ?? 0),
-    estimatedCbm: row.estimated_cbm === null ? null : Number(row.estimated_cbm ?? 0),
-    messages: Array.isArray(row.messages) ? row.messages : [],
-  }));
+  return allRows.map((row) => {
+    const messages = Array.isArray(row.messages) ? row.messages.filter((message): message is string => typeof message === 'string') : [];
+    const rawSalesMatch = messages.join('\n').match(/原始销量\s*(-?\d+(?:\.\d+)?)/);
+    const rawMonthlySales = rawSalesMatch ? Number(rawSalesMatch[1]) : Number(row.monthly_sales ?? 0);
+    return {
+      rowId: row.id,
+      sku: row.sku ?? '',
+      productName: row.product_name ?? '',
+      shopName: row.shop_name ?? '',
+      manufacturerName: row.manufacturer_name ?? '',
+      buyerName: row.buyer_name ?? '',
+      rawMonthlySales,
+      monthlySales: Number(row.monthly_sales ?? 0),
+      stockMonths: Number(row.stock_months ?? 2),
+      targetQuantity: Number(row.target_quantity ?? 0),
+      localStockQuantity: Number(row.local_stock_quantity ?? 0),
+      takealotStockQuantity: Number(row.takealot_stock_quantity ?? 0),
+      stockOnWayQuantity: Number(row.stock_on_way_quantity ?? 0),
+      inTransitQuantity: Number(row.in_transit_quantity ?? 0),
+      suggestedQuantity: Number(row.suggested_quantity ?? 0),
+      unitsPerCarton: row.units_per_carton === null ? null : Number(row.units_per_carton ?? 0),
+      estimatedCartons: row.estimated_cartons === null ? null : Number(row.estimated_cartons ?? 0),
+      estimatedCbm: row.estimated_cbm === null ? null : Number(row.estimated_cbm ?? 0),
+      messages,
+    };
+  });
 }
 
 function mapRepricingAlert(row: RepricingAlertRow): RepricingAlert {

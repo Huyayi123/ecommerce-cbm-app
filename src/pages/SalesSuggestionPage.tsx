@@ -377,6 +377,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         shopName: row.shopName || selectedStore || skuItem?.shopName || '',
         manufacturerName: skuItem?.manufacturerName ?? '',
         buyerName: skuItem?.buyerName ?? '',
+        rawMonthlySales,
         monthlySales,
         stockMonths,
         targetQuantity,
@@ -487,8 +488,9 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         imageUrl: row.imageUrl,
         manufacturerName: row.manufacturerName,
         shopName: row.shopName,
+        monthlySales: row.rawMonthlySales ?? null,
         purchaseQuantity: row.suggestedQuantity,
-        raw: { source: 'sales-suggestion', shopName: row.shopName, monthlySales: row.monthlySales, stockMonths: row.stockMonths, imageUrl: row.imageUrl },
+        raw: { source: 'sales-suggestion', shopName: row.shopName, monthlySales: row.rawMonthlySales ?? null, stockMonths: row.stockMonths, imageUrl: row.imageUrl },
       }));
   }
 

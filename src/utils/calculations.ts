@@ -155,6 +155,7 @@ export function calculateRows(purchases: PurchaseRow[], skuItems: SkuItem[]): Ca
       imageUrl: skuItem?.imageUrl || (typeof purchase.raw.imageUrl === 'string' ? purchase.raw.imageUrl : ''),
       shopName: skuItem?.shopName ?? '',
       buyerName: skuItem?.buyerName ?? '',
+      monthlySales: purchase.monthlySales ?? (Number.isFinite(Number(purchase.raw.monthlySales)) ? Number(purchase.raw.monthlySales) : null),
       purchaseQuantity: purchase.purchaseQuantity,
       purchasePrice: skuItem?.purchasePrice ?? null,
       totalAmount,

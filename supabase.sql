@@ -273,6 +273,7 @@ create table if not exists public.purchase_records (
   buyer_name text,
   assigned_buyer_name text,
   assigned_buyer_email text,
+  monthly_sales numeric,
   purchase_quantity numeric not null default 0,
   purchase_price numeric not null default 0,
   total_amount numeric not null default 0,
@@ -297,6 +298,9 @@ add column if not exists assigned_buyer_name text;
 
 alter table public.purchase_records
 add column if not exists assigned_buyer_email text;
+
+alter table public.purchase_records
+add column if not exists monthly_sales numeric;
 
 alter table public.purchase_records
 add column if not exists is_confirmed boolean not null default false;
@@ -1177,7 +1181,7 @@ begin
       v_source_quantity := greatest(v_lot.initial_product_quantity, 1);
       insert into public.purchase_records (
         id, internal_code, manufacturer_name, sku, product_name, english_name, image_url,
-        freight_cost, shop_name, buyer_name, assigned_buyer_name, assigned_buyer_email,
+        freight_cost, shop_name, buyer_name, assigned_buyer_name, assigned_buyer_email, monthly_sales,
         is_confirmed, purchase_quantity, confirmed_purchase_quantity, purchase_price, total_amount,
         purchase_date, purchase_pool_id, purchase_pool_name, purchase_pool_date, pool_status,
         purchase_batch_id, purchase_batch_name, purchase_batch_date, estimated_arrival_date, status,
@@ -1189,7 +1193,7 @@ begin
         v_record_id, v_source.internal_code, v_source.manufacturer_name, v_source.sku, v_source.product_name,
         v_source.english_name, v_source.image_url,
         coalesce(v_source.freight_cost, 0) * v_quantity / v_source_quantity,
-        v_source.shop_name, v_source.buyer_name, v_source.assigned_buyer_name, v_source.assigned_buyer_email,
+        v_source.shop_name, v_source.buyer_name, v_source.assigned_buyer_name, v_source.assigned_buyer_email, v_source.monthly_sales,
         true,
         case when jsonb_array_length(coalesce(v_source.mixed_groups, '[]'::jsonb)) > 0
           then coalesce(v_source.confirmed_purchase_quantity, v_source.purchase_quantity, 0)

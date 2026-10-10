@@ -102,6 +102,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
               <th>产品名称</th>
               <th>店铺</th>
               <th>采购人</th>
+              <th>月销量</th>
               <th>采购数量</th>
               <th>采购单价</th>
               <th>总金额</th>
@@ -121,6 +122,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
                 <td>{row.productName || '-'}</td>
                 <td>{row.shopName || '-'}</td>
                 <td>{row.buyerName || '-'}</td>
+                <td>{row.monthlySales ?? '-'}</td>
                 <td>
                   <input
                     className="quantity-input"
@@ -166,7 +168,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={13} className="empty">暂无计算结果。</td>
+                <td colSpan={15} className="empty">暂无计算结果。</td>
               </tr>
             )}
           </tbody>

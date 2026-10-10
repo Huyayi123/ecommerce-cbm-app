@@ -334,7 +334,7 @@ function buildContainerRows(suggestions, scannedAt = new Date().toISOString()) {
         shopName: row.shop_name || '',
         buyerName: row.buyer_name || '',
         imageUrl: row._container?.imageUrl || '',
-        monthlySales: numberValue(row.monthly_sales),
+        monthlySales: numberValue(row._container?.rawMonthlySales),
         stockMonths: numberValue(row.stock_months),
         messages: Array.isArray(row.messages) ? row.messages : [],
       },
@@ -480,6 +480,7 @@ async function buildStoreSuggestions(storeName) {
         internalCode: skuItem?.internal_code || '',
         englishName: skuItem?.english_name || '',
         imageUrl: skuItem?.image_url || '',
+        rawMonthlySales,
       },
     };
   });

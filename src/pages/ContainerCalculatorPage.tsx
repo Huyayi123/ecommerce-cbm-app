@@ -44,6 +44,7 @@ function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
       buyerName: row.buyerName,
       assignedBuyerName: row.buyerName,
       assignedBuyerEmail: '',
+      monthlySales: row.monthlySales,
       isConfirmed: false,
       purchaseQuantity: row.purchaseQuantity ?? 0,
       confirmedPurchaseQuantity: null,

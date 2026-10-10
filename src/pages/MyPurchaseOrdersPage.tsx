@@ -1095,7 +1095,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     const normalized = withPurchaseTotals(record);
     return (
       <tr className="packing-detail-row">
-        <td colSpan={isViewer ? 24 : 25}>
+        <td colSpan={isViewer ? 25 : 26}>
           <div className="packing-panel">
             <div className="packing-summary">
               <strong>主商品数量：{effectivePurchaseQuantity(normalized)}</strong>
@@ -1222,7 +1222,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <thead>
             <tr>
               {!isViewer && <th className="selection-sticky-col"><input ref={selectAllRef} type="checkbox" aria-label="选择当前筛选全部订单" checked={allVisibleSelected} disabled={visibleRecords.length === 0 || isDeletingRecords} onChange={toggleAllVisibleRecords} /></th>}
-              <th className="image-sticky-col">图片</th><th>厂家名</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.productName}</th><th>英文名称</th><th className="my-orders-compact-text">店铺</th><th className="my-orders-compact-text">采购人</th><th>计划采购数量</th><th className="my-orders-narrow-number">{labels.cartonCount}</th><th className="my-orders-narrow-number">{labels.unitsPerCarton}</th><th className="my-orders-narrow-number">{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
+              <th className="image-sticky-col">图片</th><th>厂家名</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.productName}</th><th>英文名称</th><th className="my-orders-compact-text">店铺</th><th className="my-orders-compact-text">采购人</th><th>月销量</th><th>计划采购数量</th><th className="my-orders-narrow-number">{labels.cartonCount}</th><th className="my-orders-narrow-number">{labels.unitsPerCarton}</th><th className="my-orders-narrow-number">{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
             </tr>
           </thead>
           <tbody>
@@ -1242,6 +1242,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td>{input(normalized, 'englishName')}</td>
                     <td className="my-orders-compact-text">{input(normalized, 'shopName')}</td>
                     <td className="my-orders-compact-text">{isAdmin ? input(normalized, 'assignedBuyerName') : normalized.assignedBuyerName}</td>
+                    <td>{normalized.monthlySales ?? '-'}</td>
                     <td>{input(normalized, 'purchaseQuantity', 'number')}</td>
                     <td className="my-orders-narrow-number">{input(normalized, 'cartonCount', 'number')}</td>
                     <td className="my-orders-narrow-number">{input(normalized, 'unitsPerCarton', 'number')}</td>
@@ -1283,6 +1284,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                       <td />
                       <td />
                       <td />
+                      <td />
                       <td>{line.quantity}</td>
                       <td>混装子行</td>
                       <td>{line.purchasePrice}</td>
@@ -1300,7 +1302,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 </Fragment>
               );
             })}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={isViewer ? 24 : 25}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={isViewer ? 25 : 26}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>

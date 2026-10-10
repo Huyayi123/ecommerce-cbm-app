@@ -37,6 +37,7 @@ export type PurchaseRow = {
   imageUrl?: string;
   manufacturerName: string;
   shopName?: string;
+  monthlySales?: number | null;
   purchaseQuantity: number | null;
   manualTotalCbm?: number | null;
   raw: Record<string, unknown>;
@@ -229,6 +230,7 @@ export type PurchaseRecord = {
   buyerName: string;
   assignedBuyerName: string;
   assignedBuyerEmail: string;
+  monthlySales?: number | null;
   isConfirmed: boolean;
   purchaseQuantity: number;
   confirmedPurchaseQuantity: number | null;
@@ -340,6 +342,7 @@ export type CalculationRow = {
   imageUrl: string;
   shopName: string;
   buyerName: string;
+  monthlySales: number | null;
   purchaseQuantity: number | null;
   purchasePrice: number | null;
   totalAmount: number | null;
@@ -367,6 +370,7 @@ export type SalesSuggestionRow = {
   shopName: string;
   manufacturerName: string;
   buyerName: string;
+  rawMonthlySales?: number | null;
   monthlySales: number;
   stockMonths: number;
   targetQuantity: number;
