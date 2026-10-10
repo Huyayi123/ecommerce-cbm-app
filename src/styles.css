@@ -1287,11 +1287,35 @@ button.danger,
   background-clip: padding-box;
 }
 
+.my-orders-table .selection-sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  width: 42px;
+  min-width: 42px;
+  max-width: 42px;
+  padding-left: 8px;
+  padding-right: 8px;
+  text-align: center;
+  background: #ffffff;
+  background-clip: padding-box;
+}
+
+.my-orders-table.has-selection .image-sticky-col {
+  left: 42px;
+}
+
+.my-orders-table th.selection-sticky-col {
+  z-index: 9;
+  background: #eaf2f6;
+}
+
 .my-orders-table th.image-sticky-col {
   z-index: 8;
   background: #eaf2f6;
 }
 
+.my-orders-table .mixed-child-row .selection-sticky-col,
 .my-orders-table .mixed-child-row .image-sticky-col {
   background: #f8fbfc;
 }

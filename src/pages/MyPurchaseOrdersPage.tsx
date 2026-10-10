@@ -210,6 +210,9 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const internalCodeRepairSignatureRef = useRef('');
   const [statusFilter, setStatusFilter] = useState<OrderFilterStatus>('pending');
   const [orderSearch, setOrderSearch] = useState('');
+  const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
+  const [isDeletingRecords, setIsDeletingRecords] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const isViewer = profile.role === 'viewer';
   const assignedRecords = useMemo(
@@ -280,6 +283,18 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     [assignedRecords],
   );
   const unconfirmedVisibleCount = visibleRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase').length;
+  const selectedVisibleIds = visibleRecords.filter((record) => selectedRecordIds.has(record.id)).map((record) => record.id);
+  const allVisibleSelected = visibleRecords.length > 0 && selectedVisibleIds.length === visibleRecords.length;
+
+  useEffect(() => {
+    setSelectedRecordIds(new Set());
+  }, [orderSearch, statusFilter]);
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selectedVisibleIds.length > 0 && !allVisibleSelected;
+    }
+  }, [allVisibleSelected, selectedVisibleIds.length]);
 
   useEffect(() => {
     const recordIds = new Set(records.map((record) => record.id));
@@ -852,6 +867,45 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     }
   }
 
+  function toggleRecordSelection(recordId: string) {
+    setSelectedRecordIds((current) => {
+      const next = new Set(current);
+      if (next.has(recordId)) next.delete(recordId);
+      else next.add(recordId);
+      return next;
+    });
+  }
+
+  function toggleAllVisibleRecords() {
+    setSelectedRecordIds(allVisibleSelected ? new Set() : new Set(visibleRecords.map((record) => record.id)));
+  }
+
+  async function deleteRecordsInBulk(ids: string[], scopeLabel: string) {
+    if (isViewer || isDeletingRecords || ids.length === 0) return;
+    if (!window.confirm(`确定要${scopeLabel}吗？即将永久删除 ${ids.length} 条采购订单，此操作无法撤销。`)) return;
+
+    setIsDeletingRecords(true);
+    const targetIds = Array.from(new Set(ids));
+    try {
+      for (const recordId of targetIds) {
+        const timer = recordAutoSaveTimers.current.get(recordId);
+        if (timer !== undefined) window.clearTimeout(timer);
+        recordAutoSaveTimers.current.delete(recordId);
+      }
+      await Promise.allSettled(targetIds.map((recordId) => recordSaveQueues.current.get(recordId)).filter((queue): queue is Promise<void> => Boolean(queue)));
+      if (onDeleteRecords) await onDeleteRecords(targetIds);
+      else await onChange(records.filter((record) => !targetIds.includes(record.id)));
+      setSelectedRecordIds(new Set());
+      setExpandedRows((current) => new Set([...current].filter((recordId) => !targetIds.includes(recordId))));
+      setMessage(`已删除 ${targetIds.length} 条采购订单。`);
+    } catch (error) {
+      console.error(error);
+      setMessage(`批量删除失败：${formatErrorMessage(error)}`);
+    } finally {
+      setIsDeletingRecords(false);
+    }
+  }
+
   async function addMixedGroup(record: PurchaseRecord) {
     if (isViewer) return;
     const nextRecord = {
@@ -1041,7 +1095,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     const normalized = withPurchaseTotals(record);
     return (
       <tr className="packing-detail-row">
-        <td colSpan={24}>
+        <td colSpan={isViewer ? 24 : 25}>
           <div className="packing-panel">
             <div className="packing-summary">
               <strong>主商品数量：{effectivePurchaseQuantity(normalized)}</strong>
@@ -1111,6 +1165,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           )}
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'xlsx', '我的采购订单', skuItems)} disabled={visibleRecords.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'csv', '我的采购订单', skuItems)} disabled={visibleRecords.length === 0}>导出 CSV</button>
+          {!isViewer && <button className="danger" type="button" disabled={selectedVisibleIds.length === 0 || isDeletingRecords} onClick={() => void deleteRecordsInBulk(selectedVisibleIds, '删除选中的订单')}>删除选中{selectedVisibleIds.length > 0 ? ` (${selectedVisibleIds.length})` : ''}</button>}
+          {!isViewer && <button className="danger" type="button" disabled={visibleRecords.length === 0 || isDeletingRecords} onClick={() => void deleteRecordsInBulk(visibleRecords.map((record) => record.id), '删除当前筛选结果中的全部订单')}>删除当前筛选全部</button>}
           {!isViewer && <button className="primary" type="button" onClick={() => void confirmVisiblePurchases()}>提交采购订单池{submittableAssignedRecords.length > 0 ? ` (${unconfirmedVisibleCount || submittableAssignedRecords.length})` : ''}</button>}
         </div>
       </div>
@@ -1163,9 +1219,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       )}
 
       <div className="table-wrap my-orders-table-wrap" ref={tableWrapRef}>
-        <table className="my-orders-table">
+        <table className={`my-orders-table${isViewer ? '' : ' has-selection'}`}>
           <thead>
             <tr>
+              {!isViewer && <th className="selection-sticky-col"><input ref={selectAllRef} type="checkbox" aria-label="选择当前筛选全部订单" checked={allVisibleSelected} disabled={visibleRecords.length === 0 || isDeletingRecords} onChange={toggleAllVisibleRecords} /></th>}
               <th className="image-sticky-col">图片</th><th>厂家名</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.productName}</th><th>英文名称</th><th className="my-orders-compact-text">店铺</th><th className="my-orders-compact-text">采购人</th><th>计划采购数量</th><th className="my-orders-narrow-number">{labels.cartonCount}</th><th className="my-orders-narrow-number">{labels.unitsPerCarton}</th><th className="my-orders-narrow-number">{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
             </tr>
           </thead>
@@ -1177,6 +1234,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
               return (
                 <Fragment key={record.id}>
                   <tr>
+                    {!isViewer && <td className="selection-sticky-col"><input type="checkbox" aria-label={`选择订单 ${normalized.sku || normalized.productName}`} checked={selectedRecordIds.has(record.id)} disabled={isDeletingRecords} onChange={() => toggleRecordSelection(record.id)} /></td>}
                     <td className="image-sticky-col">{imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                     <td>{input(normalized, 'manufacturerName')}</td>
                     <td><strong>{normalized.internalCode || '-'}</strong></td>
@@ -1207,11 +1265,12 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                         <span className="muted-action">无采购链接</span>
                       )}
                       <button type="button" onClick={() => toggleExpanded(record.id)}>{expandedRows.has(record.id) ? '收起混装' : '混装'}</button>
-                      {!isViewer && <button className="danger" type="button" onClick={() => void deleteRecord(record.id)}>删除</button>}
+                      {!isViewer && <button className="danger" type="button" disabled={isDeletingRecords} onClick={() => void deleteRecord(record.id)}>删除</button>}
                     </td>
 	                  </tr>
                   {childRows.map(({ group, line }) => (
                     <tr className="mixed-child-row" key={`${normalized.id}:${group.id}:${line.id}`}>
+                      {!isViewer && <td className="selection-sticky-col" />}
                       <td className="image-sticky-col">{imageUrlBySku.get(skuLookupKey(line.sku)) ? <img className="sku-thumb" src={imageUrlBySku.get(skuLookupKey(line.sku))} alt={line.productName || line.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                       <td>{normalized.manufacturerName}</td>
                       <td>{internalCodeBySku.get(skuLookupKey(line.sku)) || '-'}</td>
@@ -1242,7 +1301,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 </Fragment>
               );
             })}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={24}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={isViewer ? 24 : 25}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>
