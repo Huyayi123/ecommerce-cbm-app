@@ -423,7 +423,12 @@ export function HaichuanWorkflowPage({
           <h2>{isLogistics ? '海川物流工作台' : '海川仓库管理'}</h2>
           <p>采购数量保持不变；海川仅确认实际箱数，并按仓库批次分批装柜。</p>
         </div>
-        <button type="button" onClick={() => void onRefresh()} disabled={Boolean(busyKey)}>刷新</button>
+        <div className="section-heading-actions">
+          {!isLogistics && tab === 'warehouse' && <button type="button" disabled={visibleLots.length === 0} onClick={exportWarehouse}>导出 Excel</button>}
+          {!isLogistics && tab === 'review' && <button type="button" disabled={!activeBatch || activeBatch.items.length === 0} onClick={exportReviewBatch}>导出当前批次</button>}
+          {!isLogistics && tab === 'loaded' && <button type="button" disabled={loadedProducts.length === 0} onClick={exportLoaded}>导出 Excel</button>}
+          <button type="button" onClick={() => void onRefresh()} disabled={Boolean(busyKey)}>刷新</button>
+        </div>
       </div>
       <div className="tabs">
         {tabs.map(([key, title]) => <button key={key} type="button" className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{title}</button>)}
@@ -464,7 +469,6 @@ export function HaichuanWorkflowPage({
 
       {tab === 'warehouse' && (
         <>
-          {!isLogistics && <div className="form-actions"><button type="button" disabled={visibleLots.length === 0} onClick={exportWarehouse}>导出 Excel</button></div>}
           {isLogistics && (
             <div className="record-form">
               <label>{labels.containerDate}<input type="date" value={containerDate} onChange={(event) => setContainerDate(event.target.value)} /></label>
@@ -512,7 +516,6 @@ export function HaichuanWorkflowPage({
           </div>
           {activeBatch && (
             <div className="batch-detail">
-              <div className="form-actions"><button type="button" disabled={activeBatch.items.length === 0} onClick={exportReviewBatch}>导出当前批次 Excel</button></div>
               <div className="record-form">
                 <label>{labels.containerDate}<input type="date" value={reviewDate} onChange={(event) => setReviewDate(event.target.value)} /></label>
                 <label>审核备注<input value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} /></label>
@@ -539,7 +542,6 @@ export function HaichuanWorkflowPage({
       )}
 
       {tab === 'loaded' && (
-        <>{!isLogistics && <div className="form-actions"><button type="button" disabled={loadedProducts.length === 0} onClick={exportLoaded}>导出 Excel</button></div>}
         <div className="table-wrap haichuan-table-wrap"><table className="haichuan-table">
           <thead><tr><th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.containerDate}</th><th>最终装柜件数</th><th>最终装柜数量</th><th>最终 CBM</th><th>{labels.status}</th><th>确认时间</th><th>{labels.note}</th></tr></thead>
           <tbody>{loadedProducts.map(({ batch, item }) => {
@@ -551,7 +553,7 @@ export function HaichuanWorkflowPage({
               </tr>)}
             </Fragment>;
           })}{loadedProducts.length === 0 && <tr><td colSpan={11}>暂无已装柜产品</td></tr>}</tbody>
-        </table></div></>
+        </table></div>
       )}
 
       {tab === 'binding' && !isLogistics && (
