@@ -102,7 +102,7 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
       const inactiveByType: Record<string, number> = {};
 
       while (true) {
-        const params = new URLSearchParams({ store, offset: String(offset), batchSize: '20', runStartedAt });
+        const params = new URLSearchParams({ store, offset: String(offset), batchSize: '10', runStartedAt });
         const response = await fetch(`/api/repricing-monitor?${params.toString()}`, { method: 'POST' });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
@@ -118,6 +118,7 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
         offset = Number(payload.nextOffset ?? offset);
         setSyncMessage(`${store} 同步中：已检查 ${Math.min(offset, totalRows || offset)} / ${totalRows || '?'} 条，发现 ${confirmedAlerts} 条确定预警。`);
         if (!payload.hasMore) break;
+        await new Promise((resolve) => window.setTimeout(resolve, 750));
       }
 
       if (errors > 0) {

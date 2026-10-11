@@ -29,6 +29,34 @@ function numberFromEnv(name, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function fetchWithRetry(url, options = {}, attempts = 4) {
+  let lastResponse;
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      lastResponse = response;
+      if (response.status !== 429 && response.status < 500) return response;
+      if (attempt === attempts - 1) return response;
+      const retryAfterSeconds = Number(response.headers.get('retry-after'));
+      const delay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? Math.min(retryAfterSeconds * 1000, 8000)
+        : Math.min(750 * (2 ** attempt), 8000);
+      await wait(delay);
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1) throw error;
+      await wait(Math.min(750 * (2 ** attempt), 8000));
+    }
+  }
+  if (lastResponse) return lastResponse;
+  throw lastError || new Error('Takealot request failed');
+}
+
 function rowsFromPayload(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.results)) return payload.results;
@@ -312,7 +340,7 @@ async function fetchPublicPageDetails(row, storeName = '') {
   const url = offerUrlFor(row);
   if (!url) return { source: 'no_public_url', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   try {
-    const upstream = await fetch(url, {
+    const upstream = await fetchWithRetry(url, {
       headers: {
         Accept: 'text/html,application/xhtml+xml',
         'Accept-Language': 'en-ZA,en;q=0.9',
@@ -404,7 +432,7 @@ async function fetchSellerOfferDetails(storeName, row) {
   for (const identifier of identifiers) {
     const url = new URL(`/v2/offers/offer/${encodeURIComponent(identifier)}`, baseUrl);
     try {
-      const upstream = await fetch(url, { headers: takealotHeaders(storeName) });
+      const upstream = await fetchWithRetry(url, { headers: takealotHeaders(storeName) });
       const data = await upstream.json().catch(() => ({}));
       if (!upstream.ok) {
         failedSources.push(`${identifier}:http_${upstream.status}`);
@@ -429,10 +457,16 @@ async function fetchSellerOfferDetails(storeName, row) {
 async function fetchProductDetails(row, storeName) {
   const plid = extractPlid(offerUrlFor(row));
   if (!plid) return fetchSellerOfferDetails(storeName, row);
+  // The exact public URL is both the cheapest and most accurate source. Most
+  // products finish here, avoiding two extra API calls per SKU.
+  const pageDetails = await fetchPublicPageDetails(row, storeName);
+  if (pageDetails.buyBoxPrice !== null && sellerIsKnown(pageDetails.buyBoxSeller)) {
+    return pageDetails;
+  }
   const url = `https://api.takealot.com/rest/v-1-10-0/product-details/PLID${plid}`;
   let productDetails = { source: 'no_product_details', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   try {
-    const upstream = await fetch(url, {
+    const upstream = await fetchWithRetry(url, {
       headers: {
         Accept: 'application/json',
         'Accept-Language': 'en-ZA,en;q=0.9',
@@ -451,10 +485,7 @@ async function fetchProductDetails(row, storeName) {
 
   // The row URL identifies the exact offer/variant. Always inspect that page instead
   // of trusting a PLID-level response that may describe another colour or size.
-  const [sellerOfferDetails, pageDetails] = await Promise.all([
-    fetchSellerOfferDetails(storeName, row),
-    fetchPublicPageDetails(row, storeName),
-  ]);
+  const sellerOfferDetails = await fetchSellerOfferDetails(storeName, row);
   if (sellerIsKnown(pageDetails.buyBoxSeller)) {
     return {
       source: `${productDetails.source}+${sellerOfferDetails.source}+${pageDetails.source}`,
@@ -828,7 +859,7 @@ async function fetchTakealotRows(storeName, limit, requestedSku = '') {
     const url = new URL(inventoryPath, baseUrl);
     url.searchParams.set('page_size', String(pageSize));
     url.searchParams.set('page_number', String(pageNumber));
-    const upstream = await fetch(url, { headers });
+    const upstream = await fetchWithRetry(url, { headers });
     const payload = await upstream.json().catch(() => ({}));
     if (!upstream.ok) throw new Error(payload.message || payload.error || `Takealot API request failed: ${upstream.status}`);
 
@@ -856,6 +887,31 @@ async function fetchTakealotRows(storeName, limit, requestedSku = '') {
   }
 
   return { rows: allRows, contextRows, pagesFetched, totalResults };
+}
+
+async function fetchTakealotBatch(storeName, offset, batchSize) {
+  const apiKey = apiKeyForStore(storeName);
+  if (!apiKey) throw new Error(`Store ${storeName} has no Takealot API Key configured`);
+
+  const baseUrl = process.env.TAKEALOT_API_BASE_URL || 'https://seller-api.takealot.com';
+  const inventoryPath = process.env.TAKEALOT_INVENTORY_PATH || '/v2/offers';
+  const pageNumber = Math.floor(offset / batchSize) + 1;
+  const url = new URL(inventoryPath, baseUrl);
+  url.searchParams.set('page_size', String(batchSize));
+  url.searchParams.set('page_number', String(pageNumber));
+  const upstream = await fetchWithRetry(url, { headers: takealotHeaders(storeName) });
+  const payload = await upstream.json().catch(() => ({}));
+  if (!upstream.ok) throw new Error(payload.message || payload.error || `Takealot API request failed: ${upstream.status}`);
+
+  const rawRows = rowsFromPayload(payload);
+  const totalResultsValue = Number(payload?.total_results);
+  const totalResults = Number.isFinite(totalResultsValue) ? totalResultsValue : null;
+  return {
+    rows: rawRows.filter((row) => !isDisabledRow(row)),
+    rawRowCount: rawRows.length,
+    totalResults,
+    pagesFetched: 1,
+  };
 }
 
 export default async function handler(request, response) {
@@ -898,8 +954,14 @@ export default async function handler(request, response) {
       return;
     }
 
-    const { rows, contextRows, pagesFetched, totalResults } = await fetchTakealotRows(storeName, batchMode ? null : limit, requestedSku);
-    const batchRows = batchMode ? rows.slice(offset, offset + batchSize) : rows;
+    const fetched = batchMode
+      ? await fetchTakealotBatch(storeName, offset, batchSize)
+      : await fetchTakealotRows(storeName, limit, requestedSku);
+    const rows = fetched.rows;
+    const contextRows = batchMode ? rows : fetched.contextRows;
+    const pagesFetched = fetched.pagesFetched;
+    const totalResults = fetched.totalResults;
+    const batchRows = rows;
     const details = [];
     const alertDetails = [];
     let checked = 0;
@@ -911,7 +973,7 @@ export default async function handler(request, response) {
 
     const outcomes = await mapWithConcurrency(
       batchRows,
-      numberFromEnv('TAKEALOT_REPRICING_CONCURRENCY', 5),
+      numberFromEnv('TAKEALOT_REPRICING_CONCURRENCY', 2),
       async (row) => {
       try {
         const productDetails = await fetchProductDetails(row, storeName);
@@ -962,7 +1024,9 @@ export default async function handler(request, response) {
       incrementCount(sourceCounts, outcome.source);
     }
 
-    const nextOffset = batchMode ? Math.min(offset + batchRows.length, rows.length) : rows.length;
+    const rawRowCount = batchMode ? fetched.rawRowCount : rows.length;
+    const totalRows = batchMode ? (totalResults ?? offset + rawRowCount) : rows.length;
+    const nextOffset = batchMode ? Math.min(offset + rawRowCount, totalRows) : rows.length;
 
     response.status(200).json({
       ok: errors === 0,
@@ -973,10 +1037,10 @@ export default async function handler(request, response) {
       errors,
       pagesFetched,
       totalResults,
-      totalRows: rows.length,
+      totalRows,
       offset: batchMode ? offset : 0,
       nextOffset,
-      hasMore: batchMode ? nextOffset < rows.length : false,
+      hasMore: batchMode ? rawRowCount > 0 && nextOffset < totalRows : false,
       inactiveByType,
       sourceCounts,
       details: details.slice(0, 50),
