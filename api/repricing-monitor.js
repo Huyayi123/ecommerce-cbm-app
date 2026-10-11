@@ -429,7 +429,6 @@ async function fetchSellerOfferDetails(storeName, row) {
 async function fetchProductDetails(row, storeName) {
   const plid = extractPlid(offerUrlFor(row));
   if (!plid) return fetchSellerOfferDetails(storeName, row);
-  const shouldVerifyPublicVariantPage = hasVariantSuffix(titleFor(row));
   const url = `https://api.takealot.com/rest/v-1-10-0/product-details/PLID${plid}`;
   let productDetails = { source: 'no_product_details', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   try {
@@ -450,23 +449,12 @@ async function fetchProductDetails(row, storeName) {
     productDetails = { source: 'product_details_error', buyBoxPrice: null, buyBoxSeller: '', offers: [] };
   }
 
-  if (sellerIsKnown(productDetails.buyBoxSeller) && !shouldVerifyPublicVariantPage) return productDetails;
-
-  const sellerOfferDetails = await fetchSellerOfferDetails(storeName, row);
-  if (sellerIsKnown(sellerOfferDetails.buyBoxSeller) && !shouldVerifyPublicVariantPage) {
-    return {
-      source: `${productDetails.source}+${sellerOfferDetails.source}`,
-      buyBoxPrice: sellerOfferDetails.buyBoxPrice ?? productDetails.buyBoxPrice,
-      buyBoxSeller: sellerOfferDetails.buyBoxSeller,
-      offers: [
-        ...(sellerOfferDetails.offers || []),
-        ...(productDetails.offers || []),
-      ],
-      signals: sellerOfferDetails.signals,
-    };
-  }
-
-  const pageDetails = await fetchPublicPageDetails(row, storeName);
+  // The row URL identifies the exact offer/variant. Always inspect that page instead
+  // of trusting a PLID-level response that may describe another colour or size.
+  const [sellerOfferDetails, pageDetails] = await Promise.all([
+    fetchSellerOfferDetails(storeName, row),
+    fetchPublicPageDetails(row, storeName),
+  ]);
   if (sellerIsKnown(pageDetails.buyBoxSeller)) {
     return {
       source: `${productDetails.source}+${sellerOfferDetails.source}+${pageDetails.source}`,
@@ -482,8 +470,8 @@ async function fetchProductDetails(row, storeName) {
   }
   return {
     source: `${productDetails.source}+${sellerOfferDetails.source}+${pageDetails.source}`,
-    buyBoxPrice: pageDetails.buyBoxPrice ?? productDetails.buyBoxPrice,
-    buyBoxSeller: pageDetails.buyBoxSeller || productDetails.buyBoxSeller,
+    buyBoxPrice: pageDetails.buyBoxPrice ?? sellerOfferDetails.buyBoxPrice ?? productDetails.buyBoxPrice,
+    buyBoxSeller: pageDetails.buyBoxSeller || sellerOfferDetails.buyBoxSeller || productDetails.buyBoxSeller,
     offers: [
       ...(pageDetails.offers || []),
       ...(sellerOfferDetails.offers || []),
@@ -604,7 +592,6 @@ function evaluateAlert({ row, storeName, productDetails, ownRows = [] }) {
   if (
     productDetails.buyBoxPrice !== null
     && productDetails.buyBoxPrice < myPrice
-    && productDetails.source.includes('product_details_api')
     && (!sellerIsKnown(buyBoxSeller) || !sameSeller(buyBoxSeller, storeName))
   ) {
     const ownVariant = findOwnVariantAtBuyBoxPrice({ row, ownRows, buyBoxPrice: productDetails.buyBoxPrice });
@@ -711,6 +698,8 @@ function evaluateAlert({ row, storeName, productDetails, ownRows = [] }) {
   };
 }
 
+export { evaluateAlert, parseProductDetails, parsePublicPageDetails };
+
 function supabaseHeaders(extra = {}) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key) throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY');
@@ -763,11 +752,15 @@ async function mapWithConcurrency(items, concurrency, worker) {
   return results;
 }
 
-async function clearStoreRepricingAlerts(storeName) {
+async function clearStaleStoreRepricingAlerts(storeName, runStartedAt) {
   const normalizedStoreName = encodeURIComponent(storeName);
-  await supabaseRequest('DELETE', `repricing_alerts?shop_name=eq.${normalizedStoreName}`, undefined, {
-    Prefer: 'return=minimal',
-  });
+  const normalizedRunStartedAt = encodeURIComponent(runStartedAt);
+  await supabaseRequest(
+    'DELETE',
+    `repricing_alerts?shop_name=eq.${normalizedStoreName}&or=(checked_at.lt.${normalizedRunStartedAt},checked_at.is.null)`,
+    undefined,
+    { Prefer: 'return=minimal' },
+  );
 }
 
 async function syncRepricingResult({ storeName, storeId, row, alert, checkedAt }) {
@@ -872,6 +865,8 @@ export default async function handler(request, response) {
   }
 
   const storeName = String(request.query.store || DEFAULT_STORE).trim();
+  const action = String(request.query.action || '').trim();
+  const runStartedAt = String(request.query.runStartedAt || '').trim();
   const requestedSku = String(request.query.sku || '').trim();
   const requestedLimit = Number(request.query.limit);
   const requestedOffset = Number(request.query.offset);
@@ -885,7 +880,6 @@ export default async function handler(request, response) {
   const batchSize = batchMode
     ? Math.min(50, Number.isFinite(requestedBatchSize) && requestedBatchSize > 0 ? Math.floor(requestedBatchSize) : 20)
     : null;
-  const shouldReset = String(request.query.reset || '') === '1';
   const limit = requestedSku
     ? null
     : (Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.floor(requestedLimit) : null);
@@ -893,9 +887,19 @@ export default async function handler(request, response) {
   const checkedAt = new Date().toISOString();
 
   try {
+    if (action === 'finalize') {
+      const parsedRunStartedAt = new Date(runStartedAt);
+      if (!runStartedAt || Number.isNaN(parsedRunStartedAt.getTime())) {
+        response.status(400).json({ error: 'A valid runStartedAt is required to finalize repricing sync' });
+        return;
+      }
+      await clearStaleStoreRepricingAlerts(storeName, parsedRunStartedAt.toISOString());
+      response.status(200).json({ ok: true, store: storeName, finalizedAt: checkedAt });
+      return;
+    }
+
     const { rows, contextRows, pagesFetched, totalResults } = await fetchTakealotRows(storeName, batchMode ? null : limit, requestedSku);
     const batchRows = batchMode ? rows.slice(offset, offset + batchSize) : rows;
-    if (!requestedSku && (!batchMode || shouldReset)) await clearStoreRepricingAlerts(storeName);
     const details = [];
     const alertDetails = [];
     let checked = 0;
@@ -911,6 +915,9 @@ export default async function handler(request, response) {
       async (row) => {
       try {
         const productDetails = await fetchProductDetails(row, storeName);
+        if (productDetails.buyBoxPrice === null) {
+          throw new Error(`Unable to read current Takealot price for ${skuFor(row) || 'unknown SKU'}`);
+        }
         const alert = evaluateAlert({ row, storeName, productDetails, ownRows: contextRows });
         await syncRepricingResult({ storeName, storeId, row, alert, checkedAt });
         const detail = {

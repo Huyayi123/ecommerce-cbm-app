@@ -98,11 +98,11 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
       let checked = 0;
       let confirmedAlerts = 0;
       let errors = 0;
+      const runStartedAt = new Date().toISOString();
       const inactiveByType: Record<string, number> = {};
 
       while (true) {
-        const params = new URLSearchParams({ store, offset: String(offset), batchSize: '20' });
-        if (offset === 0) params.set('reset', '1');
+        const params = new URLSearchParams({ store, offset: String(offset), batchSize: '20', runStartedAt });
         const response = await fetch(`/api/repricing-monitor?${params.toString()}`, { method: 'POST' });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
@@ -119,6 +119,15 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
         setSyncMessage(`${store} 同步中：已检查 ${Math.min(offset, totalRows || offset)} / ${totalRows || '?'} 条，发现 ${confirmedAlerts} 条确定预警。`);
         if (!payload.hasMore) break;
       }
+
+      if (errors > 0) {
+        throw new Error(`有 ${errors} 条商品未能可靠读取；已保留上一轮预警，本轮结果未覆盖旧数据`);
+      }
+
+      const finalizeParams = new URLSearchParams({ store, action: 'finalize', runStartedAt });
+      const finalizeResponse = await fetch(`/api/repricing-monitor?${finalizeParams.toString()}`, { method: 'POST' });
+      const finalizePayload = await finalizeResponse.json().catch(() => ({}));
+      if (!finalizeResponse.ok) throw new Error(finalizePayload.error || `收尾失败 HTTP ${finalizeResponse.status}`);
 
       await onRefresh?.();
       setShopFilter(store);
