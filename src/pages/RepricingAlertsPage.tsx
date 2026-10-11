@@ -99,6 +99,7 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
       let confirmedAlerts = 0;
       let errors = 0;
       const runStartedAt = new Date().toISOString();
+      const failedSkus = new Set<string>();
       const inactiveByType: Record<string, number> = {};
 
       while (true) {
@@ -111,6 +112,9 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
         checked += Number(payload.checked ?? 0);
         confirmedAlerts += Number(payload.confirmedAlerts ?? 0);
         errors += Number(payload.errors ?? 0);
+        for (const sku of payload.failedSkus ?? []) {
+          if (sku) failedSkus.add(String(sku).trim().toUpperCase());
+        }
         for (const [key, value] of Object.entries(payload.inactiveByType ?? {})) {
           inactiveByType[key] = (inactiveByType[key] ?? 0) + Number(value ?? 0);
         }
@@ -121,11 +125,12 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
         await new Promise((resolve) => window.setTimeout(resolve, 750));
       }
 
-      if (errors > 0) {
-        throw new Error(`有 ${errors} 条商品未能可靠读取；已保留上一轮预警，本轮结果未覆盖旧数据`);
-      }
-
-      const finalizeParams = new URLSearchParams({ store, action: 'finalize', runStartedAt });
+      const finalizeParams = new URLSearchParams({
+        store,
+        action: 'finalize',
+        runStartedAt,
+        preserveSkus: JSON.stringify(Array.from(failedSkus)),
+      });
       const finalizeResponse = await fetch(`/api/repricing-monitor?${finalizeParams.toString()}`, { method: 'POST' });
       const finalizePayload = await finalizeResponse.json().catch(() => ({}));
       if (!finalizeResponse.ok) throw new Error(finalizePayload.error || `收尾失败 HTTP ${finalizeResponse.status}`);
@@ -133,7 +138,7 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
       await onRefresh?.();
       setShopFilter(store);
       const skippedSummary = formatInactiveSummary(inactiveByType);
-      setSyncMessage(`${store} 同步完成：检查 ${checked} 条，确定被跟价 ${confirmedAlerts} 条${errors ? `，失败 ${errors} 条` : ''}。${skippedSummary ? `跳过原因：${skippedSummary}` : ''}`);
+      setSyncMessage(`${store} 同步完成：检查 ${checked} 条，确定被跟价 ${confirmedAlerts} 条${errors ? `，${errors} 条读取失败并保留上一轮状态` : ''}。${skippedSummary ? `跳过原因：${skippedSummary}` : ''}`);
     } catch (error) {
       console.error(error);
       setSyncMessage(`${store} 同步失败：${error instanceof Error ? error.message : '未知错误'}`);

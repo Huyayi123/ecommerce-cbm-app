@@ -783,12 +783,15 @@ async function mapWithConcurrency(items, concurrency, worker) {
   return results;
 }
 
-async function clearStaleStoreRepricingAlerts(storeName, runStartedAt) {
+async function clearStaleStoreRepricingAlerts(storeName, runStartedAt, preserveSkus = []) {
   const normalizedStoreName = encodeURIComponent(storeName);
   const normalizedRunStartedAt = encodeURIComponent(runStartedAt);
+  const preserveFilter = preserveSkus.length > 0
+    ? `&sku=not.in.(${preserveSkus.map((sku) => encodeURIComponent(`"${sku}"`)).join(',')})`
+    : '';
   await supabaseRequest(
     'DELETE',
-    `repricing_alerts?shop_name=eq.${normalizedStoreName}&or=(checked_at.lt.${normalizedRunStartedAt},checked_at.is.null)`,
+    `repricing_alerts?shop_name=eq.${normalizedStoreName}&or=(checked_at.lt.${normalizedRunStartedAt},checked_at.is.null)${preserveFilter}`,
     undefined,
     { Prefer: 'return=minimal' },
   );
@@ -949,8 +952,18 @@ export default async function handler(request, response) {
         response.status(400).json({ error: 'A valid runStartedAt is required to finalize repricing sync' });
         return;
       }
-      await clearStaleStoreRepricingAlerts(storeName, parsedRunStartedAt.toISOString());
-      response.status(200).json({ ok: true, store: storeName, finalizedAt: checkedAt });
+      let preserveSkus = [];
+      try {
+        const parsed = JSON.parse(String(request.query.preserveSkus || '[]'));
+        if (Array.isArray(parsed)) {
+          preserveSkus = parsed.map((sku) => String(sku).trim().toUpperCase()).filter(Boolean).slice(0, 100);
+        }
+      } catch {
+        response.status(400).json({ error: 'preserveSkus must be a JSON array' });
+        return;
+      }
+      await clearStaleStoreRepricingAlerts(storeName, parsedRunStartedAt.toISOString(), preserveSkus);
+      response.status(200).json({ ok: true, store: storeName, preservedSkus: preserveSkus.length, finalizedAt: checkedAt });
       return;
     }
 
@@ -976,8 +989,11 @@ export default async function handler(request, response) {
       numberFromEnv('TAKEALOT_REPRICING_CONCURRENCY', 2),
       async (row) => {
       try {
-        const productDetails = await fetchProductDetails(row, storeName);
-        if (productDetails.buyBoxPrice === null) {
+        const canSkipDetails = !skuFor(row) || !myPriceFor(row) || stockFor(row) <= 0;
+        const productDetails = canSkipDetails
+          ? { source: 'seller_inventory', buyBoxPrice: null, buyBoxSeller: '', offers: [] }
+          : await fetchProductDetails(row, storeName);
+        if (!canSkipDetails && productDetails.buyBoxPrice === null) {
           throw new Error(`Unable to read current Takealot price for ${skuFor(row) || 'unknown SKU'}`);
         }
         const alert = evaluateAlert({ row, storeName, productDetails, ownRows: contextRows });
@@ -1045,6 +1061,7 @@ export default async function handler(request, response) {
       sourceCounts,
       details: details.slice(0, 50),
       alertDetails,
+      failedSkus: outcomes.filter((outcome) => outcome.error).map((outcome) => outcome.detail.sku).filter(Boolean),
     });
   } catch (error) {
     console.error(error);
