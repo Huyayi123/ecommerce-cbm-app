@@ -774,6 +774,7 @@ function App() {
         <SalesSuggestionPage
           skuItems={skuItems}
           purchaseRecords={purchaseRecords}
+          haichuanWarehouseLots={haichuanData.warehouseLots}
           onSendToCalculator={(rows, name) => void sendSuggestionsToCalculator(rows, name)}
           canEditData={editable}
           savedSuggestions={savedSalesSuggestions}

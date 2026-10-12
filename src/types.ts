@@ -379,6 +379,7 @@ export type SalesSuggestionRow = {
   stockOnWayQuantity: number;
   inTransitQuantity: number;
   pendingPoolQuantity?: number;
+  haichuanStockQuantity?: number;
   suggestedQuantity: number;
   unitsPerCarton: number | null;
   estimatedCartons: number | null;

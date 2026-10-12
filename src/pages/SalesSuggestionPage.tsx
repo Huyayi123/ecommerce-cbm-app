@@ -1,6 +1,6 @@
 import type { ChangeEvent } from 'react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import type { PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from '../types';
+import type { HaichuanWarehouseLot, PurchaseRecord, PurchaseRow, SalesSuggestionRow, SkuItem } from '../types';
 import { parseSalesFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
 import { effectivePurchaseQuantity, isInventoryRecord, withPurchaseTotals } from '../utils/purchaseRecords';
@@ -10,6 +10,7 @@ import { fetchTakealotInventory, type TakealotInventoryRow } from '../utils/take
 type Props = {
   skuItems: SkuItem[];
   purchaseRecords: PurchaseRecord[];
+  haichuanWarehouseLots: HaichuanWarehouseLot[];
   onSendToCalculator: (rows: PurchaseRow[], fileName: string) => void;
   canEditData?: boolean;
   savedSuggestions?: SalesSuggestionRow[];
@@ -179,7 +180,7 @@ function isInTransitStatus(status: string): boolean {
   return ['in_transit', 'ordered', '海运在途', '已下单'].includes(status);
 }
 
-export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalculator, canEditData = true, savedSuggestions = [] }: Props) {
+export function SalesSuggestionPage({ skuItems, purchaseRecords, haichuanWarehouseLots, onSendToCalculator, canEditData = true, savedSuggestions = [] }: Props) {
   const [salesRows, setSalesRows] = useState<PurchaseRow[]>([]);
   const [fileName, setFileName] = useState('');
   const [selectedStore, setSelectedStore] = useState('');
@@ -243,6 +244,23 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     const newProductRankMap = buildNewProductRankMap(selectedStore, inventoryRows);
     const inTransitBySku = new Map<string, number>();
     const pendingPoolBySku = new Map<string, number>();
+    const haichuanStockBySku = new Map<string, number>();
+
+    for (const lot of haichuanWarehouseLots) {
+      if (lot.remainingProductQuantity <= 0) continue;
+      const details = lot.productDetails.filter((detail) => skuKey(detail.sku) && detail.quantity > 0);
+      if (details.length > 0) {
+        const detailTotal = details.reduce((sum, detail) => sum + detail.quantity, 0);
+        for (const detail of details) {
+          const key = skuKey(detail.sku);
+          const quantity = detailTotal > 0 ? lot.remainingProductQuantity * detail.quantity / detailTotal : 0;
+          haichuanStockBySku.set(key, (haichuanStockBySku.get(key) ?? 0) + quantity);
+        }
+      } else if (skuKey(lot.sku)) {
+        const key = skuKey(lot.sku);
+        haichuanStockBySku.set(key, (haichuanStockBySku.get(key) ?? 0) + lot.remainingProductQuantity);
+      }
+    }
 
     for (const record of purchaseRecords) {
       if (record.status === 'cancelled') continue;
@@ -254,6 +272,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
           const mixedKey = skuKey(line.sku);
           pendingPoolBySku.set(mixedKey, (pendingPoolBySku.get(mixedKey) ?? 0) + line.quantity);
         }
+        continue;
       }
       if (!isInventoryRecord(record)) continue;
       if (!isInTransitStatus(record.status)) continue;
@@ -269,13 +288,15 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
     const applySavedOverride = (row: SalesSuggestionRow): SalesSuggestionRow => {
       const inTransitQuantity = inTransitBySku.get(skuKey(row.sku)) ?? row.inTransitQuantity;
       const pendingPoolQuantity = pendingPoolBySku.get(skuKey(row.sku)) ?? row.pendingPoolQuantity ?? 0;
+      const haichuanStockQuantity = haichuanStockBySku.get(skuKey(row.sku)) ?? 0;
       const rawAutoSuggestedQuantity = Math.max(round(
         row.targetQuantity
         - row.localStockQuantity
         - row.takealotStockQuantity
         - row.stockOnWayQuantity
         - inTransitQuantity
-        - pendingPoolQuantity,
+        - pendingPoolQuantity
+        - haichuanStockQuantity,
         2,
       ), 0);
       const autoSuggestedQuantity = applySuggestedQuantityMinimum(row.monthlySales, rawAutoSuggestedQuantity);
@@ -286,6 +307,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         ...row,
         inTransitQuantity,
         pendingPoolQuantity,
+        haichuanStockQuantity,
         suggestedQuantity,
         estimatedCartons: row.estimatedCartons !== null && row.estimatedCartons !== undefined && ratio > 0 ? round(row.estimatedCartons * ratio, 2) : row.estimatedCartons,
         estimatedCbm: row.estimatedCbm !== null && row.estimatedCbm !== undefined && ratio > 0 ? round(row.estimatedCbm * ratio, 4) : row.estimatedCbm,
@@ -339,6 +361,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
       const stockOnWayQuantity = inventory?.stockOnWayQuantity ?? 0;
       const inTransitQuantity = inTransitBySku.get(key) ?? 0;
       const pendingPoolQuantity = pendingPoolBySku.get(key) ?? 0;
+      const haichuanStockQuantity = haichuanStockBySku.get(key) ?? 0;
       const directTarget = !isNotBuyable && selectedStore === 'Aicom' ? aicomDirectTargetQuantity(newProductRank, rawMonthlySales) : null;
       const targetQuantity = directTarget?.targetQuantity ?? calculatedTargetQuantity;
       const rawAutoSuggestedQuantity = Math.max(round(
@@ -347,7 +370,8 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         - takealotStockQuantity
         - stockOnWayQuantity
         - inTransitQuantity
-        - pendingPoolQuantity,
+        - pendingPoolQuantity
+        - haichuanStockQuantity,
         2,
       ), 0);
       const autoSuggestedQuantity = applySuggestedQuantityMinimum(monthlySales, rawAutoSuggestedQuantity);
@@ -386,6 +410,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         stockOnWayQuantity,
         inTransitQuantity,
         pendingPoolQuantity,
+        haichuanStockQuantity,
         suggestedQuantity,
         unitsPerCarton: skuItem?.unitsPerCarton ?? null,
         estimatedCartons,
@@ -393,7 +418,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         messages,
       };
     }));
-  }, [inventoryRows, purchaseRecords, salesRows, savedSuggestions, selectedStore, skuItems, suggestedQuantityOverrides]);
+  }, [haichuanWarehouseLots, inventoryRows, purchaseRecords, salesRows, savedSuggestions, selectedStore, skuItems, suggestedQuantityOverrides]);
 
   const poolSummary = useMemo(() => {
     return {
@@ -596,7 +621,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
         <table className="suggestion-table">
           <thead>
             <tr>
-              <th className="suggestion-sticky suggestion-sticky-1">图片</th><th className="suggestion-sticky suggestion-sticky-2">SKU</th><th className="suggestion-sticky suggestion-sticky-3">产品名称</th><th>月销量</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>装柜池待装柜</th><th>建议采购数量</th><th>采购人</th><th>预计 CBM</th><th>状态/备注</th><th>店铺</th>
+              <th className="suggestion-sticky suggestion-sticky-1">图片</th><th className="suggestion-sticky suggestion-sticky-2">SKU</th><th className="suggestion-sticky suggestion-sticky-3">产品名称</th><th>月销量</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>采购订单池</th><th>海川仓库库存</th><th>建议采购数量</th><th>采购人</th><th>预计 CBM</th><th>状态/备注</th><th>店铺</th>
             </tr>
           </thead>
           <tbody>
@@ -611,6 +636,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.stockOnWayQuantity}</td>
                 <td>{row.inTransitQuantity}</td>
                 <td>{row.pendingPoolQuantity ?? 0}</td>
+                <td>{row.haichuanStockQuantity ?? 0}</td>
                 <td>
                   <input
                     className="quantity-input compact-input"
@@ -632,7 +658,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, onSendToCalcula
                 <td>{row.shopName || '-'}</td>
               </tr>
             ))}
-            {suggestions.length === 0 && <tr><td colSpan={14} className="empty">上传月销量或手动同步 Takealot 库存后生成采购建议。</td></tr>}
+            {suggestions.length === 0 && <tr><td colSpan={15} className="empty">上传月销量或手动同步 Takealot 库存后生成采购建议。</td></tr>}
           </tbody>
         </table>
       </div>

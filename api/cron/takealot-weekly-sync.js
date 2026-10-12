@@ -396,6 +396,12 @@ function skuKey(value) {
 }
 
 function effectivePurchaseQuantity(record) {
+  const cartonCount = record.carton_count;
+  const unitsPerCarton = record.units_per_carton;
+  const tailQuantity = numberValue(record.tail_quantity);
+  if (cartonCount !== null && cartonCount !== undefined && (numberValue(unitsPerCarton) > 0 || tailQuantity > 0)) {
+    return numberValue(cartonCount) * Math.max(0, numberValue(unitsPerCarton)) + tailQuantity;
+  }
   return record.confirmed_purchase_quantity === null || record.confirmed_purchase_quantity === undefined
     ? numberValue(record.purchase_quantity)
     : numberValue(record.confirmed_purchase_quantity);
@@ -410,10 +416,11 @@ function jsonResponse(body, status = 200) {
 }
 
 async function buildStoreSuggestions(storeName) {
-  const [{ rows: takealotRows, pagesFetched, totalResults, fetchedRows, activeRows, disabledRows, duplicateRows }, skuItems, purchaseRecords] = await Promise.all([
+  const [{ rows: takealotRows, pagesFetched, totalResults, fetchedRows, activeRows, disabledRows, duplicateRows }, skuItems, purchaseRecords, haichuanLots] = await Promise.all([
     fetchTakealotRows(storeName),
     fetchSkuItemsForSync(),
-    supabaseSelectAll('purchase_records?select=sku,purchase_quantity,shop_name,status'),
+    supabaseSelectAll('purchase_records?select=sku,purchase_quantity,confirmed_purchase_quantity,carton_count,units_per_carton,tail_quantity,mixed_groups,shop_name,status,pool_status'),
+    supabaseSelectAll('haichuan_warehouse_lots?select=sku,shop_name,remaining_product_quantity,product_details'),
   ]);
 
   const newProductRankMap = buildNewProductRankMap(storeName, takealotRows);
@@ -421,10 +428,34 @@ async function buildStoreSuggestions(storeName) {
   const skuCatalogRows = skuItems.length;
   const skuCatalogSkuRows = skuItems.filter((item) => skuKey(item.sku)).length;
   const inTransitMap = new Map();
+  const pendingPoolMap = new Map();
   for (const record of purchaseRecords) {
-    if (!isInTransitStatus(record.status)) continue;
-    const key = skuKey(record.sku);
-    inTransitMap.set(key, (inTransitMap.get(key) ?? 0) + effectivePurchaseQuantity(record));
+    if (record.status === 'cancelled') continue;
+    const target = record.pool_status === 'submitted_to_pool'
+      ? pendingPoolMap
+      : isInTransitStatus(record.status) && record.pool_status !== 'haichuan_warehouse' ? inTransitMap : null;
+    if (!target) continue;
+    const add = (sku, quantity) => {
+      const key = skuKey(sku);
+      if (key) target.set(key, (target.get(key) ?? 0) + numberValue(quantity));
+    };
+    add(record.sku, effectivePurchaseQuantity(record));
+    for (const group of Array.isArray(record.mixed_groups) ? record.mixed_groups : []) {
+      for (const line of Array.isArray(group.lines) ? group.lines : []) add(line.sku, line.quantity);
+    }
+  }
+  const haichuanStockMap = new Map();
+  for (const lot of haichuanLots) {
+    const remaining = numberValue(lot.remaining_product_quantity);
+    if (remaining <= 0) continue;
+    const details = (Array.isArray(lot.product_details) ? lot.product_details : [])
+      .filter((detail) => skuKey(detail.sku) && numberValue(detail.quantity) > 0);
+    const total = details.reduce((sum, detail) => sum + numberValue(detail.quantity), 0);
+    const lines = total > 0 ? details.map((detail) => [detail.sku, remaining * numberValue(detail.quantity) / total]) : [[lot.sku, remaining]];
+    for (const [sku, quantity] of lines) {
+      const key = skuKey(sku);
+      if (key) haichuanStockMap.set(key, (haichuanStockMap.get(key) ?? 0) + quantity);
+    }
   }
 
   const suggestions = takealotRows.map((row, index) => {
@@ -443,10 +474,12 @@ async function buildStoreSuggestions(storeName) {
     const takealotStockQuantity = row.stock_at_takealot_total === undefined ? sumQuantityAvailable(row.stock_at_takealot) : numberValue(row.stock_at_takealot_total);
     const stockOnWayQuantity = row.total_stock_on_way === undefined ? sumQuantityAvailable(row.stock_on_way) : numberValue(row.total_stock_on_way);
     const inTransitQuantity = inTransitMap.get(key) ?? 0;
+    const pendingPoolQuantity = pendingPoolMap.get(key) ?? 0;
+    const haichuanStockQuantity = haichuanStockMap.get(key) ?? 0;
     const calculatedTargetQuantity = round(monthlySales * stockMonths, 2);
     const directTarget = !isNotBuyable && storeName === 'Aicom' ? aicomDirectTargetQuantity(newProductRank, rawMonthlySales) : null;
     const targetQuantity = directTarget?.targetQuantity ?? calculatedTargetQuantity;
-    const rawSuggestedQuantity = Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity, 2), 0);
+    const rawSuggestedQuantity = Math.max(round(targetQuantity - localStockQuantity - takealotStockQuantity - stockOnWayQuantity - inTransitQuantity - pendingPoolQuantity - haichuanStockQuantity, 2), 0);
     const suggestedQuantity = applySuggestedQuantityMinimum(monthlySales, rawSuggestedQuantity);
     const manualUnitCbm = numberValue(skuItem?.unit_cbm);
     const totalCbm = numberValue(skuItem?.total_cbm);
