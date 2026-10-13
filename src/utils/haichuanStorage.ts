@@ -6,6 +6,8 @@ import type {
   HaichuanLoadingBatch,
   HaichuanLoadingItem,
   HaichuanProductDetail,
+  HaichuanReceiptEvent,
+  HaichuanReceiptType,
   HaichuanWarehouseLot,
   PurchaseRecord,
   SkuItem,
@@ -68,6 +70,8 @@ function mapInbound(row: Record<string, unknown>): HaichuanInboundItem {
     declaredTailQuantity: numberValue(row.declared_tail_quantity),
     declaredTotalCartonCount: numberValue(row.declared_total_carton_count),
     actualReceivedCartonCount: numberValue(row.actual_received_carton_count),
+    receiptCompletionType: textValue(row.receipt_completion_type) as HaichuanInboundItem['receiptCompletionType'],
+    purchaseNote: textValue(row.purchase_note),
     unitCbm: numberValue(row.unit_cbm),
     declaredTotalCbm: numberValue(row.declared_total_cbm),
     productDetails: productDetailsValue(row.product_details),
@@ -75,6 +79,8 @@ function mapInbound(row: Record<string, unknown>): HaichuanInboundItem {
     status: row.status === 'received' ? 'received' : 'pending_receipt',
     receivedBy: textValue(row.received_by),
     receivedAt: textValue(row.received_at),
+    completedBy: textValue(row.completed_by),
+    completedAt: textValue(row.completed_at),
     createdAt: textValue(row.created_at),
     updatedAt: textValue(row.updated_at),
   };
@@ -98,6 +104,7 @@ function mapWarehouseLot(row: Record<string, unknown>): HaichuanWarehouseLot {
     initialCbm: numberValue(row.initial_cbm), remainingCbm: numberValue(row.remaining_cbm), unitCbm: numberValue(row.unit_cbm),
     productDetails: productDetailsValue(row.product_details),
     hasPackingVariance: Boolean(row.has_packing_variance), status, version: numberValue(row.version),
+    purchaseNote: textValue(row.purchase_note), latestLogisticsNote: textValue(row.latest_logistics_note),
     createdAt: textValue(row.created_at), updatedAt: textValue(row.updated_at),
   };
 }
@@ -190,6 +197,7 @@ export async function createHaichuanInboundItems(records: PurchaseRecord[], logi
     unit_cbm: purchaseTotalQuantity > 0 ? Math.max(0, Number(record.totalCbm) || 0) / purchaseTotalQuantity : 0,
     declared_total_cbm: Math.max(0, Number(record.totalCbm) || 0),
     product_details: productDetails,
+    purchase_note: record.note,
     has_packing_variance: false,
     status: 'pending_receipt',
     created_at: now,
@@ -203,6 +211,7 @@ export async function createHaichuanInboundItems(records: PurchaseRecord[], logi
     declared_total_cbm: row.declared_total_cbm,
     unit_cbm: row.unit_cbm,
     product_details: row.product_details,
+    purchase_note: row.purchase_note,
     updated_at: now,
   }).eq('purchase_record_id', row.purchase_record_id).eq('status', 'pending_receipt')));
   const refreshError = refreshResults.find((result) => result.error)?.error;
@@ -220,12 +229,42 @@ export async function deletePendingHaichuanInboundItems(purchaseRecordIds: strin
   }
 }
 
-export async function confirmHaichuanReceipt(inboundId: string, actualCartonCount: number): Promise<void> {
-  const { error } = await client().rpc('confirm_haichuan_receipt', {
-    p_inbound_id: inboundId,
-    p_actual_carton_count: actualCartonCount,
+export async function confirmHaichuanReceipt(input: {
+  inboundId: string;
+  receivedCartonCount: number;
+  receiptType: HaichuanReceiptType;
+  logisticsNote: string;
+  requestId: string;
+}): Promise<void> {
+  const { error } = await client().rpc('record_haichuan_receipt', {
+    p_inbound_id: input.inboundId,
+    p_received_carton_count: input.receivedCartonCount,
+    p_receipt_type: input.receiptType,
+    p_logistics_note: input.logisticsNote,
+    p_request_id: input.requestId,
   });
   if (error) throw new Error(formatErrorMessage(error));
+}
+
+export async function fetchHaichuanReceiptEvents(inboundId: string): Promise<HaichuanReceiptEvent[]> {
+  const { data, error } = await client().from('haichuan_receipt_events')
+    .select('*')
+    .eq('inbound_item_id', inboundId)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(formatErrorMessage(error));
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    id: textValue(row.id),
+    requestId: textValue(row.request_id),
+    inboundItemId: textValue(row.inbound_item_id),
+    warehouseLotId: textValue(row.warehouse_lot_id),
+    receiptType: row.receipt_type === 'complete' ? 'complete' : 'partial',
+    receivedCartonCount: numberValue(row.received_carton_count),
+    cumulativeReceivedCartonCount: numberValue(row.cumulative_received_carton_count),
+    purchaseNoteSnapshot: textValue(row.purchase_note_snapshot),
+    logisticsNote: textValue(row.logistics_note),
+    createdBy: textValue(row.created_by),
+    createdAt: textValue(row.created_at),
+  }));
 }
 
 export async function updateHaichuanWarehouseQuantity(lotId: string, newTotal: number): Promise<void> {

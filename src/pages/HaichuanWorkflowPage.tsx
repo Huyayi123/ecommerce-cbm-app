@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import type { AppProfile, HaichuanData, HaichuanLoadingBatch, HaichuanLoadingItem, HaichuanProductDetail, HaichuanWarehouseLot } from '../types';
+import type { AppProfile, HaichuanData, HaichuanLoadingBatch, HaichuanLoadingItem, HaichuanProductDetail, HaichuanReceiptEvent, HaichuanReceiptType, HaichuanWarehouseLot } from '../types';
 import { formatErrorMessage } from '../utils/errors';
 import { exportHaichuanTable } from '../utils/exporters';
 import { calculateHaichuanLoadingSuggestion, previewHaichuanWarehouseQuantity, selectableHaichuanWarehouseLots, toggleAllHaichuanWarehouseLots } from '../utils/haichuan';
+import { fetchHaichuanReceiptEvents } from '../utils/haichuanStorage';
 import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
 
 type LoadingSelection = Record<string, number>;
@@ -13,7 +14,7 @@ type Props = {
   profiles: AppProfile[];
   data: HaichuanData;
   onRefresh: () => Promise<void>;
-  onConfirmReceipt: (inboundId: string, actualCartonCount: number) => Promise<void>;
+  onConfirmReceipt: (input: { inboundId: string; receivedCartonCount: number; receiptType: HaichuanReceiptType; logisticsNote: string; requestId: string }) => Promise<void>;
   onSubmitBatch: (input: {
     id: string;
     containerDate: string;
@@ -110,6 +111,9 @@ export function HaichuanWorkflowPage({
   const [message, setMessage] = useState('');
   const [busyKey, setBusyKey] = useState('');
   const [receiptDrafts, setReceiptDrafts] = useState<Record<string, number>>({});
+  const [receiptNotes, setReceiptNotes] = useState<Record<string, string>>({});
+  const [historyItemId, setHistoryItemId] = useState('');
+  const [receiptHistory, setReceiptHistory] = useState<HaichuanReceiptEvent[]>([]);
   const [selectedLots, setSelectedLots] = useState<LoadingSelection>({});
   const [containerDate, setContainerDate] = useState('');
   const [batchNote, setBatchNote] = useState('');
@@ -123,7 +127,7 @@ export function HaichuanWorkflowPage({
   const [deleteLot, setDeleteLot] = useState<HaichuanWarehouseLot | null>(null);
 
   const pendingInbound = useMemo(() => data.inboundItems.filter((item) => item.status === 'pending_receipt' && includesSearch([
-    item.sku, item.productName, item.englishName, item.internalCode,
+    item.sku, item.productName, item.englishName, item.internalCode, item.purchaseNote,
     ...item.productDetails.flatMap((detail) => [detail.sku, detail.productName, detail.englishName, detail.internalCode]),
   ], search)), [data.inboundItems, search]);
   const visibleLots = useMemo(() => data.warehouseLots.filter((lot) => lot.remainingCartonCount > 0 && includesSearch([
@@ -142,7 +146,7 @@ export function HaichuanWorkflowPage({
     setReceiptDrafts((current) => {
       const next = { ...current };
       for (const item of data.inboundItems) {
-        if (next[item.id] === undefined) next[item.id] = item.declaredTotalCartonCount;
+        if (next[item.id] === undefined) next[item.id] = Math.max(1, item.declaredTotalCartonCount - item.actualReceivedCartonCount);
       }
       return next;
     });
@@ -178,9 +182,39 @@ export function HaichuanWorkflowPage({
     }
   }
 
-  async function confirmReceipt(itemId: string) {
+  async function confirmReceipt(itemId: string, receiptType: HaichuanReceiptType) {
     const value = Math.trunc(Number(receiptDrafts[itemId]) || 0);
-    await runAction(`receipt-${itemId}`, () => onConfirmReceipt(itemId, value), '入仓确认成功，记录已进入海川仓库库存。');
+    if (value <= 0) {
+      setMessage('本次入库件数必须大于 0。');
+      return;
+    }
+    const saved = await runAction(`receipt-${itemId}`, () => onConfirmReceipt({
+      inboundId: itemId,
+      receivedCartonCount: value,
+      receiptType,
+      logisticsNote: receiptNotes[itemId] ?? '',
+      requestId: crypto.randomUUID(),
+    }), receiptType === 'partial' ? '部分入库成功，剩余货物继续待入仓。' : '完成入库成功，记录已进入海川仓库库存。');
+    if (saved) {
+      setReceiptNotes((current) => ({ ...current, [itemId]: '' }));
+      setReceiptDrafts((current) => {
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
+    }
+  }
+
+  async function openReceiptHistory(itemId: string) {
+    setBusyKey(`history-${itemId}`);
+    try {
+      setReceiptHistory(await fetchHaichuanReceiptEvents(itemId));
+      setHistoryItemId(itemId);
+    } catch (error) {
+      setMessage(`入库历史加载失败：${formatErrorMessage(error)}`);
+    } finally {
+      setBusyKey('');
+    }
   }
 
   function toggleLot(lot: HaichuanWarehouseLot, checked: boolean) {
@@ -442,26 +476,27 @@ export function HaichuanWorkflowPage({
       {tab === 'inbound' && isLogistics && (
         <div className="table-wrap haichuan-table-wrap">
           <table className="haichuan-table">
-            <thead><tr><th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>申报总件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>实际收到总件数</th><th>{labels.status}</th><th>{labels.actions}</th></tr></thead>
+            <thead><tr><th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>申报总件数</th><th>已入库件数</th><th>参考剩余件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCbm}</th><th>采购备注</th><th>本次入库件数</th><th>海川备注</th><th>{labels.status}</th><th>{labels.actions}</th></tr></thead>
             <tbody>
               {pendingInbound.map((item) => {
                 const mainDetail = mainProductDetail(item.productDetails);
                 return <Fragment key={item.id}>
                   <tr>
                     {productCells(mainDetail, item)}
-                    <td>{valueText(item.purchaseTotalQuantity)}</td><td>{item.declaredTotalCartonCount}</td>
-                    <td>{valueText(item.declaredUnitsPerCarton)}</td><td>{valueText(item.declaredTailQuantity)}</td>
-                    <td>{valueText(item.unitCbm, 8)}</td><td>{valueText(item.declaredTotalCbm)}</td>
-                    <td><input type="number" min="1" step="1" value={receiptDrafts[item.id] ?? item.declaredTotalCartonCount} onChange={(event) => setReceiptDrafts((current) => ({ ...current, [item.id]: Number(event.target.value) }))} /></td>
-                    <td>待入仓</td>
-                    <td><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id)}>{busyKey === `receipt-${item.id}` ? '正在确认...' : '确认入仓'}</button></td>
+                    <td>{valueText(item.purchaseTotalQuantity)}</td><td>{item.declaredTotalCartonCount}</td><td>{item.actualReceivedCartonCount}</td><td>{Math.max(0, item.declaredTotalCartonCount - item.actualReceivedCartonCount)}</td>
+                    <td>{valueText(item.declaredUnitsPerCarton)}</td><td>{valueText(item.declaredTailQuantity)}</td><td>{valueText(item.declaredTotalCbm)}</td>
+                    <td><span className="cell-ellipsis" title={item.purchaseNote || '-'}>{item.purchaseNote || '-'}</span></td>
+                    <td><input type="number" min="1" step="1" value={receiptDrafts[item.id] ?? Math.max(1, item.declaredTotalCartonCount - item.actualReceivedCartonCount)} onChange={(event) => setReceiptDrafts((current) => ({ ...current, [item.id]: Number(event.target.value) }))} /></td>
+                    <td><input value={receiptNotes[item.id] ?? ''} onChange={(event) => setReceiptNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="本次入库备注" /></td>
+                    <td>{item.actualReceivedCartonCount > 0 ? '部分已入库' : '待入仓'}</td>
+                    <td className="row-actions"><button type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id, 'partial')}>部分入库</button><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id, 'complete')}>{busyKey === `receipt-${item.id}` ? '正在确认...' : '完成入库'}</button><button type="button" disabled={Boolean(busyKey)} onClick={() => void openReceiptHistory(item.id)}>入库历史</button></td>
                   </tr>
                   {mixedProductDetails(item.productDetails).map((detail) => <tr className="mixed-child-row" key={`${item.id}:${detail.id}`}>
-                    {productCells(detail, item)}<td>{valueText(detail.quantity)}</td><td /><td /><td /><td>{valueText(detail.unitCbm, 8)}</td><td>{valueText(detail.totalCbm)}</td><td /><td>{mixedNote(detail)}</td><td />
+                    {productCells(detail, item)}<td>{valueText(detail.quantity)}</td><td /><td /><td /><td /><td /><td>{valueText(detail.totalCbm)}</td><td /><td /><td /><td>{mixedNote(detail)}</td><td />
                   </tr>)}
                 </Fragment>;
               })}
-              {pendingInbound.length === 0 && <tr><td colSpan={13}>暂无待入仓记录</td></tr>}
+              {pendingInbound.length === 0 && <tr><td colSpan={16}>暂无待入仓记录</td></tr>}
             </tbody>
           </table>
         </div>
@@ -601,6 +636,17 @@ export function HaichuanWorkflowPage({
           <div className="inline-error">删除后不可恢复；如果这是混装记录，主产品及全部混装子产品会整组删除，并将采购订单退回“我的采购订单”。</div>
           {(deleteLot.remainingProductQuantity !== deleteLot.initialProductQuantity || deleteLot.reservedCartonCount > 0) && <div className="inline-error">该记录已有装柜数量或冻结件数，当前不能删除。</div>}
           <div className="form-actions"><button type="button" disabled={Boolean(busyKey)} onClick={() => setDeleteLot(null)}>取消</button><button className="danger" type="button" disabled={Boolean(busyKey) || deleteLot.remainingProductQuantity !== deleteLot.initialProductQuantity || deleteLot.reservedCartonCount > 0} onClick={() => void confirmDeleteWarehouseLot()}>{busyKey ? '正在删除...' : '确认删除'}</button></div>
+        </div>
+      </div>}
+
+      {historyItemId && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setHistoryItemId(''); }}>
+        <div className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-history-title">
+          <h3 id="receipt-history-title">入库历史</h3>
+          <div className="table-wrap"><table><thead><tr><th>操作时间</th><th>类型</th><th>本次件数</th><th>累计件数</th><th>海川备注</th></tr></thead><tbody>
+            {receiptHistory.map((event) => <tr key={event.id}><td>{event.createdAt ? new Date(event.createdAt).toLocaleString() : '-'}</td><td>{event.receiptType === 'complete' ? '完成入库' : '部分入库'}</td><td>{event.receivedCartonCount}</td><td>{event.cumulativeReceivedCartonCount}</td><td>{event.logisticsNote || '-'}</td></tr>)}
+            {receiptHistory.length === 0 && <tr><td colSpan={5}>暂无入库历史</td></tr>}
+          </tbody></table></div>
+          <div className="form-actions"><button type="button" onClick={() => setHistoryItemId('')}>关闭</button></div>
         </div>
       </div>}
     </section>

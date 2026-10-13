@@ -74,6 +74,8 @@ export type AppProfile = {
 };
 
 export type HaichuanInboundStatus = 'pending_receipt' | 'received';
+export type HaichuanReceiptType = 'partial' | 'complete';
+export type HaichuanReceiptCompletionType = '' | 'matched' | 'short' | 'over';
 export type HaichuanWarehouseStatus = 'available' | 'partially_reserved' | 'fully_reserved' | 'depleted';
 export type HaichuanLoadingStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 
@@ -111,6 +113,8 @@ export type HaichuanInboundItem = {
   declaredTailQuantity: number;
   declaredTotalCartonCount: number;
   actualReceivedCartonCount: number;
+  receiptCompletionType: HaichuanReceiptCompletionType;
+  purchaseNote: string;
   unitCbm: number;
   declaredTotalCbm: number;
   productDetails: HaichuanProductDetail[];
@@ -118,6 +122,8 @@ export type HaichuanInboundItem = {
   status: HaichuanInboundStatus;
   receivedBy: string;
   receivedAt: string;
+  completedBy: string;
+  completedAt: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -151,8 +157,24 @@ export type HaichuanWarehouseLot = {
   hasPackingVariance: boolean;
   status: HaichuanWarehouseStatus;
   version: number;
+  purchaseNote: string;
+  latestLogisticsNote: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type HaichuanReceiptEvent = {
+  id: string;
+  requestId: string;
+  inboundItemId: string;
+  warehouseLotId: string;
+  receiptType: HaichuanReceiptType;
+  receivedCartonCount: number;
+  cumulativeReceivedCartonCount: number;
+  purchaseNoteSnapshot: string;
+  logisticsNote: string;
+  createdBy: string;
+  createdAt: string;
 };
 
 export type HaichuanLoadingItem = {
