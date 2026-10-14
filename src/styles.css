@@ -1395,6 +1395,33 @@ button.danger,
   max-width: 100%;
 }
 
+.purchase-pool-table-wrap .inventory-table th:nth-child(n + 11):nth-child(-n + 16),
+.purchase-pool-table-wrap .inventory-table td:nth-child(n + 11):nth-child(-n + 16) {
+  width: 78px;
+  min-width: 78px;
+  max-width: 84px;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.purchase-pool-table-wrap .inventory-table th:nth-child(n + 17):nth-child(-n + 21),
+.purchase-pool-table-wrap .inventory-table td:nth-child(n + 17):nth-child(-n + 21) {
+  width: 94px;
+  min-width: 88px;
+  max-width: 100px;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.purchase-pool-table-wrap .inventory-table td:nth-child(n + 11):nth-child(-n + 21) input,
+.purchase-pool-table-wrap .inventory-table td:nth-child(n + 11):nth-child(-n + 21) select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
 .purchase-pool-table-wrap .mixed-child-row .pool-pin {
   background: #f8fbfc;
 }
