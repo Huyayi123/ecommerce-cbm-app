@@ -271,6 +271,11 @@ export type PurchaseRecord = {
   status: PurchaseStatus;
   unitCbm: number;
   totalCbm: number;
+  manualTotalCartonCount?: number | null;
+  manualPurchaseTotalQuantity?: number | null;
+  manualTotalAmount?: number | null;
+  manualTotalCbm?: number | null;
+  manualIsMixed?: boolean | null;
   loadingType: '' | '整柜' | '冠通' | '海川';
   containerDate: string;
   totalWeightKg: number | null;

@@ -38,6 +38,9 @@ type EditablePoolField =
   | 'cartonCount'
   | 'unitsPerCarton'
   | 'tailQuantity'
+  | 'manualTotalCartonCount'
+  | 'manualPurchaseTotalQuantity'
+  | 'isMixed'
   | 'purchasePrice'
   | 'freightCost'
   | 'totalAmount'
@@ -47,6 +50,34 @@ type EditablePoolField =
   | 'loadingType'
   | 'containerDate'
   | 'note';
+
+const confirmedEditFields = new Set<EditablePoolField>([
+  'cartonCount',
+  'unitsPerCarton',
+  'tailQuantity',
+  'manualTotalCartonCount',
+  'manualPurchaseTotalQuantity',
+  'isMixed',
+  'purchasePrice',
+  'freightCost',
+  'totalAmount',
+  'unitCbm',
+  'totalCbm',
+]);
+
+const editablePoolFieldLabels: Partial<Record<EditablePoolField, string>> = {
+  cartonCount: labels.cartonCount,
+  unitsPerCarton: labels.unitsPerCarton,
+  tailQuantity: labels.tailQuantity,
+  manualTotalCartonCount: labels.totalCartonCount,
+  manualPurchaseTotalQuantity: labels.purchaseTotalQuantity,
+  isMixed: '是否混装',
+  purchasePrice: '采购单价',
+  freightCost: '运费',
+  totalAmount: '总金额',
+  unitCbm: labels.unitCbm,
+  totalCbm: labels.totalCbm,
+};
 
 function poolKey(record: PurchaseRecord): string {
   return record.purchasePoolId || record.purchaseBatchId || `${record.purchasePoolDate || record.purchaseBatchDate}|${record.purchasePoolName || record.purchaseBatchName}`;
@@ -371,22 +402,44 @@ export function PurchasePoolPage({
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  function valueFor(record: PurchaseRecord, field: EditablePoolField): string {
-    const key = draftKey(record.id, field);
-    if (key in drafts) return drafts[key];
-    const value = record[field];
+  function savedValueFor(record: PurchaseRecord, field: EditablePoolField): string {
+    const value = field === 'manualTotalCartonCount'
+      ? packageCountFor(record)
+      : field === 'manualPurchaseTotalQuantity'
+        ? effectivePurchaseQuantity(record)
+        : record[field];
     return value === null || value === undefined ? '' : String(value);
   }
 
+  function valueFor(record: PurchaseRecord, field: EditablePoolField): string {
+    const key = draftKey(record.id, field);
+    return key in drafts ? drafts[key] : savedValueFor(record, field);
+  }
+
   function canEditField(field: EditablePoolField): boolean {
-    return isAdmin && Boolean(activePool) && (!activePool?.isAggregate || field === 'containerDate' || field === 'loadingType');
+    return isAdmin && Boolean(activePool) && (!activePool?.isAggregate || field === 'containerDate' || field === 'loadingType' || confirmedEditFields.has(field));
   }
 
   function patchRecord(record: PurchaseRecord, field: EditablePoolField, value: string): PurchaseRecord {
     if (field === 'loadingType') {
       return changePurchasePoolLoadingType(record, value as PurchaseRecord['loadingType']);
     }
-    const next: PurchaseRecord = { ...record };
+    const next: PurchaseRecord = confirmedEditFields.has(field) ? {
+      ...record,
+      manualTotalCartonCount: record.manualTotalCartonCount ?? packageCountFor(record),
+      manualPurchaseTotalQuantity: record.manualPurchaseTotalQuantity ?? effectivePurchaseQuantity(record),
+      manualTotalAmount: record.manualTotalAmount ?? record.totalAmount,
+      manualTotalCbm: record.manualTotalCbm ?? record.totalCbm,
+    } : { ...record };
+    if (field === 'isMixed') {
+      next.isMixed = value === 'true';
+      next.manualIsMixed = next.isMixed;
+      return next;
+    }
+    if (field === 'manualTotalCartonCount' || field === 'manualPurchaseTotalQuantity') {
+      next[field] = parseNumber(value);
+      return next;
+    }
     if (
       field === 'purchaseQuantity'
       || field === 'purchasePrice'
@@ -410,9 +463,11 @@ export function PurchasePoolPage({
       || field === 'unitsPerCarton'
       || field === 'tailQuantity'
     ) {
-      return withPurchaseTotals({ ...next, totalAmount: calculatedPurchaseTotalAmount(next) }, { recalculateAmount: true });
+      return confirmedEditFields.has(field) ? next : withPurchaseTotals({ ...next, totalAmount: calculatedPurchaseTotalAmount(next) }, { recalculateAmount: true });
     }
-    return withPurchaseTotals(next);
+    if (field === 'totalAmount') next.manualTotalAmount = next.totalAmount;
+    if (field === 'totalCbm') next.manualTotalCbm = next.totalCbm;
+    return confirmedEditFields.has(field) ? next : withPurchaseTotals(next);
   }
 
   async function savePoolRecord(record: PurchaseRecord, field: EditablePoolField) {
@@ -424,7 +479,29 @@ export function PurchasePoolPage({
   async function savePoolRecordValue(record: PurchaseRecord, field: EditablePoolField, value: string) {
     const key = draftKey(record.id, field);
     if (!canEditField(field) || !activePool) return;
-    const nextRecord = normalizeRecordForPurchasePool(patchRecord(record, field, value));
+    const previousValue = savedValueFor(record, field);
+    if (value === previousValue) {
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      return;
+    }
+    if (confirmedEditFields.has(field)) {
+      const product = record.productName || record.sku || '该产品';
+      const fieldLabel = editablePoolFieldLabels[field] || field;
+      if (!window.confirm(`确定修改【${product}】的【${fieldLabel}】吗？\n原值：${previousValue || '空'}\n新值：${value || '空'}`)) {
+        setDrafts((current) => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+        return;
+      }
+    }
+    const patchedRecord = patchRecord(record, field, value);
+    const nextRecord = confirmedEditFields.has(field) ? patchedRecord : normalizeRecordForPurchasePool(patchedRecord);
     const sourcePool = activePool.isAggregate
       ? sourcePoolOptions.find((pool) => pool.records.some((item) => item.id === record.id))
       : activePool;
@@ -512,6 +589,21 @@ export function PurchasePoolPage({
           <option value="整柜">整柜</option>
           <option value="冠通">冠通</option>
           <option value="海川">海川</option>
+        </select>
+      );
+    }
+    if (field === 'isMixed') {
+      return (
+        <select
+          value={valueFor(record, field)}
+          onChange={(event) => {
+            const value = event.target.value;
+            setDrafts((current) => ({ ...current, [draftKey(record.id, field)]: value }));
+            void savePoolRecordValue(record, field, value);
+          }}
+        >
+          <option value="false">否</option>
+          <option value="true">是</option>
         </select>
       );
     }
@@ -623,9 +715,9 @@ export function PurchasePoolPage({
                     <td>{editableCell(record, 'cartonCount', 'number')}</td>
                     <td>{editableCell(record, 'unitsPerCarton', 'number')}</td>
                     <td>{editableCell(record, 'tailQuantity', 'number')}</td>
-                    <td>{packageCountFor(record)}</td>
-                    <td>{effectivePurchaseQuantity(record)}</td>
-                    <td>{record.isMixed ? '是' : '否'}</td>
+                    <td>{editableCell(record, 'manualTotalCartonCount', 'number')}</td>
+                    <td>{editableCell(record, 'manualPurchaseTotalQuantity', 'number')}</td>
+                    <td>{editableCell(record, 'isMixed')}</td>
                     <td>{editableCell(record, 'purchasePrice', 'number')}</td>
                     <td>{editableCell(record, 'freightCost', 'number')}</td>
                     <td>{editableCell(record, 'totalAmount', 'number')}</td>

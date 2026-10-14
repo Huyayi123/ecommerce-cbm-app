@@ -65,6 +65,11 @@ type PurchaseRecordRow = {
   english_name: string | null;
   unit_cbm: number | null;
   total_cbm: number | null;
+  manual_total_carton_count?: number | null;
+  manual_purchase_total_quantity?: number | null;
+  manual_total_amount?: number | null;
+  manual_total_cbm?: number | null;
+  manual_is_mixed?: boolean | null;
   loading_type?: PurchaseRecord['loadingType'] | null;
   container_date?: string | null;
   total_weight_kg?: number | null;
@@ -456,6 +461,11 @@ function mapPurchaseRecord(row: PurchaseRecordRow): PurchaseRecord {
     status: status === 'in_transit' || status === 'arrived' || status === 'cancelled' ? status : 'pending',
     unitCbm: Number(row.unit_cbm ?? 0),
     totalCbm: Number(row.total_cbm ?? 0),
+    manualTotalCartonCount: row.manual_total_carton_count === null || row.manual_total_carton_count === undefined ? null : Number(row.manual_total_carton_count),
+    manualPurchaseTotalQuantity: row.manual_purchase_total_quantity === null || row.manual_purchase_total_quantity === undefined ? null : Number(row.manual_purchase_total_quantity),
+    manualTotalAmount: row.manual_total_amount === null || row.manual_total_amount === undefined ? null : Number(row.manual_total_amount),
+    manualTotalCbm: row.manual_total_cbm === null || row.manual_total_cbm === undefined ? null : Number(row.manual_total_cbm),
+    manualIsMixed: row.manual_is_mixed ?? null,
     loadingType: row.loading_type ?? '',
     containerDate: row.container_date ?? '',
     totalWeightKg: row.total_weight_kg === null || row.total_weight_kg === undefined ? null : Number(row.total_weight_kg),
@@ -658,6 +668,13 @@ function normalizePoolRecord(value: unknown): PurchaseRecord {
     english_name: String(payload.englishName ?? payload.english_name ?? ''),
     unit_cbm: Number(payload.unitCbm ?? payload.unit_cbm ?? 0),
     total_cbm: Number(payload.totalCbm ?? payload.total_cbm ?? 0),
+    manual_total_carton_count: nullableNumber(payload.manualTotalCartonCount ?? payload.manual_total_carton_count),
+    manual_purchase_total_quantity: nullableNumber(payload.manualPurchaseTotalQuantity ?? payload.manual_purchase_total_quantity),
+    manual_total_amount: nullableNumber(payload.manualTotalAmount ?? payload.manual_total_amount),
+    manual_total_cbm: nullableNumber(payload.manualTotalCbm ?? payload.manual_total_cbm),
+    manual_is_mixed: payload.manualIsMixed === null || payload.manualIsMixed === undefined
+      ? payload.manual_is_mixed === null || payload.manual_is_mixed === undefined ? null : Boolean(payload.manual_is_mixed)
+      : Boolean(payload.manualIsMixed),
     loading_type: String(payload.loadingType ?? payload.loading_type ?? '') as PurchaseRecord['loadingType'],
     container_date: String(payload.containerDate ?? payload.container_date ?? ''),
     total_weight_kg: nullableNumber(payload.totalWeightKg ?? payload.total_weight_kg),
@@ -718,6 +735,11 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     english_name: normalized.englishName,
     unit_cbm: normalized.unitCbm,
     total_cbm: normalized.totalCbm,
+    manual_total_carton_count: normalized.manualTotalCartonCount ?? null,
+    manual_purchase_total_quantity: normalized.manualPurchaseTotalQuantity ?? null,
+    manual_total_amount: normalized.manualTotalAmount ?? null,
+    manual_total_cbm: normalized.manualTotalCbm ?? null,
+    manual_is_mixed: normalized.manualIsMixed ?? null,
     loading_type: normalized.loadingType || null,
     container_date: dateOrNull(normalized.containerDate),
     total_weight_kg: normalized.totalWeightKg,

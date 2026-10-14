@@ -54,6 +54,8 @@ try {
 
   assert.equal(calculations.effectivePurchaseQuantity({ cartonCount: 0, unitsPerCarton: 0, tailQuantity: 40, confirmedPurchaseQuantity: 0, purchaseQuantity: 0 }), 40);
   assert.equal(calculations.effectivePurchaseQuantity({ cartonCount: 2, unitsPerCarton: 20, tailQuantity: 3, confirmedPurchaseQuantity: 0, purchaseQuantity: 0 }), 43);
+  assert.equal(calculations.effectivePurchaseQuantity({ cartonCount: 2, unitsPerCarton: 20, tailQuantity: 3, confirmedPurchaseQuantity: 0, purchaseQuantity: 0, manualPurchaseTotalQuantity: 88 }), 88);
+  assert.equal(calculations.packageCountFor({ ...record(3, 10), manualTotalCartonCount: 12 }), 12);
 
   const mixedRecord = record(0, 40, oneMixedGroup);
   assert.equal(calculations.mixedQuantityFor(mixedRecord), 20);
@@ -77,6 +79,18 @@ try {
   const recalculatedTotal = calculations.withPurchaseTotals(pricedRecord, { recalculateAmount: true });
   assert.equal(recalculatedTotal.totalAmount, 485);
   assert.equal(recalculatedTotal.totalCbm, 0.08);
+  const adminOverrides = calculations.withPurchaseTotals({
+    ...pricedRecord,
+    manualPurchaseTotalQuantity: 77,
+    manualTotalAmount: 1234.56,
+    manualTotalCbm: 9.8765,
+    manualIsMixed: false,
+    isMixed: true,
+  }, { recalculateAmount: true });
+  assert.equal(adminOverrides.confirmedPurchaseQuantity, 77);
+  assert.equal(adminOverrides.totalAmount, 1234.56);
+  assert.equal(adminOverrides.totalCbm, 9.8765);
+  assert.equal(adminOverrides.isMixed, false);
 
   const logisticsOnlyChange = { ...pricedRecord, logisticsTotalCbm: 1.25, totalWeightKg: 80, note: '物流回传' };
   assert.equal(calculations.purchaseAmountInputsChanged(pricedRecord, logisticsOnlyChange), false);

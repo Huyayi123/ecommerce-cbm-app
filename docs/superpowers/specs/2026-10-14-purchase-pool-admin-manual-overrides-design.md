@@ -44,8 +44,9 @@
 - `manualPurchaseTotalQuantity`
 - `manualTotalAmount`
 - `manualTotalCbm`
+- `manualIsMixed`
 
-覆盖字段为可空数值。空值表示沿用系统计算值；管理员在采购池输入数值后保存为覆盖值。数据库 `purchase_records` 增加对应可空列，采购池 JSON 同步保留这些属性。
+数值覆盖字段为可空数值，混装覆盖字段为可空布尔值。空值表示沿用系统计算值；管理员在采购池输入后保存为覆盖值。数据库 `purchase_records` 增加对应可空列，采购池 JSON 同步保留这些属性。
 
 ## 读取规则
 
@@ -64,7 +65,7 @@
 
 ## 数据库迁移
 
-新增一份可重复执行的 SQL 迁移，为 `purchase_records` 添加四个可空数值列。同步更新主 `supabase.sql`，使全新部署包含这些列。
+新增一份可重复执行的 SQL 迁移，为 `purchase_records` 添加四个可空数值列和一个可空布尔列。
 
 ## 验证
 

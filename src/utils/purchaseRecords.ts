@@ -1,7 +1,7 @@
 import type { MixedCartonGroup, MixedCartonLine, PurchaseRecord } from '../types';
 import { round } from './number';
 
-type PurchaseQuantityLike = Pick<PurchaseRecord, 'purchaseQuantity' | 'confirmedPurchaseQuantity' | 'cartonCount' | 'unitsPerCarton' | 'tailQuantity'>;
+type PurchaseQuantityLike = Pick<PurchaseRecord, 'purchaseQuantity' | 'confirmedPurchaseQuantity' | 'cartonCount' | 'unitsPerCarton' | 'tailQuantity' | 'manualPurchaseTotalQuantity'>;
 
 function numberOrZero(value: unknown): number {
   const parsed = Number(value);
@@ -41,6 +41,9 @@ export function normalizeMixedGroups(value: unknown): MixedCartonGroup[] {
 }
 
 export function effectivePurchaseQuantity(record: PurchaseQuantityLike): number {
+  if (record.manualPurchaseTotalQuantity !== null && record.manualPurchaseTotalQuantity !== undefined) {
+    return record.manualPurchaseTotalQuantity;
+  }
   const cartonCount = record.cartonCount ?? null;
   const unitsPerCarton = record.unitsPerCarton ?? null;
   const tailQuantity = record.tailQuantity ?? 0;
@@ -75,6 +78,9 @@ export function purchaseQuantityWithMixed(record: PurchaseRecord): number {
 }
 
 export function packageCountFor(record: PurchaseRecord): number {
+  if (record.manualTotalCartonCount !== null && record.manualTotalCartonCount !== undefined) {
+    return record.manualTotalCartonCount;
+  }
   const tailCartons = (record.tailQuantity ?? 0) > 0 ? 1 : 0;
   return (record.cartonCount ?? 0) + tailCartons;
 }
@@ -135,14 +141,14 @@ export function withPurchaseTotals(record: PurchaseRecord, options: { recalculat
     ...record,
     tailQuantity: record.tailQuantity ?? 0,
     mixedGroups,
-    isMixed: record.isMixed || mixedGroups.length > 0,
+    isMixed: record.manualIsMixed ?? (record.isMixed || mixedGroups.length > 0),
   };
 
   return {
     ...normalizedRecord,
-    confirmedPurchaseQuantity: record.cartonCount !== null && record.unitsPerCarton ? mainQuantity : record.confirmedPurchaseQuantity ?? null,
-    totalAmount: recalculateAmount ? calculatedPurchaseTotalAmount(normalizedRecord) : round(Number.isFinite(record.totalAmount) ? record.totalAmount : calculatedPurchaseTotalAmount(normalizedRecord), 2),
-    totalCbm: round(mainCbm + mixedCbmFor(normalizedRecord), 4),
+    confirmedPurchaseQuantity: record.manualPurchaseTotalQuantity ?? (record.cartonCount !== null && record.unitsPerCarton ? mainQuantity : record.confirmedPurchaseQuantity ?? null),
+    totalAmount: record.manualTotalAmount ?? (recalculateAmount ? calculatedPurchaseTotalAmount(normalizedRecord) : round(Number.isFinite(record.totalAmount) ? record.totalAmount : calculatedPurchaseTotalAmount(normalizedRecord), 2)),
+    totalCbm: record.manualTotalCbm ?? round(mainCbm + mixedCbmFor(normalizedRecord), 4),
   };
 }
 
