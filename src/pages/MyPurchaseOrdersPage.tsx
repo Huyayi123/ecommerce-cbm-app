@@ -212,6 +212,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const [orderSearch, setOrderSearch] = useState('');
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
   const [isDeletingRecords, setIsDeletingRecords] = useState(false);
+  const [isSubmittingRecords, setIsSubmittingRecords] = useState(false);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const isViewer = profile.role === 'viewer';
@@ -278,11 +279,6 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     },
     [assignedRecords, orderSearch, skuBySku, statusFilter],
   );
-  const submittableAssignedRecords = useMemo(
-    () => assignedRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase'),
-    [assignedRecords],
-  );
-  const unconfirmedVisibleCount = visibleRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase').length;
   const selectedVisibleIds = visibleRecords.filter((record) => selectedRecordIds.has(record.id)).map((record) => record.id);
   const allVisibleSelected = visibleRecords.length > 0 && selectedVisibleIds.length === visibleRecords.length;
 
@@ -810,25 +806,26 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     };
   }
 
-  async function confirmVisiblePurchases() {
+  async function confirmSelectedPurchases() {
     if (isViewer) return;
-    const visibleTargets = visibleRecords.filter((record) => record.status === 'pending' && record.poolStatus === 'pending_purchase');
-    const targetRecords = visibleTargets.length > 0 ? visibleTargets : submittableAssignedRecords;
-    const visibleIds = new Set(targetRecords.map((record) => record.id));
-    if (visibleIds.size === 0) {
-      setMessage('没有可提交到采购订单池的待采购订单。');
+    const selectedIds = new Set(selectedVisibleIds);
+    if (selectedIds.size === 0) {
+      setMessage('请先选择要提交到采购订单池的订单。');
       return;
     }
+    setIsSubmittingRecords(true);
     try {
-      const preparedRecords = records
-        .filter((item) => visibleIds.has(item.id))
+      const selectedRecords = records.filter((item) => selectedIds.has(item.id));
+      const submittableRecords = selectedRecords.filter((item) => item.status === 'pending' && item.poolStatus === 'pending_purchase');
+      const unavailableCount = selectedRecords.length - submittableRecords.length;
+      const preparedRecords = submittableRecords
         .map((item) => confirmedRecord(item));
       const missingQuantityCount = preparedRecords.filter((item) => effectivePurchaseQuantity(item) <= 0).length;
       const missingAmountCount = preparedRecords.filter((item) => effectivePurchaseQuantity(item) > 0 && item.totalAmount <= 0).length;
       const confirmedRecords = preparedRecords.filter((item) => effectivePurchaseQuantity(item) > 0 && item.totalAmount > 0);
       const submittedIds = new Set(confirmedRecords.map((record) => record.id));
       if (confirmedRecords.length === 0) {
-        setMessage(`没有符合提交条件的采购订单。实际数量为空或为 0：${missingQuantityCount} 条；总金额为空或为 0：${missingAmountCount} 条。`);
+        setMessage(`没有符合提交条件的选中订单。非待采购或已提交：${unavailableCount} 条；实际数量为空或为 0：${missingQuantityCount} 条；总金额为空或为 0：${missingAmountCount} 条。`);
         return;
       }
       if (onSubmitToPool) {
@@ -843,15 +840,18 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           await onSubmitToPool(group.pool, group.records);
         }
       } else if (onSaveRecords) await onSaveRecords(confirmedRecords);
-      else await onChange(records.map((item) => (visibleIds.has(item.id) ? confirmedRecord(item) : item)));
+      else await onChange(records.map((item) => (submittedIds.has(item.id) ? confirmedRecord(item) : item)));
       draftsRef.current = Object.fromEntries(Object.entries(draftsRef.current).filter(([key]) => !submittedIds.has(key.split(':')[0])));
       mixedDraftsRef.current = Object.fromEntries(Object.entries(mixedDraftsRef.current).filter(([key]) => !submittedIds.has(key.split(':')[0])));
       setDrafts(draftsRef.current);
       setMixedDrafts(mixedDraftsRef.current);
-      setMessage(`已提交 ${confirmedRecords.length} 条采购订单到采购订单池；跳过 ${missingQuantityCount + missingAmountCount} 条（实际数量为空或为 0：${missingQuantityCount} 条；总金额为空或为 0：${missingAmountCount} 条）。`);
+      setSelectedRecordIds((current) => new Set([...current].filter((id) => !submittedIds.has(id))));
+      setMessage(`已提交 ${confirmedRecords.length} 条选中订单到采购订单池；跳过 ${unavailableCount + missingQuantityCount + missingAmountCount} 条（非待采购或已提交：${unavailableCount} 条；实际数量为空或为 0：${missingQuantityCount} 条；总金额为空或为 0：${missingAmountCount} 条）。`);
     } catch (error) {
       console.error(error);
       setMessage(`确认失败：${formatErrorMessage(error)}`);
+    } finally {
+      setIsSubmittingRecords(false);
     }
   }
 
@@ -1166,7 +1166,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'xlsx', '我的采购订单', skuItems)} disabled={visibleRecords.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'csv', '我的采购订单', skuItems)} disabled={visibleRecords.length === 0}>导出 CSV</button>
           {!isViewer && <button className="danger" type="button" disabled={selectedVisibleIds.length === 0 || isDeletingRecords} onClick={() => void deleteRecordsInBulk(selectedVisibleIds, '删除选中的订单')}>删除选中{selectedVisibleIds.length > 0 ? ` (${selectedVisibleIds.length})` : ''}</button>}
-          {!isViewer && <button className="primary" type="button" onClick={() => void confirmVisiblePurchases()}>提交采购订单池{submittableAssignedRecords.length > 0 ? ` (${unconfirmedVisibleCount || submittableAssignedRecords.length})` : ''}</button>}
+          {!isViewer && <button className="primary" type="button" disabled={selectedVisibleIds.length === 0 || isSubmittingRecords} onClick={() => void confirmSelectedPurchases()}>提交选中{selectedVisibleIds.length > 0 ? ` (${selectedVisibleIds.length})` : ''}</button>}
         </div>
       </div>
       {message && <div className="inline-notice order-save-notice" role="status">{message}</div>}
