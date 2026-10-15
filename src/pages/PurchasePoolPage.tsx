@@ -687,7 +687,7 @@ export function PurchasePoolPage({
         <div className="metric"><span>池中总 CBM</span><strong>{totalCbm.toFixed(4)}</strong></div>
       </div>
 
-      <div className="table-wrap purchase-pool-table-wrap">
+      <div className="table-wrap purchase-pool-table-wrap desktop-data-view">
         <table className="inventory-table">
           <thead>
             <tr>
@@ -773,6 +773,60 @@ export function PurchasePoolPage({
             {submittedRecords.length === 0 && <tr><td className="empty" colSpan={25}>暂无待发送采购订单。</td></tr>}
           </tbody>
         </table>
+      </div>
+      <div className="mobile-data-view mobile-card-list mobile-pool-list">
+        {submittedRecords.map((record) => {
+          const imageUrl = record.imageUrl || imageUrlBySku.get(skuLookupKey(record.sku)) || '';
+          const purchaseUrl = purchaseUrlForRecord(record, skuBySku);
+          const childRows = mixedChildRows(record);
+          return <article className="mobile-record-card mobile-pool-card" key={record.id}>
+            <div className="mobile-order-topline"><strong>{record.assignedBuyerName || '未分配采购人'}</strong><span className="mobile-status-chip">{record.poolStatus === 'submitted_to_pool' ? '待发送' : record.poolStatus}</span></div>
+            <div className="mobile-order-identity">
+              {imageUrl ? <img className="sku-thumb" src={imageUrl} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : <div className="mobile-order-image-placeholder">无图</div>}
+              <div><strong>{record.productName || '-'}</strong><span>{record.sku || '-'}</span><small>{record.manufacturerName || '-'}</small></div>
+            </div>
+            <dl className="mobile-record-metrics">
+              <div><dt>{labels.containerDate}</dt><dd>{record.containerDate || record.purchaseBatchDate || '-'}</dd></div>
+              <div><dt>{labels.purchaseTotalQuantity}</dt><dd>{effectivePurchaseQuantity(record)}</dd></div>
+              <div><dt>{labels.totalCartonCount}</dt><dd>{packageCountFor(record)}</dd></div>
+              <div><dt>{labels.totalCbm}</dt><dd>{record.totalCbm.toFixed(4)}</dd></div>
+            </dl>
+            <details className="mobile-order-details">
+              <summary>查看和编辑全部字段</summary>
+              <div className="mobile-order-fields">
+                <label>厂家名{editableCell(record, 'manufacturerName')}</label>
+                <label>{labels.internalCode}<span>{record.internalCode || '-'}</span></label>
+                <label>{labels.sku}{editableCell(record, 'sku')}</label>
+                <label>{labels.productName}{editableCell(record, 'productName')}</label>
+                <label>英文名称{editableCell(record, 'englishName')}</label>
+                <label>店铺{editableCell(record, 'shopName')}</label>
+                <label>采购人{editableCell(record, 'assignedBuyerName')}</label>
+                <label>{labels.containerDate}{editableCell(record, 'containerDate', 'date')}</label>
+                <label>计划采购数量<span>{record.purchaseQuantity}</span></label>
+                <label>{labels.cartonCount}{editableCell(record, 'cartonCount', 'number')}</label>
+                <label>{labels.unitsPerCarton}{editableCell(record, 'unitsPerCarton', 'number')}</label>
+                <label>{labels.tailQuantity}{editableCell(record, 'tailQuantity', 'number')}</label>
+                <label>{labels.totalCartonCount}{editableCell(record, 'manualTotalCartonCount', 'number')}</label>
+                <label>{labels.purchaseTotalQuantity}{editableCell(record, 'manualPurchaseTotalQuantity', 'number')}</label>
+                <label>是否混装{editableCell(record, 'isMixed')}</label>
+                <label>采购单价{editableCell(record, 'purchasePrice', 'number')}</label>
+                <label>运费{editableCell(record, 'freightCost', 'number')}</label>
+                <label>总金额{editableCell(record, 'totalAmount', 'number')}</label>
+                <label>{labels.unitCbm}{editableCell(record, 'unitCbm', 'number')}</label>
+                <label>{labels.totalCbm}{editableCell(record, 'totalCbm', 'number')}</label>
+                <label>{labels.status}{editableCell(record, 'status')}</label>
+                <label>{labels.loadingType}{editableCell(record, 'loadingType')}</label>
+                <label className="mobile-order-field-wide">{labels.note}{editableCell(record, 'note')}</label>
+              </div>
+            </details>
+            {childRows.length > 0 && <div className="mobile-record-note">{childRows.map(({ group, line }) => <span key={`${group.id}:${line.id}`}>{line.productName || line.sku}：{line.quantity} 个，{group.groupName} {group.cartonCount} 件</span>)}</div>}
+            <div className="mobile-record-actions">
+              {purchaseUrl ? <button type="button" onClick={() => openPurchaseUrl(purchaseUrl)}>1688下单</button> : <span className="muted-action">无采购链接</span>}
+              {isAdmin && <button type="button" onClick={() => void returnToBuyer(record)}>退回采购人</button>}
+            </div>
+          </article>;
+        })}
+        {submittedRecords.length === 0 && <div className="mobile-empty-state">暂无待发送采购订单。</div>}
       </div>
     </section>
   );
