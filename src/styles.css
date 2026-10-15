@@ -600,6 +600,77 @@ button.danger,
     padding: 12px;
   }
 
+  .auth-shell {
+    min-height: 100dvh;
+    padding: 16px;
+  }
+
+  .auth-card {
+    padding: 20px 16px;
+    border-radius: 12px;
+  }
+
+  .auth-card h1 {
+    font-size: 22px;
+  }
+
+  .column-settings {
+    align-items: flex-start;
+    max-height: 190px;
+    overflow-y: auto;
+  }
+
+  .column-settings > strong {
+    flex: 0 0 100%;
+  }
+
+  .sku-search {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .sku-search label,
+  .sku-search label:nth-child(2) {
+    min-width: 0;
+  }
+
+  .sku-search label:nth-child(2),
+  .sku-search > span,
+  .sku-search .pagination-actions {
+    grid-column: 1 / -1;
+  }
+
+  .sku-search > span {
+    padding-bottom: 0;
+  }
+
+  .sku-search .pagination-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sku-mobile-details {
+    display: grid;
+    gap: 7px;
+    margin-top: 12px;
+    padding: 12px;
+    border-top: 1px solid #e1e8ee;
+    border-bottom: 1px solid #e1e8ee;
+    color: #52616d;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .recent-import-card {
+    border-color: #e0ad35;
+    background: #fffaf0;
+  }
+
   .form-actions {
     grid-column: auto;
     flex-wrap: wrap;

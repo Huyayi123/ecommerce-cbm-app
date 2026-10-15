@@ -531,7 +531,7 @@ export function SkuManager({ items, onChange, onSaveItem, loadImportMatches, onC
         </div>
       </div>
 
-      <div className="table-wrap sku-table-wrap">
+      <div className="table-wrap sku-table-wrap desktop-data-view">
         <table className="sku-table">
           <thead>
             <tr>
@@ -612,6 +612,49 @@ export function SkuManager({ items, onChange, onSaveItem, loadImportMatches, onC
             {filteredItems.length === 0 && <tr><td colSpan={tableColSpan} className="empty">暂无匹配的 SKU 资料。</td></tr>}
           </tbody>
         </table>
+      </div>
+      <div className="mobile-data-view mobile-card-list">
+        {pagedItems.map((item) => (
+          <article key={item.id} className={`mobile-record-card${recentImportIds.has(item.id) ? ' recent-import-card' : ''}`}>
+            <div className="mobile-order-identity">
+              {item.imageUrl
+                ? <img className="sku-thumb" src={item.imageUrl} alt={item.productName || item.sku || 'SKU'} loading="lazy" />
+                : <div className="mobile-order-image-placeholder">无图</div>}
+              <div>
+                <strong>{item.productName || item.englishName || item.sku || '-'}</strong>
+                <span>SKU：{item.sku || '-'}</span>
+                <small>{item.internalCode || '暂无内部编号'} · {item.manufacturerName || '暂无厂家'}</small>
+              </div>
+            </div>
+            <dl className="mobile-record-metrics">
+              <div><dt>采购单价</dt><dd>{item.purchasePrice}</dd></div>
+              <div><dt>单品 CBM</dt><dd>{item.unitCbm.toFixed(8)}</dd></div>
+              <div><dt>店铺</dt><dd>{item.shopName || '-'}</dd></div>
+              <div><dt>采购人</dt><dd>{item.buyerName || '-'}</dd></div>
+            </dl>
+            {expandedIds.has(item.id) && (
+              <div className="mobile-order-details-content sku-mobile-details">
+                <span>英文名称：{item.englishName || '-'}</span>
+                <span>图片链接：{item.imageUrl || '-'}</span>
+                <span>库位：{item.storageLocation || '-'}</span>
+                <span>采购链接：{item.purchaseUrl ? <a href={item.purchaseUrl} target="_blank" rel="noreferrer">打开</a> : '-'}</span>
+                <span>总 CBM：{item.totalCbm || '-'}</span>
+                <span>总数量：{item.totalQuantity || '-'}</span>
+                <span>长宽高：{item.cartonLengthCm} x {item.cartonWidthCm} x {item.cartonHeightCm}</span>
+                <span>每箱数量：{item.unitsPerCarton}</span>
+                <span>长宽高 CBM：{item.cartonCbm.toFixed(8)}</span>
+                <span>季节性产品：{item.isSeasonal ? '是' : '否'}</span>
+                <span>更新时间：{item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-'}</span>
+              </div>
+            )}
+            <div className="mobile-record-actions">
+              <button type="button" onClick={() => toggleExpanded(item.id)}>{expandedIds.has(item.id) ? '收起' : '展开详情'}</button>
+              {canEditData && <button type="button" onClick={() => editItem(item)}>编辑</button>}
+              {canDeleteData && <button type="button" className="danger" onClick={() => deleteItem(item.id)}>删除</button>}
+            </div>
+          </article>
+        ))}
+        {filteredItems.length === 0 && <div className="mobile-empty-state">暂无匹配的 SKU 资料。</div>}
       </div>
     </section>
   );
