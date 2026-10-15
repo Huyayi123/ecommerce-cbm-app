@@ -1091,12 +1091,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     );
   }
 
-  function renderMixedPanel(record: PurchaseRecord) {
+  function renderMixedContent(record: PurchaseRecord) {
     const normalized = withPurchaseTotals(record);
     return (
-      <tr className="packing-detail-row">
-        <td colSpan={isViewer ? 25 : 26}>
-          <div className="packing-panel">
+      <div className="packing-panel">
             <div className="packing-summary">
               <strong>主商品数量：{effectivePurchaseQuantity(normalized)}</strong>
               <strong>混装商品数量：{mixedQuantityFor(normalized)}</strong>
@@ -1132,7 +1130,15 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 </table>
               </div>
             ))}
-          </div>
+      </div>
+    );
+  }
+
+  function renderMixedPanel(record: PurchaseRecord) {
+    return (
+      <tr className="packing-detail-row">
+        <td colSpan={isViewer ? 25 : 26}>
+          {renderMixedContent(record)}
         </td>
       </tr>
     );
@@ -1217,7 +1223,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         </div>
       )}
 
-      <div className="table-wrap my-orders-table-wrap" ref={tableWrapRef}>
+      <div className="table-wrap my-orders-table-wrap desktop-data-view" ref={tableWrapRef}>
         <table className={`my-orders-table${isViewer ? '' : ' has-selection'}`}>
           <thead>
             <tr>
@@ -1305,6 +1311,64 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
             {visibleRecords.length === 0 && <tr><td className="empty" colSpan={isViewer ? 25 : 26}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
+      </div>
+      <div className="mobile-data-view mobile-card-list mobile-order-list">
+        {visibleRecords.map((record) => {
+          const normalized = withPurchaseTotals(recordWithSkuDefaults(record));
+          const purchaseUrl = purchaseUrlForRecord(normalized, skuBySku);
+          const selected = selectedRecordIds.has(record.id);
+          return <article className={`mobile-record-card mobile-order-card${selected ? ' selected' : ''}`} key={record.id}>
+            <div className="mobile-order-topline">
+              {!isViewer && <label className="mobile-order-select"><input type="checkbox" aria-label={`选择订单 ${normalized.sku || normalized.productName}`} checked={selected} disabled={isDeletingRecords} onChange={() => toggleRecordSelection(record.id)} /><span>选择</span></label>}
+              <span className="mobile-status-chip">{statusLabels[normalized.status]}</span>
+            </div>
+            <div className="mobile-order-identity">
+              {imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : <div className="mobile-order-image-placeholder">无图</div>}
+              <div><strong>{normalized.productName || '-'}</strong><span>{normalized.sku || '-'}</span><small>{normalized.manufacturerName || '-'}</small></div>
+            </div>
+            <dl className="mobile-record-metrics">
+              <div><dt>计划采购数量</dt><dd>{normalized.purchaseQuantity || 0}</dd></div>
+              <div><dt>{labels.purchaseTotalQuantity}</dt><dd>{effectivePurchaseQuantity(normalized)}</dd></div>
+              <div><dt>总件数</dt><dd>{packageCountFor(normalized)}</dd></div>
+              <div><dt>{labels.totalCbm}</dt><dd>{normalized.totalCbm.toFixed(4)}</dd></div>
+            </dl>
+            <details className="mobile-order-details">
+              <summary>查看和编辑全部字段</summary>
+              <div className="mobile-order-fields">
+                <label>厂家名{input(normalized, 'manufacturerName')}</label>
+                <label>{labels.internalCode}<span>{normalized.internalCode || '-'}</span></label>
+                <label>{labels.sku}{isAdmin ? input(normalized, 'sku') : <span>{normalized.sku}</span>}</label>
+                <label>{labels.productName}{input(normalized, 'productName')}</label>
+                <label>英文名称{input(normalized, 'englishName')}</label>
+                <label>店铺{input(normalized, 'shopName')}</label>
+                <label>采购人{isAdmin ? input(normalized, 'assignedBuyerName') : <span>{normalized.assignedBuyerName}</span>}</label>
+                <label>月销量<span>{normalized.monthlySales ?? '-'}</span></label>
+                <label>计划采购数量{input(normalized, 'purchaseQuantity', 'number')}</label>
+                <label>{labels.cartonCount}{input(normalized, 'cartonCount', 'number')}</label>
+                <label>{labels.unitsPerCarton}{input(normalized, 'unitsPerCarton', 'number')}</label>
+                <label>{labels.tailQuantity}{input(normalized, 'tailQuantity', 'number')}</label>
+                <label>{labels.totalCartonCount}<span>{packageCountFor(normalized)}</span></label>
+                <label>{labels.purchaseTotalQuantity}<span>{effectivePurchaseQuantity(normalized)}</span></label>
+                <label>是否混装<span>{normalized.isMixed ? '是' : '否'}</span></label>
+                <label>采购单价{input(normalized, 'purchasePrice', 'number')}</label>
+                <label>运费{input(normalized, 'freightCost', 'number')}</label>
+                <label>总金额{input(normalized, 'totalAmount', 'number')}</label>
+                <label>{labels.unitCbm}{input(normalized, 'unitCbm', 'number')}</label>
+                <label>{labels.totalCbm}<span>{normalized.totalCbm.toFixed(4)}</span></label>
+                <label>{labels.status}{input(normalized, 'status')}</label>
+                <label>{labels.loadingType}{input(normalized, 'loadingType')}</label>
+                <label className="mobile-order-field-wide">{labels.note}{input(normalized, 'note')}</label>
+              </div>
+            </details>
+            <div className="mobile-record-actions">
+              {purchaseUrl ? <button type="button" onClick={() => openPurchaseUrl(purchaseUrl)}>1688下单</button> : <span className="muted-action">无采购链接</span>}
+              <button type="button" onClick={() => toggleExpanded(record.id)}>{expandedRows.has(record.id) ? '收起混装' : '混装'}</button>
+              {!isViewer && <button className="danger" type="button" disabled={isDeletingRecords} onClick={() => void deleteRecord(record.id)}>删除</button>}
+            </div>
+            {expandedRows.has(record.id) && <div className="mobile-mixed-panel">{renderMixedContent(normalized)}</div>}
+          </article>;
+        })}
+        {visibleRecords.length === 0 && <div className="mobile-empty-state">暂无分配给你的采购订单。</div>}
       </div>
     </section>
   );

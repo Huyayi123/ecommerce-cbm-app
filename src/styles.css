@@ -309,6 +309,124 @@ button.danger,
   margin: 4px 0 0;
 }
 
+.mobile-order-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.mobile-order-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #52616d;
+  font-size: 13px;
+}
+
+.mobile-order-select input {
+  width: 20px;
+  min-height: 20px;
+  height: 20px;
+}
+
+.mobile-order-identity {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.mobile-order-identity .sku-thumb,
+.mobile-order-image-placeholder {
+  width: 54px;
+  height: 54px;
+  border-radius: 9px;
+}
+
+.mobile-order-image-placeholder {
+  display: grid;
+  place-items: center;
+  background: #eef2f5;
+  color: #87949e;
+  font-size: 11px;
+}
+
+.mobile-order-identity strong,
+.mobile-order-identity span,
+.mobile-order-identity small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-order-identity span,
+.mobile-order-identity small {
+  margin-top: 3px;
+  color: #667784;
+}
+
+.mobile-order-details {
+  margin-top: 12px;
+  border-top: 1px solid #e1e8ee;
+  border-bottom: 1px solid #e1e8ee;
+}
+
+.mobile-order-details summary {
+  padding: 12px 2px;
+  color: #136f63;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.mobile-order-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 0 12px;
+}
+
+.mobile-order-fields label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: #51606c;
+  font-size: 12px;
+}
+
+.mobile-order-fields input,
+.mobile-order-fields select,
+.mobile-order-fields label > span {
+  width: 100%;
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid #cbd6df;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #16202a;
+}
+
+.mobile-order-fields label > span {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.mobile-order-field-wide {
+  grid-column: 1 / -1;
+}
+
+.mobile-mixed-panel {
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.mobile-mixed-panel .packing-panel {
+  min-width: 760px;
+}
+
 @media (max-width: 720px) {
   body {
     min-width: 0;
