@@ -432,6 +432,22 @@ button.danger,
   min-width: 760px;
 }
 
+.mobile-repricing-card.repricing-high {
+  border-left: 4px solid #b42318;
+}
+
+.mobile-repricing-card.repricing-medium {
+  border-left: 4px solid #d97706;
+}
+
+.mobile-profit-card.profit-row-profit {
+  border-left: 4px solid #16806a;
+}
+
+.mobile-profit-card.profit-row-loss {
+  border-left: 4px solid #b42318;
+}
+
 @media (max-width: 720px) {
   body {
     min-width: 0;

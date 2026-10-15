@@ -104,7 +104,7 @@ export function ProfitAnalysisPage({ skuItems, profile, runs, onSaveRun, onRefre
         <div className="metric"><span>持平</span><strong>{summary.break_even ?? 0}</strong></div>
         <div className="metric"><span>无法计算</span><strong>{summary.missing_data ?? 0}</strong></div>
       </div>
-      <div className="table-wrap profit-analysis-table-wrap">
+      <div className="table-wrap profit-analysis-table-wrap desktop-data-view">
         <table className="profit-analysis-table">
           <thead><tr><th>图片</th><th>店铺</th><th>SKU</th><th>产品名称</th><th>最近成交时间</th><th>实际成交价</th><th>采购价 RMB</th><th>采购成本 ZAR</th><th>单品 CBM</th><th>海运费</th><th>国内运费</th><th>送仓费</th><th>Total Fees</th><th>总成本</th><th>单件利润</th><th>状态</th><th>提示</th></tr></thead>
           <tbody>
@@ -114,6 +114,36 @@ export function ProfitAnalysisPage({ skuItems, profile, runs, onSaveRun, onRefre
             {visibleRows.length === 0 && <tr><td colSpan={17} className="empty">暂无利润数据，请选择店铺后同步。</td></tr>}
           </tbody>
         </table>
+      </div>
+      <div className="mobile-data-view mobile-card-list mobile-profit-list">
+        {visibleRows.map((row) => <article className={`mobile-record-card mobile-profit-card profit-row-${row.status}`} key={row.id}>
+          <div className="mobile-order-topline"><strong>{row.shopName}</strong><span className={`repricing-badge ${row.status}`}>{statusText(row.status)}</span></div>
+          <div className="mobile-order-identity">
+            {row.imageUrl ? <img className="sku-thumb" src={row.imageUrl} alt={row.productName || row.sku} loading="lazy" /> : <div className="mobile-order-image-placeholder">无图</div>}
+            <div><strong>{row.productName || '-'}</strong><span>{row.sku}</span><small>{dateText(row.latestOrderDate)}</small></div>
+          </div>
+          <dl className="mobile-record-metrics">
+            <div><dt>实际成交价</dt><dd>{money(row.sellingPrice)}</dd></div>
+            <div><dt>总成本</dt><dd>{money(row.totalCost)}</dd></div>
+            <div><dt>单件利润</dt><dd>{money(row.profit)}</dd></div>
+            <div><dt>采购价 RMB</dt><dd>{row.purchaseCostRmb === null ? '-' : `¥ ${row.purchaseCostRmb.toFixed(2)}`}</dd></div>
+          </dl>
+          <details className="mobile-order-details">
+            <summary>查看全部成本明细</summary>
+            <div className="mobile-order-fields mobile-readonly-fields">
+              <label>采购成本 ZAR<span>{money(row.purchaseCostZar)}</span></label>
+              <label>单品 CBM<span>{row.unitCbm === null ? '-' : row.unitCbm.toFixed(8)}</span></label>
+              <label>海运费<span>{money(row.seaFreightCost)}</span></label>
+              <label>国内运费<span>{money(row.domesticFreightCost)}</span></label>
+              <label>送仓费<span>{money(row.warehouseFee)}</span></label>
+              <label>Total Fees<span>{money(row.totalFees)}</span></label>
+              <label>总成本<span>{money(row.totalCost)}</span></label>
+              <label>单件利润<span>{money(row.profit)}</span></label>
+            </div>
+          </details>
+          <div className="mobile-record-note"><span>{row.messages.length ? row.messages.join('；') : '正常'}</span></div>
+        </article>)}
+        {visibleRows.length === 0 && <div className="mobile-empty-state">暂无利润数据，请选择店铺后同步。</div>}
       </div>
     </section>
   );

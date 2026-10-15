@@ -230,7 +230,7 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
         </label>
       </div>
 
-      <div className="table-wrap repricing-table-wrap">
+      <div className="table-wrap repricing-table-wrap desktop-data-view">
         <table className="repricing-table">
           <thead>
             <tr>
@@ -273,6 +273,23 @@ export function RepricingAlertsPage({ alerts, skuItems, onRefresh }: Props) {
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="mobile-data-view mobile-card-list mobile-repricing-list">
+        {filteredAlerts.map((alert) => <article className={`mobile-record-card mobile-repricing-card repricing-${alert.alertLevel}`} key={alert.id}>
+          <div className="mobile-order-topline"><strong>{alert.shopName || '-'}</strong><span className="mobile-status-chip">{alert.alertType === 'lost_buy_box' ? '丢 Buy Box' : '被跟价'}</span></div>
+          <div className="mobile-order-identity">
+            {alert.imageUrl ? <img className="product-thumb" src={alert.imageUrl} alt="" /> : <div className="mobile-order-image-placeholder">无图</div>}
+            <div><strong>{alert.title || alert.productName || '-'}</strong><span>{alert.sku || '-'}</span><small>{alert.lowestCompetitorSeller || '无竞争卖家'}</small></div>
+          </div>
+          <dl className="mobile-record-metrics">
+            <div><dt>当前售价</dt><dd>{money(alert.myPrice)}</dd></div>
+            <div><dt>Buy Box</dt><dd>{money(alert.buyBoxPrice)}</dd></div>
+            <div><dt>最低竞品价</dt><dd>{money(alert.lowestCompetitorPrice)}</dd></div>
+            <div><dt>差价</dt><dd>{money(alert.priceGap)}</dd></div>
+          </dl>
+          <div className="mobile-record-note"><span>最后检测：{formatDate(alert.checkedAt)}</span><span>说明：{alert.alertMessage || '-'}</span>{alert.productName && alert.title && alert.productName !== alert.title && <span>资料库名称：{alert.productName}</span>}</div>
+        </article>)}
+        {filteredAlerts.length === 0 && <div className="mobile-empty-state">暂无确定被跟价商品。</div>}
       </div>
     </section>
   );
