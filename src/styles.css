@@ -2654,6 +2654,121 @@ tbody tr:last-child td {
 .repricing-badge.break_even { background: #e2e8f0; color: #334155; }
 .repricing-badge.missing_data { background: #fee2e2; color: #991b1b; }
 
+.barcode-scan-panel {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid #b9cbc7;
+  border-radius: 10px;
+  background: #f3faf8;
+}
+
+.barcode-scan-heading strong,
+.barcode-scan-heading span {
+  display: block;
+}
+
+.barcode-scan-heading span {
+  margin-top: 4px;
+  color: #5f6d78;
+  font-size: 13px;
+}
+
+.barcode-scan-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto auto;
+  gap: 8px;
+}
+
+.barcode-scan-controls input {
+  width: 100%;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid #aebdc7;
+  border-radius: 7px;
+}
+
+.barcode-scan-result {
+  padding: 9px 11px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.barcode-scan-result.success {
+  background: #dff4ed;
+  color: #0f5f55;
+}
+
+.barcode-scan-result.error {
+  background: #fff0ee;
+  color: #9f2d22;
+}
+
+.barcode-scan-results-anchor {
+  scroll-margin-top: 12px;
+}
+
+.barcode-match-row > td {
+  background: #f0faf7;
+}
+
+.barcode-match-card {
+  border-color: #16806a;
+  box-shadow: 0 0 0 1px #16806a;
+}
+
+.mobile-scan-badges {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+}
+
+.barcode-recommended-chip {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fff2c7;
+  color: #7a5200;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.barcode-camera-modal {
+  width: min(520px, calc(100vw - 24px));
+  padding: 16px;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.25);
+}
+
+.barcode-camera-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.barcode-camera-heading h3,
+.barcode-camera-modal p {
+  margin: 0;
+}
+
+.barcode-camera-video {
+  display: block;
+  width: 100%;
+  max-height: 62vh;
+  border-radius: 10px;
+  background: #101820;
+  object-fit: cover;
+}
+
+.barcode-camera-modal p {
+  margin-top: 10px;
+  color: #5f6d78;
+  font-size: 13px;
+}
+
 /* Final mobile overrides live at the end so desktop rules declared above cannot win the cascade. */
 @media (max-width: 720px) {
   html,
@@ -2846,5 +2961,23 @@ tbody tr:last-child td {
   .haichuan-table-wrap {
     width: 100%;
     max-width: 100%;
+  }
+
+  .barcode-scan-panel {
+    padding: 12px;
+  }
+
+  .barcode-scan-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .barcode-scan-controls > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .barcode-camera-modal {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
   }
 }
