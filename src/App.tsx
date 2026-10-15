@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from 'react';
 import { AuthPanel } from './components/AuthPanel';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { PasswordResetPanel } from './components/PasswordResetPanel';
 import { ProfileBinding } from './components/ProfileBinding';
 import { SkuManager } from './components/SkuManager';
@@ -875,6 +876,7 @@ function App() {
         />
       )}
       </div>
+      <MobileBottomNav role={profile.role} currentPage={currentPage} items={visibleNavItems} onSelect={openPage} />
     </main>
   );
 }
