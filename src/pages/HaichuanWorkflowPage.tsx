@@ -651,7 +651,8 @@ export function HaichuanWorkflowPage({
       )}
 
       {tab === 'loaded' && (
-        <div className="table-wrap haichuan-table-wrap"><table className="haichuan-table">
+        <>
+        <div className="table-wrap haichuan-table-wrap desktop-data-view"><table className="haichuan-table">
           <thead><tr><th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.containerDate}</th><th>最终装柜件数</th><th>最终装柜数量</th><th>最终 CBM</th><th>{labels.status}</th><th>确认时间</th><th>{labels.note}</th></tr></thead>
           <tbody>{loadedProducts.map(({ batch, item }) => {
             const fallback = { productName: item.productName, internalCode: item.internalCode, sku: item.sku };
@@ -663,6 +664,30 @@ export function HaichuanWorkflowPage({
             </Fragment>;
           })}{loadedProducts.length === 0 && <tr><td colSpan={11}>暂无已装柜产品</td></tr>}</tbody>
         </table></div>
+        <div className="mobile-data-view mobile-card-list">
+          {loadedProducts.map(({ batch, item }) => {
+            const detail = mainProductDetail(item.productDetails);
+            return <article className="mobile-record-card" key={`${batch.id}-${item.id}`}>
+              <div className="mobile-record-heading">
+                <div><strong>{detail?.productName || item.productName || '-'}</strong><span>{detail?.sku || item.sku || '-'}</span></div>
+                <span className="mobile-status-chip">{loadingStatusLabel(batch.status)}</span>
+              </div>
+              <dl className="mobile-record-metrics">
+                <div><dt>{labels.containerDate}</dt><dd>{batch.containerDate || '-'}</dd></div>
+                <div><dt>最终装柜件数</dt><dd>{item.approvedCartonCount ?? item.requestedCartonCount}</dd></div>
+                <div><dt>最终装柜数量</dt><dd>{valueText(item.approvedProductQuantity ?? item.suggestedProductQuantity)}</dd></div>
+                <div><dt>最终 CBM</dt><dd>{valueText(item.approvedCbm ?? item.suggestedCbm, 8)}</dd></div>
+              </dl>
+              <div className="mobile-record-note">
+                <span>确认时间：{batch.reviewedAt ? new Date(batch.reviewedAt).toLocaleString() : '-'}</span>
+                <span>备注：{item.note || batch.note || '-'}</span>
+                {mixedProductDetails(item.productDetails).map((mixed) => <span key={mixed.id}>{mixed.productName || mixed.sku}：{mixedNote(mixed)}</span>)}
+              </div>
+            </article>;
+          })}
+          {loadedProducts.length === 0 && <div className="mobile-empty-state">暂无已装柜产品</div>}
+        </div>
+        </>
       )}
 
       {tab === 'binding' && !isLogistics && (
@@ -673,13 +698,22 @@ export function HaichuanWorkflowPage({
       )}
 
       {isLogistics && rejectedBatches.length > 0 && tab === 'warehouse' && (
-        <div className="table-wrap">
+        <>
+        <div className="table-wrap desktop-data-view">
           <h3>已退回装柜批次</h3>
           <table>
             <thead><tr><th>批次</th><th>{labels.containerDate}</th><th>退回原因</th><th>我方调整结果</th></tr></thead>
             <tbody>{rejectedBatches.map((batch) => <tr key={batch.id}><td>{batch.id}</td><td>{batch.containerDate}</td><td>{batch.rejectionReason || '-'}</td><td>{batch.items.map((item) => `${item.internalCode || item.sku}：${item.approvedCartonCount ?? item.requestedCartonCount}件 / ${valueText(item.approvedProductQuantity ?? item.suggestedProductQuantity)}个`).join('；')}</td></tr>)}</tbody>
           </table>
         </div>
+        <div className="mobile-data-view mobile-card-list rejected-batch-cards">
+          <h3>已退回装柜批次</h3>
+          {rejectedBatches.map((batch) => <article className="mobile-record-card" key={batch.id}>
+            <div className="mobile-record-heading"><div><strong>{batch.id}</strong><span>{batch.containerDate}</span></div><span className="mobile-status-chip">已退回</span></div>
+            <div className="mobile-record-note"><span>退回原因：{batch.rejectionReason || '-'}</span><span>我方调整结果：{batch.items.map((item) => `${item.internalCode || item.sku}：${item.approvedCartonCount ?? item.requestedCartonCount}件 / ${valueText(item.approvedProductQuantity ?? item.suggestedProductQuantity)}个`).join('；')}</span></div>
+          </article>)}
+        </div>
+        </>
       )}
 
       {quantityLot && (() => {
