@@ -485,7 +485,7 @@ export function HaichuanWorkflowPage({
           <button type="button" onClick={() => void onRefresh()} disabled={Boolean(busyKey)}>刷新</button>
         </div>
       </div>
-      <div className="tabs">
+      <div className={`tabs${isLogistics ? ' haichuan-workflow-tabs' : ''}`}>
         {tabs.map(([key, title]) => <button key={key} type="button" className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{title}</button>)}
       </div>
       {message && <div className="inline-notice">{message}</div>}
@@ -795,6 +795,16 @@ export function HaichuanWorkflowPage({
           </article>)}
         </div>
         </>
+      )}
+
+      {isLogistics && (
+        <nav className="haichuan-mobile-bottom-nav" aria-label="海川物流导航">
+          {tabs.map(([key, title]) => (
+            <button key={key} type="button" className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
+              {key === 'warehouse' ? '仓库库存' : title}
+            </button>
+          ))}
+        </nav>
       )}
 
       {quantityLot && (() => {

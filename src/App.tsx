@@ -876,7 +876,9 @@ function App() {
         />
       )}
       </div>
-      <MobileBottomNav role={profile.role} currentPage={currentPage} items={visibleNavItems} onSelect={openPage} />
+      {!(currentPage === 'logistics' && profile.role === 'logistics' && profile.logisticsProviderType === 'haichuan') && (
+        <MobileBottomNav role={profile.role} currentPage={currentPage} items={visibleNavItems} onSelect={openPage} />
+      )}
     </main>
   );
 }

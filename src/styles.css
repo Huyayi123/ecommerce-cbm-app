@@ -145,6 +145,7 @@ button.danger,
 }
 
 .mobile-bottom-nav,
+.haichuan-mobile-bottom-nav,
 .mobile-more-menu,
 .mobile-data-view {
   display: none;
@@ -3062,5 +3063,42 @@ tbody tr:last-child td {
 
   .barcode-loading-submit {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .haichuan-workflow-tabs {
+    display: none;
+  }
+
+  .haichuan-mobile-bottom-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 900;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2px;
+    padding: 7px 8px calc(7px + env(safe-area-inset-bottom));
+    border-top: 1px solid #dce4ea;
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 -4px 18px rgba(22, 32, 42, 0.08);
+    backdrop-filter: blur(12px);
+  }
+
+  .haichuan-mobile-bottom-nav button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 5px 4px;
+    border-color: transparent;
+    background: transparent;
+    color: #52616d;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .haichuan-mobile-bottom-nav button.active {
+    background: #e8f3f1;
+    color: #0f5f55;
+    font-weight: 700;
   }
 }
