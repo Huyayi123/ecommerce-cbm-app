@@ -510,6 +510,7 @@ export function HaichuanWorkflowPage({
                 <div>
                   <strong>{mainDetail?.productName || item.productName || '-'}</strong>
                   <span>{mainDetail?.sku || item.sku || '-'}</span>
+                  <span>内部编码：{mainDetail?.internalCode || item.internalCode || '-'}</span>
                 </div>
                 <span className="mobile-status-chip">{item.actualReceivedCartonCount > 0 ? '部分已入库' : '待入仓'}</span>
               </div>
@@ -589,6 +590,7 @@ export function HaichuanWorkflowPage({
                   <div>
                     <strong>{mainDetail?.productName || lot.productName || '-'}</strong>
                     <span>{mainDetail?.sku || lot.sku || '-'}</span>
+                    <span>内部编码：{mainDetail?.internalCode || lot.internalCode || '-'}</span>
                   </div>
                   <span className="mobile-status-chip">{lot.hasPackingVariance ? '包装件数有差异' : warehouseStatusLabel(lot)}</span>
                 </div>
@@ -669,7 +671,7 @@ export function HaichuanWorkflowPage({
             const detail = mainProductDetail(item.productDetails);
             return <article className="mobile-record-card" key={`${batch.id}-${item.id}`}>
               <div className="mobile-record-heading">
-                <div><strong>{detail?.productName || item.productName || '-'}</strong><span>{detail?.sku || item.sku || '-'}</span></div>
+                <div><strong>{detail?.productName || item.productName || '-'}</strong><span>{detail?.sku || item.sku || '-'}</span><span>内部编码：{detail?.internalCode || item.internalCode || '-'}</span></div>
                 <span className="mobile-status-chip">{loadingStatusLabel(batch.status)}</span>
               </div>
               <dl className="mobile-record-metrics">
