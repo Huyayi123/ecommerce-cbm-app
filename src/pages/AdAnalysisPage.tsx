@@ -201,7 +201,7 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
         <div className="metric"><span>建议暂停</span><strong>{(displaySummary.loss_product ?? 0) + (displaySummary.no_profit ?? 0)}</strong></div>
       </div>
 
-      <div className="table-wrap ad-analysis-table-wrap">
+      <div className="table-wrap ad-analysis-table-wrap desktop-data-view">
         <table className="ad-analysis-table">
           <thead>
             <tr>
@@ -237,6 +237,33 @@ export function AdAnalysisPage({ skuItems, profile, savedRuns, onSaveRun, onRefr
             {displayRows.length === 0 && <tr><td colSpan={21} className="empty">导入广告报表后生成分析，或查看最近三次历史分析结果。</td></tr>}
           </tbody>
         </table>
+      </div>
+      <div className="mobile-data-view mobile-card-list mobile-ad-list">
+        {displayRows.map((row) => <article className="mobile-record-card mobile-ad-card" key={row.id}>
+          <div className="mobile-order-topline"><strong>{row.shopName || '-'}</strong><span className={`repricing-badge ${labelClass(row.strategyLabel)}`}>{row.strategyName}</span></div>
+          <div className="mobile-order-identity">
+            {row.imageUrl ? <img className="sku-thumb" src={row.imageUrl} alt={row.productName || row.sku} loading="lazy" /> : <div className="mobile-order-image-placeholder">无图</div>}
+            <div><strong>{row.productName || '-'}</strong><span>{row.sku || '-'}</span><small>Product ID：{row.productId || '-'}</small></div>
+          </div>
+          <dl className="mobile-record-metrics">
+            <div><dt>广告花费</dt><dd>{row.adSpend}</dd></div>
+            <div><dt>广告销量</dt><dd>{row.adSalesQuantity}</dd></div>
+            <div><dt>ROAS</dt><dd>{row.roas ?? '-'}</dd></div>
+            <div><dt>利润率</dt><dd>{percentText(row.profitRate)}</dd></div>
+          </dl>
+          <details className="mobile-order-details">
+            <summary>查看全部分析字段</summary>
+            <div className="mobile-order-fields mobile-readonly-fields">
+              <label>TSIN<span>{row.sku || '-'}</span></label><label>售价<span>{row.salePrice || '-'}</span></label>
+              <label>采购成本RMB<span>{row.purchaseCostRmb || '-'}</span></label><label>采购成本兰特<span>{row.purchaseCostZar || '-'}</span></label>
+              <label>平台税费<span>{row.platformFee || '-'}{row.platformFeeSource === 'fallback' ? ' (40%)' : ''}</span></label><label>海运费<span>{row.seaFreightCost || '-'}</span></label>
+              <label>送仓费<span>{row.warehouseFee || '-'}</span></label><label>单次广告成本<span>{row.adCostPerSale || '-'}</span></label>
+              <label>TSIN排名<span>{row.skuRank ?? '-'}</span></label><label>新品状态<span>{ageStatusText(row.productAgeStatus)}</span></label>
+            </div>
+          </details>
+          <div className="mobile-record-note"><span>执行动作：{row.actionSuggestion}</span><span>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</span></div>
+        </article>)}
+        {displayRows.length === 0 && <div className="mobile-empty-state">导入广告报表后生成分析，或查看最近三次历史分析结果。</div>}
       </div>
     </section>
   );

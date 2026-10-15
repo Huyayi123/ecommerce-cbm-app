@@ -91,7 +91,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
         </div>
       </div>
 
-      <div className="table-wrap">
+      <div className="table-wrap desktop-data-view">
         <table>
           <thead>
             <tr>
@@ -173,6 +173,26 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
             )}
           </tbody>
         </table>
+      </div>
+      <div className="mobile-data-view mobile-card-list mobile-results-list">
+        {rows.map((row) => <article className={`mobile-record-card mobile-result-card${row.status === 'error' ? ' error-row' : ''}`} key={row.rowId}>
+          <div className="mobile-order-topline"><strong>{row.shopName || '-'}</strong><span className="mobile-status-chip">{row.buyerName || '未分配采购人'}</span></div>
+          <div className="mobile-order-identity">
+            {row.imageUrl ? <img className="sku-thumb" src={row.imageUrl} alt={row.productName || row.sku || 'SKU'} loading="lazy" /> : <div className="mobile-order-image-placeholder">无图</div>}
+            <div><strong>{row.productName || '-'}</strong><span>{row.sku || '-'}</span><small>{row.manufacturerName || '-'}</small></div>
+          </div>
+          <div className="mobile-record-form mobile-result-inputs">
+            <label>采购数量<input className="quantity-input" type="text" inputMode="decimal" min="0" value={draftQuantities[row.rowId] ?? String(row.purchaseQuantity ?? '')} onChange={(event) => setDraftQuantities((current) => ({ ...current, [row.rowId]: event.target.value }))} onBlur={() => commitQuantity(row.rowId)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label>
+            <label>总 CBM<input className="quantity-input" type="text" inputMode="decimal" min="0" value={draftTotalCbms[row.rowId] ?? String(row.totalCbm ?? '')} onChange={(event) => setDraftTotalCbms((current) => ({ ...current, [row.rowId]: event.target.value }))} onBlur={() => commitTotalCbm(row.rowId)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label>
+          </div>
+          <dl className="mobile-record-metrics">
+            <div><dt>采购单价</dt><dd>{row.purchasePrice?.toFixed(2) ?? '-'}</dd></div><div><dt>总金额</dt><dd>{row.totalAmount?.toFixed(2) ?? '-'}</dd></div>
+            <div><dt>单品 CBM</dt><dd>{row.unitCbm?.toFixed(8) ?? '-'}</dd></div><div><dt>月销量</dt><dd>{row.monthlySales ?? '-'}</dd></div>
+          </dl>
+          <div className="mobile-record-note"><span>内部编号：{row.internalCode || '-'}</span><span>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</span></div>
+          <div className="mobile-record-actions"><button className="danger" type="button" onClick={() => onDeleteRow(row.rowId)}>删除</button></div>
+        </article>)}
+        {rows.length === 0 && <div className="mobile-empty-state">暂无计算结果。</div>}
       </div>
     </section>
   );

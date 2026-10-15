@@ -448,6 +448,37 @@ button.danger,
   border-left: 4px solid #b42318;
 }
 
+.mobile-suggestion-card.error-row {
+  border-left: 4px solid #b42318;
+}
+
+.mobile-suggestion-card.seasonal-row {
+  border-left: 4px solid #d97706;
+}
+
+.mobile-result-card.error-row {
+  border-left: 4px solid #b42318;
+}
+
+.mobile-suggestion-quantity {
+  margin-top: 12px;
+}
+
+.mobile-suggestion-quantity label {
+  display: grid;
+  gap: 5px;
+  color: #51606c;
+  font-size: 12px;
+}
+
+.mobile-suggestion-quantity input {
+  width: 100%;
+  padding: 0 10px;
+  border: 1px solid #cbd6df;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
 @media (max-width: 720px) {
   body {
     min-width: 0;
@@ -589,6 +620,25 @@ button.danger,
     gap: 10px;
   }
 
+  .ad-analysis-controls,
+  .suggestion-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .ad-analysis-controls label,
+  .suggestion-controls label {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ad-analysis-controls button,
+  .suggestion-controls button {
+    width: 100%;
+  }
+
   .profit-analysis-controls label,
   .monthly-date-control {
     min-width: 0 !important;
@@ -621,6 +671,15 @@ button.danger,
   .store-sync-actions button,
   .database-usage-actions button {
     flex: 1 1 140px;
+  }
+
+  .pagination-bar {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .pagination-bar span {
+    flex: 1 0 100%;
   }
 
   .table-wrap,

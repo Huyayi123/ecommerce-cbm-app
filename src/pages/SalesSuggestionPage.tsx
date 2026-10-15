@@ -617,7 +617,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, haichuanWarehou
         </section>
       )}
 
-      <div className="table-wrap suggestion-table-wrap">
+      <div className="table-wrap suggestion-table-wrap desktop-data-view">
         <table className="suggestion-table">
           <thead>
             <tr>
@@ -661,6 +661,25 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, haichuanWarehou
             {suggestions.length === 0 && <tr><td colSpan={15} className="empty">上传月销量或手动同步 Takealot 库存后生成采购建议。</td></tr>}
           </tbody>
         </table>
+      </div>
+      <div className="mobile-data-view mobile-card-list mobile-suggestion-list">
+        {suggestions.map((row) => <article className={`mobile-record-card mobile-suggestion-card${hasMissingSkuData(row) ? ' error-row' : hasSeasonalWarning(row) ? ' seasonal-row' : ''}`} key={row.rowId}>
+          <div className="mobile-order-topline"><strong>{row.shopName || '-'}</strong><span className="mobile-status-chip">{row.buyerName || '未分配采购人'}</span></div>
+          <div className="mobile-order-identity">
+            {row.imageUrl ? <img className="sku-thumb" src={row.imageUrl} alt={row.productName || row.sku || 'SKU'} loading="lazy" /> : <div className="mobile-order-image-placeholder">无图</div>}
+            <div><strong>{row.productName || '-'}</strong><span>{row.sku || '-'}</span><small>{row.messages.length > 0 ? row.messages.join('；') : '正常'}</small></div>
+          </div>
+          <dl className="mobile-record-metrics">
+            <div><dt>月销量</dt><dd>{row.monthlySales}</dd></div><div><dt>南非本地库存</dt><dd>{row.localStockQuantity}</dd></div>
+            <div><dt>海运在途</dt><dd>{row.inTransitQuantity}</dd></div><div><dt>预计 CBM</dt><dd>{row.estimatedCbm?.toFixed(4) ?? '-'}</dd></div>
+          </dl>
+          <div className="mobile-suggestion-quantity"><label>建议采购数量<input className="quantity-input" type="number" min="0" step="1" value={suggestedQuantityInputValue(row)} disabled={!canEditData} onChange={(event) => setSuggestedQuantityDrafts((current) => ({ ...current, [row.rowId]: event.target.value }))} onBlur={() => commitSuggestedQuantity(row)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label></div>
+          <details className="mobile-order-details"><summary>查看全部库存字段</summary><div className="mobile-order-fields mobile-readonly-fields">
+            <label>官方仓库存<span>{row.takealotStockQuantity}</span></label><label>送仓路上库存<span>{row.stockOnWayQuantity}</span></label>
+            <label>采购订单池<span>{row.pendingPoolQuantity ?? 0}</span></label><label>海川仓库库存<span>{row.haichuanStockQuantity ?? 0}</span></label>
+          </div></details>
+        </article>)}
+        {suggestions.length === 0 && <div className="mobile-empty-state">上传月销量或手动同步 Takealot 库存后生成采购建议。</div>}
       </div>
     </section>
   );
