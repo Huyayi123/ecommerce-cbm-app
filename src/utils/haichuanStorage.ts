@@ -13,7 +13,13 @@ import type {
   SkuItem,
 } from '../types';
 import { formatErrorMessage } from './errors';
-import { declaredTotalCartonCount, haichuanProductDetails, haichuanPurchaseTotalQuantity } from './haichuan';
+import {
+  declaredTotalCartonCount,
+  haichuanApprovedLoadingSyncValues,
+  haichuanPendingInboundSyncValues,
+  haichuanProductDetails,
+  haichuanPurchaseTotalQuantity,
+} from './haichuan';
 
 function client() {
   if (!supabase) throw new Error('Supabase 尚未配置');
@@ -227,6 +233,44 @@ export async function deletePendingHaichuanInboundItems(purchaseRecordIds: strin
       .eq('status', 'pending_receipt');
     if (error) throw new Error(formatErrorMessage(error));
   }
+}
+
+export async function syncPendingHaichuanInboundItems(records: PurchaseRecord[]): Promise<void> {
+  const haichuanRecords = records.filter((record) => record.loadingType === '海川');
+  if (haichuanRecords.length === 0) return;
+  const now = new Date().toISOString();
+  const results = await Promise.all(haichuanRecords.map((record) => {
+    const values = haichuanPendingInboundSyncValues(record);
+    return client().from('haichuan_inbound_items').update({
+      purchase_total_quantity: values.purchaseTotalQuantity,
+      declared_total_carton_count: values.declaredTotalCartonCount,
+      declared_units_per_carton: values.declaredUnitsPerCarton,
+      declared_tail_quantity: values.declaredTailQuantity,
+      updated_at: now,
+    }).eq('purchase_record_id', record.id).eq('status', 'pending_receipt');
+  }));
+  const error = results.find((result) => result.error)?.error;
+  if (error) throw new Error(formatErrorMessage(error));
+}
+
+export async function syncApprovedHaichuanLoadingItems(records: PurchaseRecord[]): Promise<void> {
+  const haichuanRecords = records.filter((record) => record.loadingType === '海川');
+  if (haichuanRecords.length === 0) return;
+  const { data: batches, error: batchError } = await client().from('haichuan_loading_batches').select('id').eq('status', 'approved');
+  if (batchError) throw new Error(formatErrorMessage(batchError));
+  const approvedBatchIds = ((batches ?? []) as Array<{ id: string }>).map((batch) => batch.id).filter(Boolean);
+  if (approvedBatchIds.length === 0) return;
+  const now = new Date().toISOString();
+  const results = await Promise.all(haichuanRecords.map((record) => {
+    const values = haichuanApprovedLoadingSyncValues(record);
+    return client().from('haichuan_loading_items').update({
+      approved_carton_count: values.approvedCartonCount,
+      approved_product_quantity: values.approvedProductQuantity,
+      updated_at: now,
+    }).eq('purchase_record_id', record.id).in('batch_id', approvedBatchIds);
+  }));
+  const error = results.find((result) => result.error)?.error;
+  if (error) throw new Error(formatErrorMessage(error));
 }
 
 export async function confirmHaichuanReceipt(input: {

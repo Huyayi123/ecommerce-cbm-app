@@ -1363,30 +1363,6 @@ button.danger,
   left: 482px;
   min-width: 280px;
   max-width: 280px;
-}
-
-.purchase-pool-table-wrap .pool-pin-english {
-  left: 762px;
-  min-width: 340px;
-  max-width: 340px;
-}
-
-.purchase-pool-table-wrap .pool-pin-shop {
-  left: 1102px;
-  min-width: 90px;
-  max-width: 90px;
-}
-
-.purchase-pool-table-wrap .pool-pin-buyer {
-  left: 1192px;
-  min-width: 100px;
-  max-width: 100px;
-}
-
-.purchase-pool-table-wrap .pool-pin-date {
-  left: 1292px;
-  min-width: 130px;
-  max-width: 130px;
   box-shadow: 2px 0 0 #c5d2da;
 }
 
@@ -1430,7 +1406,7 @@ button.danger,
   background: #fff8df;
 }
 
-.purchase-pool-table-wrap tr.has-note-row .pool-pin-date {
+.purchase-pool-table-wrap tr.has-note-row .pool-pin-product {
   box-shadow: 2px 0 0 #d8c987;
 }
 

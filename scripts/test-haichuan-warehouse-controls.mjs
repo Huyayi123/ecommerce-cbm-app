@@ -41,6 +41,36 @@ try {
   });
   assert.equal(controls.previewHaichuanWarehouseQuantity(lot, 29).valid, false);
 
+  const record = {
+    purchaseQuantity: 80,
+    confirmedPurchaseQuantity: 90,
+    cartonCount: 4,
+    unitsPerCarton: 20,
+    tailQuantity: 5,
+    manualTotalCartonCount: 7,
+    manualPurchaseTotalQuantity: 105,
+    manualTotalAmount: null,
+    manualTotalCbm: null,
+    manualIsMixed: null,
+    mixedGroups: [],
+    isMixed: false,
+    purchasePrice: 0,
+    freightCost: 0,
+    totalAmount: 0,
+    totalCbm: 0,
+    unitCbm: 0,
+  };
+  assert.deepEqual(controls.haichuanPendingInboundSyncValues(record), {
+    purchaseTotalQuantity: 105,
+    declaredTotalCartonCount: 7,
+    declaredUnitsPerCarton: 20,
+    declaredTailQuantity: 5,
+  });
+  assert.deepEqual(controls.haichuanApprovedLoadingSyncValues(record), {
+    approvedCartonCount: 7,
+    approvedProductQuantity: 105,
+  });
+
   console.log('Haichuan warehouse controls tests passed');
 } finally {
   await rm(tempDir, { recursive: true, force: true });

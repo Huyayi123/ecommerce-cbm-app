@@ -52,7 +52,7 @@ import {
   upsertPurchasePools,
   upsertPurchaseRecords,
 } from './utils/cloudStorage';
-import { confirmHaichuanReceipt, createHaichuanInboundItems, deleteHaichuanWarehouseLot, deletePendingHaichuanInboundItems, fetchHaichuanData, reviewHaichuanLoadingBatch, submitHaichuanLoadingBatch, updateHaichuanWarehouseQuantity } from './utils/haichuanStorage';
+import { confirmHaichuanReceipt, createHaichuanInboundItems, deleteHaichuanWarehouseLot, deletePendingHaichuanInboundItems, fetchHaichuanData, reviewHaichuanLoadingBatch, submitHaichuanLoadingBatch, syncApprovedHaichuanLoadingItems, syncPendingHaichuanInboundItems, updateHaichuanWarehouseQuantity } from './utils/haichuanStorage';
 import { formatErrorMessage } from './utils/errors';
 import { applyApprovedLogisticsBatch } from './utils/logistics';
 import { canDelete, canEdit } from './utils/permissions';
@@ -355,7 +355,7 @@ function App() {
     setPurchaseRecords(normalized.records);
   }
 
-  async function persistPurchaseRecordUpdates(changedRecords: PurchaseRecord[]) {
+  async function persistPurchaseRecordUpdates(changedRecords: PurchaseRecord[], haichuanSync: 'none' | 'pending-inbound' | 'approved-loading' = 'none') {
     const normalized = normalizePurchaseRecords(assignBuyerEmails(changedRecords)).records;
     const existingById = new Map(purchaseRecords.map((record) => [record.id, record]));
     const newlyHaichuan = normalized.filter((record) => record.loadingType === '海川'
@@ -372,6 +372,8 @@ function App() {
       await upsertPurchaseRecords(normalized);
       if (haichuanProfile && newlyHaichuan.length > 0) await createHaichuanInboundItems(newlyHaichuan, haichuanProfile, skuItems);
       if (removedFromHaichuan.length > 0) await deletePendingHaichuanInboundItems(removedFromHaichuan.map((record) => record.id));
+      if (haichuanSync === 'pending-inbound') await syncPendingHaichuanInboundItems(normalized);
+      if (haichuanSync === 'approved-loading') await syncApprovedHaichuanLoadingItems(normalized);
       setPurchaseRecords((current) => {
         const existingIds = new Set(current.map((record) => record.id));
         const changedById = new Map(normalized.map((record) => [record.id, record]));
@@ -379,6 +381,9 @@ function App() {
         const created = normalized.filter((record) => !existingIds.has(record.id));
         return [...created, ...updated];
       });
+      if (haichuanSync !== 'none' && normalized.some((record) => record.loadingType === '海川')) {
+        setHaichuanData(await fetchHaichuanData());
+      }
     } catch (error) {
       await loadCloudData();
       throw error;
@@ -732,7 +737,7 @@ function App() {
           records={purchaseRecords}
           skuItems={skuItems}
           onChange={(records) => void persistPurchaseRecords(records)}
-          onSaveRecord={(record) => persistPurchaseRecordUpdates([record])}
+          onSaveRecord={(record) => persistPurchaseRecordUpdates([record], 'approved-loading')}
           onDeleteRecords={persistPurchaseRecordDeletes}
           canEditData={editable}
           canDeleteData={deletable}
@@ -748,7 +753,7 @@ function App() {
           profiles={profiles}
           skuItems={skuItems}
           logisticsBatches={logisticsBatches}
-          onSaveRecords={persistPurchaseRecordUpdates}
+          onSaveRecords={(records) => persistPurchaseRecordUpdates(records, 'pending-inbound')}
           onSavePools={persistPurchasePools}
           onSaveLogisticsBatch={persistLogisticsBatch}
           onOpenLogistics={() => openPage('logistics')}

@@ -691,7 +691,7 @@ export function PurchasePoolPage({
         <table className="inventory-table">
           <thead>
             <tr>
-              <th className="pool-pin pool-pin-image">图片</th><th className="pool-pin pool-pin-manufacturer">厂家名</th><th className="pool-pin pool-pin-code">{labels.internalCode}</th><th className="pool-pin pool-pin-sku">{labels.sku}</th><th className="pool-pin pool-pin-product">{labels.productName}</th><th className="pool-pin pool-pin-english">英文名称</th><th className="pool-pin pool-pin-shop">店铺</th><th className="pool-pin pool-pin-buyer">采购人</th><th className="pool-pin pool-pin-date">{labels.containerDate}</th><th>计划采购数量</th><th>{labels.cartonCount}</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
+              <th className="pool-pin pool-pin-image">图片</th><th className="pool-pin pool-pin-manufacturer">厂家名</th><th className="pool-pin pool-pin-code">{labels.internalCode}</th><th className="pool-pin pool-pin-sku">{labels.sku}</th><th className="pool-pin pool-pin-product">{labels.productName}</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>{labels.containerDate}</th><th>计划采购数量</th><th>{labels.cartonCount}</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
             </tr>
           </thead>
           <tbody>
@@ -707,10 +707,10 @@ export function PurchasePoolPage({
                     <td className="pool-pin pool-pin-code"><strong>{record.internalCode || '-'}</strong></td>
                     <td className="pool-pin pool-pin-sku">{editableCell(record, 'sku')}</td>
                     <td className="pool-pin pool-pin-product">{editableCell(record, 'productName')}</td>
-                    <td className="pool-pin pool-pin-english">{editableCell(record, 'englishName')}</td>
-                    <td className="pool-pin pool-pin-shop">{editableCell(record, 'shopName')}</td>
-                    <td className="pool-pin pool-pin-buyer">{editableCell(record, 'assignedBuyerName')}</td>
-                    <td className="pool-pin pool-pin-date">{editableCell(record, 'containerDate', 'date')}</td>
+                    <td>{editableCell(record, 'englishName')}</td>
+                    <td>{editableCell(record, 'shopName')}</td>
+                    <td>{editableCell(record, 'assignedBuyerName')}</td>
+                    <td>{editableCell(record, 'containerDate', 'date')}</td>
                     <td>{record.purchaseQuantity}</td>
                     <td>{editableCell(record, 'cartonCount', 'number')}</td>
                     <td>{editableCell(record, 'unitsPerCarton', 'number')}</td>
@@ -744,10 +744,10 @@ export function PurchasePoolPage({
                         <td className="pool-pin pool-pin-code">{skuBySku.get(skuLookupKey(line.sku))?.internalCode || '-'}</td>
                         <td className="pool-pin pool-pin-sku"><strong>{line.sku}</strong></td>
                         <td className="pool-pin pool-pin-product"><strong>{line.productName}</strong></td>
-                        <td className="pool-pin pool-pin-english">{line.englishName || skuBySku.get(skuLookupKey(line.sku))?.englishName || ''}</td>
-                        <td className="pool-pin pool-pin-shop">{record.shopName}</td>
-                        <td className="pool-pin pool-pin-buyer">{record.assignedBuyerName}</td>
-                        <td className="pool-pin pool-pin-date">{record.containerDate || record.purchaseBatchDate || '-'}</td>
+                        <td>{line.englishName || skuBySku.get(skuLookupKey(line.sku))?.englishName || ''}</td>
+                        <td>{record.shopName}</td>
+                        <td>{record.assignedBuyerName}</td>
+                        <td>{record.containerDate || record.purchaseBatchDate || '-'}</td>
                         <td />
                         <td />
                         <td />

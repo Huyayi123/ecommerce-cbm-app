@@ -1,5 +1,5 @@
 import type { HaichuanProductDetail, HaichuanWarehouseLot, PurchaseRecord, SkuItem } from '../types';
-import { effectivePurchaseQuantity, purchaseQuantityWithMixed, withPurchaseTotals } from './purchaseRecords';
+import { effectivePurchaseQuantity, packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from './purchaseRecords';
 import { round } from './number';
 
 export function declaredTotalCartonCount(record: Pick<PurchaseRecord, 'cartonCount' | 'tailQuantity'>): number {
@@ -8,6 +8,22 @@ export function declaredTotalCartonCount(record: Pick<PurchaseRecord, 'cartonCou
 
 export function haichuanPurchaseTotalQuantity(record: PurchaseRecord): number {
   return Math.max(0, purchaseQuantityWithMixed(withPurchaseTotals(record)));
+}
+
+export function haichuanPendingInboundSyncValues(record: PurchaseRecord) {
+  return {
+    purchaseTotalQuantity: haichuanPurchaseTotalQuantity(record),
+    declaredTotalCartonCount: Math.max(0, packageCountFor(record)),
+    declaredUnitsPerCarton: Math.max(0, Number(record.unitsPerCarton) || 0),
+    declaredTailQuantity: Math.max(0, Number(record.tailQuantity) || 0),
+  };
+}
+
+export function haichuanApprovedLoadingSyncValues(record: PurchaseRecord) {
+  return {
+    approvedCartonCount: Math.max(0, packageCountFor(record)),
+    approvedProductQuantity: haichuanPurchaseTotalQuantity(record),
+  };
 }
 
 export function haichuanProductDetails(record: PurchaseRecord, skuItems: SkuItem[] = []): HaichuanProductDetail[] {
