@@ -108,7 +108,8 @@ export function HaichuanWorkflowPage({
   onSaveProfile,
 }: Props) {
   const isLogistics = profile.role === 'logistics';
-  const [tab, setTab] = useState(isLogistics ? 'inbound' : 'warehouse');
+  const [tab, setTab] = useState(isLogistics ? 'scan' : 'warehouse');
+  const [scanMode, setScanMode] = useState<'inbound' | 'warehouse'>('inbound');
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState('');
   const [busyKey, setBusyKey] = useState('');
@@ -132,18 +133,16 @@ export function HaichuanWorkflowPage({
 
   const pendingInboundRecords = useMemo(() => data.inboundItems.filter((item) => item.status === 'pending_receipt'), [data.inboundItems]);
   const availableWarehouseLots = useMemo(() => data.warehouseLots.filter((lot) => lot.remainingCartonCount > 0), [data.warehouseLots]);
-  const pendingInbound = useMemo(() => scanSku
-    ? filterByBarcodeSku(pendingInboundRecords, scanSku)
-    : pendingInboundRecords.filter((item) => includesSearch([
+  const pendingInbound = useMemo(() => pendingInboundRecords.filter((item) => includesSearch([
     item.sku, item.productName, item.englishName, item.internalCode, item.purchaseNote,
     ...item.productDetails.flatMap((detail) => [detail.sku, detail.productName, detail.englishName, detail.internalCode]),
-  ], search)), [pendingInboundRecords, scanSku, search]);
-  const visibleLots = useMemo(() => scanSku
-    ? filterByBarcodeSku(availableWarehouseLots, scanSku)
-    : availableWarehouseLots.filter((lot) => includesSearch([
+  ], search)), [pendingInboundRecords, search]);
+  const visibleLots = useMemo(() => availableWarehouseLots.filter((lot) => includesSearch([
     lot.sku, lot.productName, lot.englishName, lot.internalCode,
     ...lot.productDetails.flatMap((detail) => [detail.sku, detail.productName, detail.englishName, detail.internalCode]),
-  ], search)), [availableWarehouseLots, scanSku, search]);
+  ], search)), [availableWarehouseLots, search]);
+  const scannedInbound = useMemo(() => filterByBarcodeSku(pendingInboundRecords, scanSku), [pendingInboundRecords, scanSku]);
+  const scannedLots = useMemo(() => filterByBarcodeSku(availableWarehouseLots, scanSku), [availableWarehouseLots, scanSku]);
   const submittedBatches = useMemo(() => data.loadingBatches.filter((batch) => batch.status === 'submitted'), [data.loadingBatches]);
   const approvedBatches = useMemo(() => data.loadingBatches.filter((batch) => batch.status === 'approved'), [data.loadingBatches]);
   const rejectedBatches = useMemo(() => data.loadingBatches.filter((batch) => batch.status === 'rejected'), [data.loadingBatches]);
@@ -151,6 +150,8 @@ export function HaichuanWorkflowPage({
   const activeBatch = submittedBatches.find((batch) => batch.id === activeBatchId) ?? submittedBatches[0] ?? null;
   const selectableVisibleLots = selectableHaichuanWarehouseLots(visibleLots);
   const allVisibleLotsSelected = selectableVisibleLots.length > 0 && selectableVisibleLots.every((lot) => selectedLots[lot.id] !== undefined);
+  const selectableScannedLots = selectableHaichuanWarehouseLots(scannedLots);
+  const allScannedLotsSelected = selectableScannedLots.length > 0 && selectableScannedLots.every((lot) => selectedLots[lot.id] !== undefined);
 
   useEffect(() => {
     setReceiptDrafts((current) => {
@@ -177,9 +178,9 @@ export function HaichuanWorkflowPage({
 
   useEffect(() => {
     if (!scanSku) return;
-    const matchCount = tab === 'inbound' ? pendingInbound.length : tab === 'warehouse' ? visibleLots.length : 0;
+    const matchCount = tab === 'scan' ? (scanMode === 'inbound' ? scannedInbound.length : scannedLots.length) : 0;
     if (matchCount > 0) requestAnimationFrame(() => scanResultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-  }, [scanSku, tab, pendingInbound.length, visibleLots.length]);
+  }, [scanSku, scanMode, tab, scannedInbound.length, scannedLots.length]);
 
   async function runAction(key: string, action: () => Promise<void>, successMessage: string): Promise<boolean> {
     if (busyKey) return false;
@@ -244,6 +245,10 @@ export function HaichuanWorkflowPage({
 
   function toggleAllVisibleLots() {
     setSelectedLots((current) => toggleAllHaichuanWarehouseLots(current, visibleLots));
+  }
+
+  function toggleAllScannedLots() {
+    setSelectedLots((current) => toggleAllHaichuanWarehouseLots(current, scannedLots));
   }
 
   function openQuantityDialog(lot: HaichuanWarehouseLot) {
@@ -463,7 +468,7 @@ export function HaichuanWorkflowPage({
   }
 
   const tabs = isLogistics
-    ? [['inbound', '待入仓'], ['warehouse', '仓库存货'], ['loaded', '已装柜']] as const
+    ? [['scan', '扫码'], ['inbound', '待入仓'], ['warehouse', '仓库存货'], ['loaded', '已装柜']] as const
     : [['warehouse', '海川仓库库存'], ['review', '海川装柜审核'], ['loaded', '已装柜'], ['binding', '物流商绑定']] as const;
 
   return (
@@ -489,25 +494,81 @@ export function HaichuanWorkflowPage({
         <div className="search-bar"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索 SKU、产品名称、英文名称、内部编号" /></div>
       )}
 
+      {tab === 'scan' && isLogistics && (
+        <div className="barcode-workbench">
+          <div className="barcode-mode-switch" role="group" aria-label="扫码业务类型">
+            <button type="button" className={scanMode === 'inbound' ? 'active' : ''} onClick={() => setScanMode('inbound')}>收货扫码</button>
+            <button type="button" className={scanMode === 'warehouse' ? 'active' : ''} onClick={() => setScanMode('warehouse')}>装柜扫码</button>
+          </div>
+          <BarcodeScanControl
+            value={scanSku}
+            matchCount={scanMode === 'inbound' ? scannedInbound.length : scannedLots.length}
+            targetLabel={scanMode === 'inbound' ? '待入仓' : '仓库存货'}
+            onScan={setScanSku}
+            onClear={() => setScanSku('')}
+            embeddedCamera
+          />
+          <div ref={scanResultsRef} className="barcode-scan-results-anchor" />
+
+          {scanSku && scanMode === 'inbound' && scannedInbound.length > 0 && <div className="barcode-workbench-results">
+            {scannedInbound.map((item, index) => {
+              const mainDetail = mainProductDetail(item.productDetails);
+              const remainingCartons = Math.max(0, item.declaredTotalCartonCount - item.actualReceivedCartonCount);
+              return <article className="mobile-record-card barcode-workbench-card barcode-match-card" key={item.id}>
+                <div className="mobile-record-heading">
+                  <div><strong>{mainDetail?.productName || item.productName || '-'}</strong><span>SKU：{mainDetail?.sku || item.sku || '-'}</span><span>内部编码：{mainDetail?.internalCode || item.internalCode || '-'}</span></div>
+                  <div className="mobile-scan-badges"><span className="mobile-status-chip">{item.actualReceivedCartonCount > 0 ? '部分已入库' : '待入仓'}</span>{index === 0 && <span className="barcode-recommended-chip">建议处理</span>}</div>
+                </div>
+                <dl className="mobile-record-metrics">
+                  <div><dt>采购总数量</dt><dd>{valueText(item.purchaseTotalQuantity)}</dd></div><div><dt>申报件数</dt><dd>{item.declaredTotalCartonCount}</dd></div><div><dt>已入库</dt><dd>{item.actualReceivedCartonCount}</dd></div><div><dt>剩余件数</dt><dd>{remainingCartons}</dd></div><div><dt>每件数量</dt><dd>{valueText(item.declaredUnitsPerCarton)}</dd></div><div><dt>总 CBM</dt><dd>{valueText(item.declaredTotalCbm)}</dd></div>
+                </dl>
+                {(item.purchaseNote || mixedProductDetails(item.productDetails).length > 0) && <div className="mobile-record-note">{item.purchaseNote && <span>采购备注：{item.purchaseNote}</span>}{mixedProductDetails(item.productDetails).map((detail) => <span key={detail.id}>{detail.productName || detail.sku}：{mixedNote(detail)}</span>)}</div>}
+                <div className="mobile-record-form"><label>本次入库件数<input type="number" min="1" step="1" value={receiptDrafts[item.id] ?? Math.max(1, remainingCartons)} onChange={(event) => setReceiptDrafts((current) => ({ ...current, [item.id]: Number(event.target.value) }))} /></label><label>海川备注<input value={receiptNotes[item.id] ?? ''} onChange={(event) => setReceiptNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="本次入库备注" /></label></div>
+                <div className="mobile-record-actions"><button type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id, 'partial')}>部分入库</button><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id, 'complete')}>{busyKey === `receipt-${item.id}` ? '正在确认...' : '完成入库'}</button><button type="button" disabled={Boolean(busyKey)} onClick={() => void openReceiptHistory(item.id)}>入库历史</button></div>
+              </article>;
+            })}
+          </div>}
+
+          {scanSku && scanMode === 'warehouse' && scannedLots.length > 0 && <>
+            <div className="barcode-workbench-results">
+              {scannedLots.map((lot, index) => {
+                const available = Math.max(0, lot.remainingCartonCount - lot.reservedCartonCount);
+                const checked = selectedLots[lot.id] !== undefined;
+                const mainDetail = mainProductDetail(lot.productDetails);
+                return <article className={`mobile-record-card barcode-workbench-card barcode-match-card${checked ? ' selected' : ''}`} key={lot.id}>
+                  <div className="mobile-record-heading"><div><strong>{mainDetail?.productName || lot.productName || '-'}</strong><span>SKU：{mainDetail?.sku || lot.sku || '-'}</span><span>内部编码：{mainDetail?.internalCode || lot.internalCode || '-'}</span></div><div className="mobile-scan-badges"><span className="mobile-status-chip">{lot.hasPackingVariance ? '包装件数有差异' : warehouseStatusLabel(lot)}</span>{index === 0 && <span className="barcode-recommended-chip">建议处理</span>}</div></div>
+                  <dl className="mobile-record-metrics"><div><dt>采购总数量</dt><dd>{valueText(lot.initialProductQuantity)}</dd></div><div><dt>入仓件数</dt><dd>{lot.initialCartonCount}</dd></div><div><dt>剩余件数</dt><dd>{lot.remainingCartonCount}</dd></div><div><dt>冻结件数</dt><dd>{lot.reservedCartonCount}</dd></div><div><dt>剩余数量</dt><dd>{valueText(lot.remainingProductQuantity)}</dd></div><div><dt>剩余 CBM</dt><dd>{valueText(lot.remainingCbm)}</dd></div></dl>
+                  {mixedProductDetails(lot.productDetails).length > 0 && <div className="mobile-record-note">{mixedProductDetails(lot.productDetails).map((detail) => <span key={detail.id}>{detail.productName || detail.sku}：{mixedNote(detail)}</span>)}</div>}
+                  <div className="mobile-record-selection"><label className="mobile-checkbox-label"><input type="checkbox" checked={checked} disabled={available <= 0 || Boolean(busyKey)} onChange={(event) => toggleLot(lot, event.target.checked)} />选择本次装柜</label><label>本次装柜件数<input type="number" min={lot.productDetails.length > 1 ? available : 1} max={available} step="1" disabled={!checked || Boolean(busyKey) || lot.productDetails.length > 1} value={checked ? selectedLots[lot.id] : available} title={lot.productDetails.length > 1 ? '混装库存需整批装走，避免拆散同一混装箱内商品' : ''} onChange={(event) => setSelectedLots((current) => ({ ...current, [lot.id]: Number(event.target.value) }))} /></label></div>
+                </article>;
+              })}
+            </div>
+            <div className="record-form barcode-loading-submit">
+              <label>{labels.containerDate}<input type="date" value={containerDate} onChange={(event) => setContainerDate(event.target.value)} /></label>
+              <label>{labels.note}<input value={batchNote} onChange={(event) => setBatchNote(event.target.value)} /></label>
+              <div className="form-actions"><button type="button" disabled={selectableScannedLots.length === 0 || Boolean(busyKey)} onClick={toggleAllScannedLots}>{allScannedLotsSelected ? '取消当前 SKU 全部选择' : `选择当前 SKU 全部批次（${selectableScannedLots.length}）`}</button><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void submitLoading()}>{busyKey === 'submit-loading' ? '正在提交...' : '提交装柜审核'}</button></div>
+            </div>
+          </>}
+        </div>
+      )}
+
       {tab === 'inbound' && isLogistics && (
         <>
-        <BarcodeScanControl value={scanSku} matchCount={pendingInbound.length} targetLabel="待入仓" onScan={setScanSku} onClear={() => setScanSku('')} />
-        <div ref={scanResultsRef} className="barcode-scan-results-anchor" />
         <div className="table-wrap haichuan-table-wrap desktop-data-view">
           <table className="haichuan-table">
             <thead><tr><th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>申报总件数</th><th>已入库件数</th><th>参考剩余件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCbm}</th><th>采购备注</th><th>本次入库件数</th><th>海川备注</th><th>{labels.status}</th><th>{labels.actions}</th></tr></thead>
             <tbody>
-              {pendingInbound.map((item, index) => {
+              {pendingInbound.map((item) => {
                 const mainDetail = mainProductDetail(item.productDetails);
                 return <Fragment key={item.id}>
-                  <tr className={scanSku ? 'barcode-match-row' : undefined}>
+                  <tr>
                     {productCells(mainDetail, item)}
                     <td>{valueText(item.purchaseTotalQuantity)}</td><td>{item.declaredTotalCartonCount}</td><td>{item.actualReceivedCartonCount}</td><td>{Math.max(0, item.declaredTotalCartonCount - item.actualReceivedCartonCount)}</td>
                     <td>{valueText(item.declaredUnitsPerCarton)}</td><td>{valueText(item.declaredTailQuantity)}</td><td>{valueText(item.declaredTotalCbm)}</td>
                     <td><span className="cell-ellipsis" title={item.purchaseNote || '-'}>{item.purchaseNote || '-'}</span></td>
                     <td><input type="number" min="1" step="1" value={receiptDrafts[item.id] ?? Math.max(1, item.declaredTotalCartonCount - item.actualReceivedCartonCount)} onChange={(event) => setReceiptDrafts((current) => ({ ...current, [item.id]: Number(event.target.value) }))} /></td>
                     <td><input value={receiptNotes[item.id] ?? ''} onChange={(event) => setReceiptNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="本次入库备注" /></td>
-                    <td>{item.actualReceivedCartonCount > 0 ? '部分已入库' : '待入仓'}{scanSku && index === 0 ? ' · 建议处理' : ''}</td>
+                    <td>{item.actualReceivedCartonCount > 0 ? '部分已入库' : '待入仓'}</td>
                     <td className="row-actions"><button type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id, 'partial')}>部分入库</button><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id, 'complete')}>{busyKey === `receipt-${item.id}` ? '正在确认...' : '完成入库'}</button><button type="button" disabled={Boolean(busyKey)} onClick={() => void openReceiptHistory(item.id)}>入库历史</button></td>
                   </tr>
                   {mixedProductDetails(item.productDetails).map((detail) => <tr className="mixed-child-row" key={`${item.id}:${detail.id}`}>
@@ -520,17 +581,17 @@ export function HaichuanWorkflowPage({
           </table>
         </div>
         <div className="mobile-data-view mobile-card-list">
-          {pendingInbound.map((item, index) => {
+          {pendingInbound.map((item) => {
             const mainDetail = mainProductDetail(item.productDetails);
             const remainingCartons = Math.max(0, item.declaredTotalCartonCount - item.actualReceivedCartonCount);
-            return <article className={`mobile-record-card${scanSku ? ' barcode-match-card' : ''}`} key={item.id}>
+            return <article className="mobile-record-card" key={item.id}>
               <div className="mobile-record-heading">
                 <div>
                   <strong>{mainDetail?.productName || item.productName || '-'}</strong>
                   <span>{mainDetail?.sku || item.sku || '-'}</span>
                   <span>内部编码：{mainDetail?.internalCode || item.internalCode || '-'}</span>
                 </div>
-                <div className="mobile-scan-badges"><span className="mobile-status-chip">{item.actualReceivedCartonCount > 0 ? '部分已入库' : '待入仓'}</span>{scanSku && index === 0 && <span className="barcode-recommended-chip">建议处理</span>}</div>
+                <span className="mobile-status-chip">{item.actualReceivedCartonCount > 0 ? '部分已入库' : '待入仓'}</span>
               </div>
               <dl className="mobile-record-metrics">
                 <div><dt>采购总数量</dt><dd>{valueText(item.purchaseTotalQuantity)}</dd></div>
@@ -562,8 +623,6 @@ export function HaichuanWorkflowPage({
 
       {tab === 'warehouse' && (
         <>
-          {isLogistics && <BarcodeScanControl value={scanSku} matchCount={visibleLots.length} targetLabel="仓库存货" onScan={setScanSku} onClear={() => setScanSku('')} />}
-          {isLogistics && <div ref={scanResultsRef} className="barcode-scan-results-anchor" />}
           {isLogistics && (
             <div className="record-form">
               <label>{labels.containerDate}<input type="date" value={containerDate} onChange={(event) => setContainerDate(event.target.value)} /></label>
@@ -575,19 +634,19 @@ export function HaichuanWorkflowPage({
             <table className="haichuan-table">
               <thead><tr>{isLogistics && <th>选择</th>}<th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>入仓总件数</th><th>剩余件数</th><th>冻结件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>剩余数量</th><th>剩余 CBM</th><th>{labels.status}</th>{isLogistics ? <th>本次装柜件数</th> : <th>{labels.actions}</th>}</tr></thead>
               <tbody>
-                {visibleLots.map((lot, index) => {
+                {visibleLots.map((lot) => {
                   const available = Math.max(0, lot.remainingCartonCount - lot.reservedCartonCount);
                   const checked = selectedLots[lot.id] !== undefined;
                   const mainDetail = mainProductDetail(lot.productDetails);
                   return (
                     <Fragment key={lot.id}>
-                      <tr className={scanSku ? 'barcode-match-row' : undefined}>
+                      <tr>
                         {isLogistics && <td><input type="checkbox" checked={checked} disabled={available <= 0 || Boolean(busyKey)} onChange={(event) => toggleLot(lot, event.target.checked)} /></td>}
                         {productCells(mainDetail, lot)}
                         <td>{valueText(lot.initialProductQuantity)}</td><td>{lot.initialCartonCount}</td><td>{lot.remainingCartonCount}</td><td>{lot.reservedCartonCount}</td>
                         <td>{valueText(lot.declaredUnitsPerCarton)}</td><td>{valueText(lot.declaredTailQuantity)}</td>
                         <td>{valueText(lot.remainingProductQuantity)}</td><td>{valueText(lot.remainingCbm)}</td>
-                        <td>{lot.hasPackingVariance ? '包装件数有差异' : warehouseStatusLabel(lot)}{scanSku && index === 0 ? ' · 建议处理' : ''}</td>
+                        <td>{lot.hasPackingVariance ? '包装件数有差异' : warehouseStatusLabel(lot)}</td>
                         {isLogistics ? <td><input type="number" min={lot.productDetails.length > 1 ? available : 1} max={available} step="1" disabled={!checked || Boolean(busyKey) || lot.productDetails.length > 1} value={checked ? selectedLots[lot.id] : available} title={lot.productDetails.length > 1 ? '混装库存需整批装走，避免拆散同一混装箱内商品' : ''} onChange={(event) => setSelectedLots((current) => ({ ...current, [lot.id]: Number(event.target.value) }))} /></td> : <td className="row-actions"><button type="button" disabled={Boolean(busyKey)} onClick={() => openQuantityDialog(lot)}>修改数量</button><button className="danger" type="button" disabled={Boolean(busyKey)} onClick={() => setDeleteLot(lot)}>删除</button></td>}
                       </tr>
                       {mixedProductDetails(lot.productDetails).map((detail) => <tr className="mixed-child-row" key={`${lot.id}:${detail.id}`}>
@@ -601,18 +660,18 @@ export function HaichuanWorkflowPage({
             </table>
           </div>
           <div className="mobile-data-view mobile-card-list">
-            {visibleLots.map((lot, index) => {
+            {visibleLots.map((lot) => {
               const available = Math.max(0, lot.remainingCartonCount - lot.reservedCartonCount);
               const checked = selectedLots[lot.id] !== undefined;
               const mainDetail = mainProductDetail(lot.productDetails);
-              return <article className={`mobile-record-card${checked ? ' selected' : ''}${scanSku ? ' barcode-match-card' : ''}`} key={lot.id}>
+              return <article className={`mobile-record-card${checked ? ' selected' : ''}`} key={lot.id}>
                 <div className="mobile-record-heading">
                   <div>
                     <strong>{mainDetail?.productName || lot.productName || '-'}</strong>
                     <span>{mainDetail?.sku || lot.sku || '-'}</span>
                     <span>内部编码：{mainDetail?.internalCode || lot.internalCode || '-'}</span>
                   </div>
-                  <div className="mobile-scan-badges"><span className="mobile-status-chip">{lot.hasPackingVariance ? '包装件数有差异' : warehouseStatusLabel(lot)}</span>{scanSku && index === 0 && <span className="barcode-recommended-chip">建议处理</span>}</div>
+                  <span className="mobile-status-chip">{lot.hasPackingVariance ? '包装件数有差异' : warehouseStatusLabel(lot)}</span>
                 </div>
                 <dl className="mobile-record-metrics">
                   <div><dt>采购总数量</dt><dd>{valueText(lot.initialProductQuantity)}</dd></div>

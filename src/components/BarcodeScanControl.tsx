@@ -8,9 +8,10 @@ type Props = {
   targetLabel: string;
   onScan: (sku: string) => void;
   onClear: () => void;
+  embeddedCamera?: boolean;
 };
 
-export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onClear }: Props) {
+export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onClear, embeddedCamera = false }: Props) {
   const [input, setInput] = useState(value);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState('');
@@ -68,13 +69,21 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
     setInput('');
     setCameraError('');
     onClear();
+    if (embeddedCamera) setCameraOpen(true);
   }
 
+  const cameraContent = <div className={embeddedCamera ? 'barcode-camera-embedded' : 'barcode-camera-modal'}>
+    <div className="barcode-camera-heading"><h3 id="barcode-camera-title">扫描商品条形码</h3><button type="button" onClick={() => setCameraOpen(false)}>关闭</button></div>
+    <video ref={videoRef} className="barcode-camera-video" muted playsInline />
+    <p>将条形码完整放入取景框。识别成功后会自动定位记录。</p>
+  </div>;
+
   return <>
-    <div className="barcode-scan-panel">
+    <div className={`barcode-scan-panel${embeddedCamera ? ' barcode-scan-workbench-control' : ''}`}>
       <div className="barcode-scan-heading">
         <div><strong>扫描条形码定位{targetLabel}</strong><span>条形码内容为 SKU；扫描仅定位记录，不会自动提交。</span></div>
       </div>
+      {embeddedCamera && cameraOpen && cameraContent}
       <div className="barcode-scan-controls">
         <input
           value={input}
@@ -87,7 +96,7 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
         />
         <button type="button" className="primary" onClick={submit}>定位记录</button>
         <button type="button" onClick={() => { setCameraError(''); setCameraOpen(true); }}>打开摄像头</button>
-        {value && <button type="button" onClick={clear}>清除</button>}
+        {value && <button type="button" onClick={clear}>{embeddedCamera ? '继续扫描' : '清除'}</button>}
       </div>
       {value && <div className={`barcode-scan-result ${matchCount > 0 ? 'success' : 'error'}`}>
         {matchCount > 0
@@ -97,12 +106,6 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
       {cameraError && <div className="inline-error">{cameraError}</div>}
     </div>
 
-    {cameraOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCameraOpen(false); }}>
-      <div className="barcode-camera-modal" role="dialog" aria-modal="true" aria-labelledby="barcode-camera-title">
-        <div className="barcode-camera-heading"><h3 id="barcode-camera-title">扫描商品条形码</h3><button type="button" onClick={() => setCameraOpen(false)}>关闭</button></div>
-        <video ref={videoRef} className="barcode-camera-video" muted playsInline />
-        <p>将条形码完整放入取景框。识别成功后会自动返回并定位记录。</p>
-      </div>
-    </div>}
+    {cameraOpen && !embeddedCamera && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCameraOpen(false); }}>{cameraContent}</div>}
   </>;
 }
