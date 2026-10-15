@@ -175,6 +175,7 @@ button.danger,
   }
 
   .app-header {
+    flex-direction: column;
     align-items: flex-start;
     gap: 12px;
   }
@@ -188,7 +189,101 @@ button.danger,
   }
 
   .user-panel {
+    width: 100%;
+    flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .panel {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .panel h2 {
+    font-size: 19px;
+  }
+
+  .section-heading,
+  .upload-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-heading-actions,
+  .export-actions,
+  .upload-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .section-heading-actions > *,
+  .export-actions > *,
+  .upload-actions > * {
+    flex: 1 1 130px;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .metric,
+  .status-panel {
+    padding: 12px;
+  }
+
+  .tabs {
+    flex-wrap: nowrap;
+    margin-right: -14px;
+    margin-left: -14px;
+    padding: 0 14px 4px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .tabs button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .sku-form,
+  .record-form,
+  .filter-grid,
+  .inventory-filter-grid,
+  .inventory-search-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin: 12px 0;
+    padding: 12px;
+  }
+
+  .form-actions {
+    grid-column: auto;
+    flex-wrap: wrap;
+  }
+
+  .form-actions > button {
+    flex: 1 1 130px;
+  }
+
+  .search-bar input {
+    width: 100%;
+  }
+
+  .table-wrap,
+  .haichuan-table-wrap {
+    max-width: calc(100vw - 52px);
+    overscroll-behavior-inline: contain;
+  }
+
+  .confirm-modal {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+
+  .task-notice {
+    padding: 11px 12px;
   }
 
   .mobile-bottom-nav {
