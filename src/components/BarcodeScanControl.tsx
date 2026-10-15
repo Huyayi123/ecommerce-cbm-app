@@ -15,6 +15,7 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
   const [input, setInput] = useState(value);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState('');
+  const [scanHint, setScanHint] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
 
@@ -23,15 +24,33 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
   useEffect(() => {
     if (!cameraOpen || !videoRef.current) return;
     let cancelled = false;
-    void import('@zxing/browser').then(({ BrowserMultiFormatReader }) => {
+    setScanHint('正在识别，请将完整条形码放入取景框。');
+    const hintTimer = window.setTimeout(() => {
+      if (!cancelled) setScanHint('尚未识别：请将黑色条纹竖直放置，稍微拉远，并保留条码两侧空白。');
+    }, 6000);
+    void Promise.all([import('@zxing/browser'), import('@zxing/library')]).then(([browser, library]) => {
       if (cancelled || !videoRef.current) return;
-      const reader = new BrowserMultiFormatReader();
+      const hints = new Map();
+      hints.set(library.DecodeHintType.POSSIBLE_FORMATS, [
+        browser.BarcodeFormat.EAN_13,
+        browser.BarcodeFormat.EAN_8,
+        browser.BarcodeFormat.UPC_A,
+        browser.BarcodeFormat.UPC_E,
+        browser.BarcodeFormat.CODE_128,
+        browser.BarcodeFormat.CODE_39,
+        browser.BarcodeFormat.ITF,
+        browser.BarcodeFormat.CODABAR,
+      ]);
+      hints.set(library.DecodeHintType.TRY_HARDER, true);
+      const reader = new browser.BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 100 });
       return reader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } }, audio: false }, videoRef.current, (result) => {
         if (!result || cancelled) return;
         const scanned = normalizeBarcodeSku(result.getText());
         if (!scanned) return;
+        window.clearTimeout(hintTimer);
         controlsRef.current?.stop();
         controlsRef.current = null;
+        setScanHint('识别成功，正在定位记录。');
         setInput(scanned);
         setCameraOpen(false);
         onScan(scanned);
@@ -49,6 +68,7 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
 
     return () => {
       cancelled = true;
+      window.clearTimeout(hintTimer);
       controlsRef.current?.stop();
       controlsRef.current = null;
     };
@@ -68,6 +88,7 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
   function clear() {
     setInput('');
     setCameraError('');
+    setScanHint('');
     onClear();
     if (embeddedCamera) setCameraOpen(true);
   }
@@ -75,7 +96,7 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
   const cameraContent = <div className={embeddedCamera ? 'barcode-camera-embedded' : 'barcode-camera-modal'}>
     <div className="barcode-camera-heading"><h3 id="barcode-camera-title">扫描商品条形码</h3><button type="button" onClick={() => setCameraOpen(false)}>关闭</button></div>
     <video ref={videoRef} className="barcode-camera-video" muted playsInline />
-    <p>将条形码完整放入取景框。识别成功后会自动定位记录。</p>
+    <p aria-live="polite">{scanHint || '将条形码完整放入取景框。识别成功后会自动定位记录。'}</p>
   </div>;
 
   return <>
