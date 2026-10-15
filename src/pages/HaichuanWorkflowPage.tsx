@@ -474,7 +474,8 @@ export function HaichuanWorkflowPage({
       )}
 
       {tab === 'inbound' && isLogistics && (
-        <div className="table-wrap haichuan-table-wrap">
+        <>
+        <div className="table-wrap haichuan-table-wrap desktop-data-view">
           <table className="haichuan-table">
             <thead><tr><th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>申报总件数</th><th>已入库件数</th><th>参考剩余件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCbm}</th><th>采购备注</th><th>本次入库件数</th><th>海川备注</th><th>{labels.status}</th><th>{labels.actions}</th></tr></thead>
             <tbody>
@@ -500,6 +501,44 @@ export function HaichuanWorkflowPage({
             </tbody>
           </table>
         </div>
+        <div className="mobile-data-view mobile-card-list">
+          {pendingInbound.map((item) => {
+            const mainDetail = mainProductDetail(item.productDetails);
+            const remainingCartons = Math.max(0, item.declaredTotalCartonCount - item.actualReceivedCartonCount);
+            return <article className="mobile-record-card" key={item.id}>
+              <div className="mobile-record-heading">
+                <div>
+                  <strong>{mainDetail?.productName || item.productName || '-'}</strong>
+                  <span>{mainDetail?.sku || item.sku || '-'}</span>
+                </div>
+                <span className="mobile-status-chip">{item.actualReceivedCartonCount > 0 ? '部分已入库' : '待入仓'}</span>
+              </div>
+              <dl className="mobile-record-metrics">
+                <div><dt>采购总数量</dt><dd>{valueText(item.purchaseTotalQuantity)}</dd></div>
+                <div><dt>申报件数</dt><dd>{item.declaredTotalCartonCount}</dd></div>
+                <div><dt>已入库</dt><dd>{item.actualReceivedCartonCount}</dd></div>
+                <div><dt>剩余件数</dt><dd>{remainingCartons}</dd></div>
+                <div><dt>每件数量</dt><dd>{valueText(item.declaredUnitsPerCarton)}</dd></div>
+                <div><dt>总 CBM</dt><dd>{valueText(item.declaredTotalCbm)}</dd></div>
+              </dl>
+              {(item.purchaseNote || mixedProductDetails(item.productDetails).length > 0) && <div className="mobile-record-note">
+                {item.purchaseNote && <span>采购备注：{item.purchaseNote}</span>}
+                {mixedProductDetails(item.productDetails).map((detail) => <span key={detail.id}>{detail.productName || detail.sku}：{mixedNote(detail)}</span>)}
+              </div>}
+              <div className="mobile-record-form">
+                <label>本次入库件数<input type="number" min="1" step="1" value={receiptDrafts[item.id] ?? Math.max(1, remainingCartons)} onChange={(event) => setReceiptDrafts((current) => ({ ...current, [item.id]: Number(event.target.value) }))} /></label>
+                <label>海川备注<input value={receiptNotes[item.id] ?? ''} onChange={(event) => setReceiptNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="本次入库备注" /></label>
+              </div>
+              <div className="mobile-record-actions">
+                <button type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id, 'partial')}>部分入库</button>
+                <button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id, 'complete')}>{busyKey === `receipt-${item.id}` ? '正在确认...' : '完成入库'}</button>
+                <button type="button" disabled={Boolean(busyKey)} onClick={() => void openReceiptHistory(item.id)}>入库历史</button>
+              </div>
+            </article>;
+          })}
+          {pendingInbound.length === 0 && <div className="mobile-empty-state">暂无待入仓记录</div>}
+        </div>
+        </>
       )}
 
       {tab === 'warehouse' && (
@@ -511,7 +550,7 @@ export function HaichuanWorkflowPage({
               <div className="form-actions"><button type="button" disabled={selectableVisibleLots.length === 0 || Boolean(busyKey)} onClick={toggleAllVisibleLots}>{allVisibleLotsSelected ? '取消全部选择' : `全部选择（${selectableVisibleLots.length}）`}</button><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void submitLoading()}>{busyKey === 'submit-loading' ? '正在提交...' : '提交装柜审核'}</button></div>
             </div>
           )}
-          <div className="table-wrap haichuan-table-wrap">
+          <div className="table-wrap haichuan-table-wrap desktop-data-view">
             <table className="haichuan-table">
               <thead><tr>{isLogistics && <th>选择</th>}<th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>入仓总件数</th><th>剩余件数</th><th>冻结件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>剩余数量</th><th>剩余 CBM</th><th>{labels.status}</th>{isLogistics ? <th>本次装柜件数</th> : <th>{labels.actions}</th>}</tr></thead>
               <tbody>
@@ -539,6 +578,41 @@ export function HaichuanWorkflowPage({
                 {visibleLots.length === 0 && <tr><td colSpan={15}>暂无海川仓库存货</td></tr>}
               </tbody>
             </table>
+          </div>
+          <div className="mobile-data-view mobile-card-list">
+            {visibleLots.map((lot) => {
+              const available = Math.max(0, lot.remainingCartonCount - lot.reservedCartonCount);
+              const checked = selectedLots[lot.id] !== undefined;
+              const mainDetail = mainProductDetail(lot.productDetails);
+              return <article className={`mobile-record-card${checked ? ' selected' : ''}`} key={lot.id}>
+                <div className="mobile-record-heading">
+                  <div>
+                    <strong>{mainDetail?.productName || lot.productName || '-'}</strong>
+                    <span>{mainDetail?.sku || lot.sku || '-'}</span>
+                  </div>
+                  <span className="mobile-status-chip">{lot.hasPackingVariance ? '包装件数有差异' : warehouseStatusLabel(lot)}</span>
+                </div>
+                <dl className="mobile-record-metrics">
+                  <div><dt>采购总数量</dt><dd>{valueText(lot.initialProductQuantity)}</dd></div>
+                  <div><dt>入仓件数</dt><dd>{lot.initialCartonCount}</dd></div>
+                  <div><dt>剩余件数</dt><dd>{lot.remainingCartonCount}</dd></div>
+                  <div><dt>冻结件数</dt><dd>{lot.reservedCartonCount}</dd></div>
+                  <div><dt>剩余数量</dt><dd>{valueText(lot.remainingProductQuantity)}</dd></div>
+                  <div><dt>剩余 CBM</dt><dd>{valueText(lot.remainingCbm)}</dd></div>
+                </dl>
+                {mixedProductDetails(lot.productDetails).length > 0 && <div className="mobile-record-note">
+                  {mixedProductDetails(lot.productDetails).map((detail) => <span key={detail.id}>{detail.productName || detail.sku}：{mixedNote(detail)}</span>)}
+                </div>}
+                {isLogistics ? <div className="mobile-record-selection">
+                  <label className="mobile-checkbox-label"><input type="checkbox" checked={checked} disabled={available <= 0 || Boolean(busyKey)} onChange={(event) => toggleLot(lot, event.target.checked)} />选择本次装柜</label>
+                  <label>本次装柜件数<input type="number" min={lot.productDetails.length > 1 ? available : 1} max={available} step="1" disabled={!checked || Boolean(busyKey) || lot.productDetails.length > 1} value={checked ? selectedLots[lot.id] : available} title={lot.productDetails.length > 1 ? '混装库存需整批装走，避免拆散同一混装箱内商品' : ''} onChange={(event) => setSelectedLots((current) => ({ ...current, [lot.id]: Number(event.target.value) }))} /></label>
+                </div> : <div className="mobile-record-actions">
+                  <button type="button" disabled={Boolean(busyKey)} onClick={() => openQuantityDialog(lot)}>修改数量</button>
+                  <button className="danger" type="button" disabled={Boolean(busyKey)} onClick={() => setDeleteLot(lot)}>删除</button>
+                </div>}
+              </article>;
+            })}
+            {visibleLots.length === 0 && <div className="mobile-empty-state">暂无海川仓库存货</div>}
           </div>
         </>
       )}
