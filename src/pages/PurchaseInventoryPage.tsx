@@ -575,7 +575,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           </div>
         </div>}
 
-        <div className="table-wrap inventory-table-wrap">
+        <div className="table-wrap inventory-table-wrap desktop-data-view">
           <table className="inventory-table">
             <thead>
               <tr>
@@ -668,6 +668,68 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
               {filteredRecords.length === 0 && <tr><td colSpan={31} className="empty">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div className="mobile-data-view mobile-card-list mobile-inventory-list">
+          {pagedRecords.map((record) => {
+            const normalized = withPurchaseTotals(recordWithSkuDefaults(record));
+            const childRows = mixedChildRows(normalized);
+            const selected = selectedIds.has(normalized.id);
+            return <article className={`mobile-record-card mobile-inventory-card${selected ? ' selected' : ''}`} key={normalized.id}>
+              <div className="mobile-order-topline">
+                <label className="mobile-order-select"><input type="checkbox" checked={selected} onChange={() => toggleSelection(normalized.id)} /><span>选择</span></label>
+                <span className="mobile-status-chip">{statusLabels[normalized.status]}</span>
+              </div>
+              <div className="mobile-order-identity">
+                {imageUrlFor(normalized) ? <img className="sku-thumb" src={imageUrlFor(normalized)} alt={normalized.productName || normalized.sku || 'SKU'} loading="lazy" /> : <div className="mobile-order-image-placeholder">无图</div>}
+                <div><strong>{normalized.productName || '-'}</strong><span>{normalized.sku || '-'}</span><small>{normalized.manufacturerName || '-'}</small></div>
+              </div>
+              <dl className="mobile-record-metrics">
+                <div><dt>批次</dt><dd>{batchLabel(normalized)}</dd></div>
+                <div><dt>{labels.purchaseTotalQuantity}</dt><dd>{effectivePurchaseQuantity(normalized)}</dd></div>
+                <div><dt>{labels.totalCartonCount}</dt><dd>{packageCountFor(normalized) || logisticsText(normalized.cartonCount)}</dd></div>
+                <div><dt>总金额</dt><dd>{normalized.totalAmount.toFixed(2)}</dd></div>
+              </dl>
+              <details className="mobile-order-details">
+                <summary>查看全部字段</summary>
+                <div className="mobile-order-fields mobile-readonly-fields">
+                  <label>厂家名<span>{normalized.manufacturerName || '-'}</span></label>
+                  <label>{labels.internalCode}<span>{normalized.internalCode || '-'}</span></label>
+                  <label>{labels.sku}<span>{normalized.sku || '-'}</span></label>
+                  <label>{labels.productName}<span>{normalized.productName || '-'}</span></label>
+                  <label>英文名称<span>{normalized.englishName || '-'}</span></label>
+                  <label>批次<span>{batchLabel(normalized)}</span></label>
+                  <label>批次日期<span>{normalized.purchaseBatchDate || '-'}</span></label>
+                  <label>{labels.cartonCount}<span>{logisticsText(normalized.cartonCount)}</span></label>
+                  <label>{labels.unitsPerCarton}<span>{logisticsText(normalized.unitsPerCarton)}</span></label>
+                  <label>{labels.tailQuantity}<span>{normalized.tailQuantity}</span></label>
+                  <label>{labels.totalCartonCount}<span>{packageCountFor(normalized) || logisticsText(normalized.cartonCount)}</span></label>
+                  <label>是否混装<span>{normalized.isMixed ? '是' : '否'}</span></label>
+                  <label>混装组<span>{mixedGroupsSummary(normalized) || '-'}</span></label>
+                  <label>物流确认<span>{normalized.logisticsConfirmationStatus === 'unassigned' ? '-' : normalized.logisticsConfirmationStatus}</span></label>
+                  <label>总重量kg<span>{needsLogisticsMetrics(normalized) ? logisticsText(normalized.totalWeightKg, 2) : '-'}</span></label>
+                  <label>物流总CBM<span>{needsLogisticsMetrics(normalized) ? logisticsText(normalized.logisticsTotalCbm, 4) : '-'}</span></label>
+                  <label>店铺<span>{normalized.shopName || '-'}</span></label>
+                  <label>采购人<span>{normalized.assignedBuyerName || normalized.buyerName || '-'}</span></label>
+                  <label>{labels.purchaseTotalQuantity}<span>{effectivePurchaseQuantity(normalized)}</span></label>
+                  <label>采购单价<span>{normalized.purchasePrice}</span></label>
+                  <label>运费<span>{normalized.freightCost}</span></label>
+                  <label>总金额<span>{normalized.totalAmount.toFixed(2)}</span></label>
+                  <label>采购日期<span>{normalized.purchaseDate || '-'}</span></label>
+                  <label>{labels.status}<span>{statusLabels[normalized.status]}</span></label>
+                  <label>{labels.loadingType}<span>{normalized.loadingType || '整柜'}</span></label>
+                  <label>{labels.containerDate}<span>{normalized.containerDate || '-'}</span></label>
+                  <label>{labels.unitCbm}<span>{normalized.unitCbm.toFixed(8)}</span></label>
+                  <label className="mobile-order-field-wide">{labels.note}<span>{normalized.note || '-'}</span></label>
+                </div>
+              </details>
+              {childRows.length > 0 && <div className="mobile-record-note">{childRows.map(({ group, line }) => <span key={`${group.id}:${line.id}`}>{line.productName || line.sku}：{line.quantity} 个，{group.groupName} {group.cartonCount} 件</span>)}</div>}
+              {(canEditData || canDeleteData) && <div className="mobile-record-actions">
+                {canEditData && <button type="button" onClick={() => editRecord(normalized)}>编辑</button>}
+                {canDeleteData && <button className="danger" type="button" onClick={() => void deleteRecord(normalized.id)}>删除</button>}
+              </div>}
+            </article>;
+          })}
+          {filteredRecords.length === 0 && <div className="mobile-empty-state">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</div>}
         </div>
         {filteredRecords.length > 0 && (
           <div className="pagination-bar">
