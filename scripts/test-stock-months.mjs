@@ -35,16 +35,22 @@ try {
   assert.equal(stockMonthsForMonthlySales(9, new Date('2026-08-03T00:00:00+08:00')), 3);
 
   assert.equal(stockMonthsForMonthlySales(101, new Date('2026-09-03T00:00:00+08:00')), 7);
-  assert.equal(stockMonthsForMonthlySales(101, new Date('2026-10-03T00:00:00+08:00')), 6);
+  assert.equal(stockMonthsForMonthlySales(101, new Date('2026-10-03T00:00:00+08:00')), 5);
   assert.equal(stockMonthsForMonthlySales(80, new Date('2026-10-03T00:00:00+08:00')), 5);
-  assert.equal(stockMonthsForMonthlySales(50, new Date('2026-10-03T00:00:00+08:00')), 4);
-  assert.equal(stockMonthsForMonthlySales(20, new Date('2026-10-03T00:00:00+08:00')), 3);
-  assert.equal(stockMonthsForMonthlySales(19, new Date('2026-10-03T00:00:00+08:00')), 2);
+  assert.equal(stockMonthsForMonthlySales(50, new Date('2026-10-03T00:00:00+08:00')), 5);
+  assert.equal(stockMonthsForMonthlySales(20, new Date('2026-10-03T00:00:00+08:00')), 4.5);
+  assert.equal(stockMonthsForMonthlySales(19, new Date('2026-10-03T00:00:00+08:00')), 4.5);
+  assert.equal(stockMonthsForMonthlySales(50, new Date('2026-10-15T23:59:59+08:00')), 5);
+  assert.equal(stockMonthsForMonthlySales(50, new Date('2026-10-16T00:00:00+08:00')), 4);
+  assert.equal(stockMonthsForMonthlySales(49, new Date('2026-10-16T00:00:00+08:00')), 3.5);
 
-  assert.equal(stockMonthsForMonthlySales(101, new Date('2026-11-03T00:00:00+08:00')), 5);
+  assert.equal(stockMonthsForMonthlySales(101, new Date('2026-11-03T00:00:00+08:00')), 4);
   assert.equal(stockMonthsForMonthlySales(50, new Date('2026-11-03T00:00:00+08:00')), 4);
-  assert.equal(stockMonthsForMonthlySales(20, new Date('2026-11-03T00:00:00+08:00')), 3);
-  assert.equal(stockMonthsForMonthlySales(19, new Date('2026-11-03T00:00:00+08:00')), 2);
+  assert.equal(stockMonthsForMonthlySales(20, new Date('2026-11-03T00:00:00+08:00')), 3.5);
+  assert.equal(stockMonthsForMonthlySales(19, new Date('2026-11-03T00:00:00+08:00')), 3.5);
+  assert.equal(stockMonthsForMonthlySales(49, new Date('2026-11-15T23:59:59+08:00')), 3.5);
+  assert.equal(stockMonthsForMonthlySales(51, new Date('2026-11-16T00:00:00+08:00')), 4);
+  assert.equal(stockMonthsForMonthlySales(50, new Date('2026-11-16T00:00:00+08:00')), 3);
 
   assert.equal(stockMonthsForMonthlySales(51, new Date('2026-12-03T00:00:00+08:00')), 4);
   assert.equal(stockMonthsForMonthlySales(50, new Date('2026-12-03T00:00:00+08:00')), 3);
