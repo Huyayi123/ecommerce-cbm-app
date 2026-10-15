@@ -534,6 +534,11 @@ button.danger,
     gap: 8px;
   }
 
+  .repricing-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
   .metric,
   .status-panel {
     padding: 12px;
@@ -575,6 +580,47 @@ button.danger,
 
   .search-bar input {
     width: 100%;
+  }
+
+  .profit-analysis-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .profit-analysis-controls label,
+  .monthly-date-control {
+    min-width: 0 !important;
+    width: 100%;
+  }
+
+  .date-range-popover {
+    position: fixed;
+    top: 50%;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
+    transform: translateY(-50%);
+  }
+
+  .monthly-profit-section .table-wrap,
+  .monthly-return-detail-table,
+  .monthly-sale-detail-table {
+    max-width: calc(100vw - 52px);
+  }
+
+  .store-sync-actions,
+  .database-usage-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .store-sync-actions button,
+  .database-usage-actions button {
+    flex: 1 1 140px;
   }
 
   .table-wrap,
