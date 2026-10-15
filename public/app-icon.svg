@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="电商采购装柜工作台">
+  <rect width="512" height="512" rx="112" fill="#136f63"/>
+  <path d="M112 170 256 98l144 72-144 72-144-72Z" fill="#ffffff"/>
+  <path d="M112 196v146l126 72V266L112 196Z" fill="#d8f3ed"/>
+  <path d="M400 196v146l-126 72V266l126-70Z" fill="#ffffff" opacity=".9"/>
+  <path d="m256 98 144 72-52 26-143-72 51-26Z" fill="#f3b33d"/>
+  <path d="M238 266h36v148h-36z" fill="#0f5f55" opacity=".5"/>
+</svg>

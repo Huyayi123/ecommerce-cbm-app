@@ -72,6 +72,29 @@ button.danger,
   padding: 28px 16px 28px 20px;
 }
 
+.pwa-update-notice {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1000;
+  width: min(360px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid #b9cbc7;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(22, 32, 42, 0.18);
+}
+
+.pwa-update-notice p {
+  margin: 0 0 12px;
+}
+
+.pwa-update-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .side-nav {
   position: sticky;
   top: 0;
