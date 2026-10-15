@@ -2653,3 +2653,198 @@ tbody tr:last-child td {
 .repricing-badge.loss { background: #ffedd5; color: #9a3412; }
 .repricing-badge.break_even { background: #e2e8f0; color: #334155; }
 .repricing-badge.missing_data { background: #fee2e2; color: #991b1b; }
+
+/* Final mobile overrides live at the end so desktop rules declared above cannot win the cascade. */
+@media (max-width: 720px) {
+  html,
+  body,
+  #root,
+  .app-shell,
+  .app-content {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  .app-shell {
+    display: block;
+  }
+
+  .app-content {
+    flex: 1 1 0;
+    padding: 14px 12px calc(86px + env(safe-area-inset-bottom));
+    overflow-x: clip;
+  }
+
+  .panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 14px;
+    overflow: hidden;
+  }
+
+  .panel > *,
+  .section-heading > *,
+  .mobile-record-card > * {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .section-heading,
+  .upload-panel,
+  .my-orders-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-heading-actions,
+  .export-actions,
+  .upload-actions,
+  .my-orders-heading .export-actions,
+  .store-sync-actions,
+  .database-usage-actions {
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 auto;
+    justify-content: stretch;
+    flex-wrap: wrap;
+  }
+
+  .section-heading-actions > *,
+  .export-actions > *,
+  .upload-actions > *,
+  .store-sync-actions > *,
+  .database-usage-actions > * {
+    min-width: 0;
+    flex: 1 1 130px;
+  }
+
+  .sku-form,
+  .record-form,
+  .filter-grid,
+  .inventory-filter-grid,
+  .inventory-search-grid,
+  .repricing-filter-grid {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin: 12px 0;
+    padding: 12px;
+  }
+
+  .sku-form > *,
+  .record-form > *,
+  .filter-grid > *,
+  .wide,
+  .computed,
+  .form-actions {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    grid-column: 1 / -1;
+  }
+
+  .form-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+  }
+
+  .form-actions > button,
+  .form-actions > .secondary-file-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .summary-grid,
+  .summary-grid.inventory-summary,
+  .repricing-summary {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .metric,
+  .status-panel {
+    min-width: 0;
+    padding: 12px;
+  }
+
+  .metric strong,
+  .status-panel strong {
+    overflow-wrap: anywhere;
+    font-size: 18px;
+  }
+
+  .order-filter-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .order-filter-bar label,
+  .order-filter-bar .order-search-field,
+  .order-filter-bar .order-count-text {
+    width: 100%;
+    min-width: 0;
+    padding-bottom: 0;
+    white-space: normal;
+  }
+
+  .database-usage-panel,
+  .database-usage-counts {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .database-usage-counts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .database-usage-counts span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-card-list,
+  .mobile-order-list,
+  .mobile-pool-list,
+  .mobile-repricing-list {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .mobile-record-form,
+  .mobile-record-selection,
+  .mobile-order-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-record-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-record-actions > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .table-wrap,
+  .haichuan-table-wrap {
+    width: 100%;
+    max-width: 100%;
+  }
+}
