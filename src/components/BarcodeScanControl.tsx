@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { IScannerControls } from '@zxing/browser';
 import { normalizeBarcodeSku } from '../utils/barcodeMatching';
+import { startBarcodeScanner, type BarcodeScannerSession, type BarcodeScannerStatus } from '../utils/barcodeScanner';
 
 type Props = {
   value: string;
@@ -16,49 +16,35 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [scanHint, setScanHint] = useState('');
+  const [scannerStatus, setScannerStatus] = useState<BarcodeScannerStatus | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const controlsRef = useRef<IScannerControls | null>(null);
+  const scannerRef = useRef<BarcodeScannerSession | null>(null);
 
   useEffect(() => setInput(value), [value]);
 
   useEffect(() => {
     if (!cameraOpen || !videoRef.current) return;
     let cancelled = false;
+    setCameraError('');
+    setScannerStatus(null);
     setScanHint('正在识别，请将完整条形码放入取景框。');
     const hintTimer = window.setTimeout(() => {
       if (!cancelled) setScanHint('尚未识别：请将黑色条纹竖直放置，稍微拉远，并保留条码两侧空白。');
     }, 6000);
-    void Promise.all([import('@zxing/browser'), import('@zxing/library')]).then(([browser, library]) => {
-      if (cancelled || !videoRef.current) return;
-      const hints = new Map();
-      hints.set(library.DecodeHintType.POSSIBLE_FORMATS, [
-        browser.BarcodeFormat.EAN_13,
-        browser.BarcodeFormat.EAN_8,
-        browser.BarcodeFormat.UPC_A,
-        browser.BarcodeFormat.UPC_E,
-        browser.BarcodeFormat.CODE_128,
-        browser.BarcodeFormat.CODE_39,
-        browser.BarcodeFormat.ITF,
-        browser.BarcodeFormat.CODABAR,
-      ]);
-      hints.set(library.DecodeHintType.TRY_HARDER, true);
-      const reader = new browser.BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 100 });
-      return reader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } }, audio: false }, videoRef.current, (result) => {
-        if (!result || cancelled) return;
-        const scanned = normalizeBarcodeSku(result.getText());
-        if (!scanned) return;
-        window.clearTimeout(hintTimer);
-        controlsRef.current?.stop();
-        controlsRef.current = null;
-        setScanHint('识别成功，正在定位记录。');
-        setInput(scanned);
-        setCameraOpen(false);
-        onScan(scanned);
-      });
-    }).then((controls) => {
-      if (!controls) return;
-      if (cancelled) controls.stop();
-      else controlsRef.current = controls;
+    void startBarcodeScanner(videoRef.current, (result) => {
+      if (cancelled) return;
+      const scanned = normalizeBarcodeSku(result);
+      if (!scanned) return;
+      window.clearTimeout(hintTimer);
+      scannerRef.current?.stop();
+      scannerRef.current = null;
+      setScanHint('识别成功，正在定位记录。');
+      setInput(scanned);
+      setCameraOpen(false);
+      onScan(scanned);
+    }, setScannerStatus).then((session) => {
+      if (cancelled) session.stop();
+      else scannerRef.current = session;
     }).catch(() => {
       if (!cancelled) {
         setCameraError('无法打开摄像头，请检查浏览器权限或改用扫码枪/手工输入。');
@@ -69,8 +55,8 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
     return () => {
       cancelled = true;
       window.clearTimeout(hintTimer);
-      controlsRef.current?.stop();
-      controlsRef.current = null;
+      scannerRef.current?.stop();
+      scannerRef.current = null;
     };
   }, [cameraOpen, onScan]);
 
@@ -97,6 +83,7 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
     <div className="barcode-camera-heading"><h3 id="barcode-camera-title">扫描商品条形码</h3><button type="button" onClick={() => setCameraOpen(false)}>关闭</button></div>
     <video ref={videoRef} className="barcode-camera-video" muted playsInline />
     <p aria-live="polite">{scanHint || '将条形码完整放入取景框。识别成功后会自动定位记录。'}</p>
+    {scannerStatus && <p className="barcode-scanner-status">识别方式：{scannerStatus.engine === 'native+wasm' ? '手机原生 + 增强识别' : '增强识别'} · 相机 {scannerStatus.width}×{scannerStatus.height}</p>}
   </div>;
 
   return <>

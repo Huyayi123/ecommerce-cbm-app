@@ -2816,6 +2816,12 @@ tbody tr:last-child td {
   text-align: center;
 }
 
+.barcode-camera-embedded .barcode-scanner-status,
+.barcode-camera-modal .barcode-scanner-status {
+  color: #9fb0ba;
+  font-size: 12px;
+}
+
 .barcode-workbench-results {
   display: grid;
   gap: 12px;
