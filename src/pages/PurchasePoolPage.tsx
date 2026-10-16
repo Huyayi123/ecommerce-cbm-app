@@ -236,6 +236,7 @@ export function PurchasePoolPage({
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [poolDateDraft, setPoolDateDraft] = useState('');
   const [logisticsUserId, setLogisticsUserId] = useState('');
+  const [mobileEditingId, setMobileEditingId] = useState('');
   const logisticsLoadingType: LogisticsLoadingType = '整柜';
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const logisticsProfiles = useMemo(() => profiles.filter((item) => item.role === 'logistics' && item.logisticsProviderType !== 'haichuan'), [profiles]);
@@ -274,6 +275,11 @@ export function PurchasePoolPage({
   useEffect(() => {
     setLogisticsUserId((current) => current || logisticsProfiles[0]?.id || '');
   }, [logisticsProfiles]);
+
+  useEffect(() => {
+    document.body.classList.toggle('mobile-purchase-form-open', Boolean(mobileEditingId));
+    return () => document.body.classList.remove('mobile-purchase-form-open');
+  }, [mobileEditingId]);
 
   async function applyPoolContainerDate() {
     if (!canApplyPoolDate || !activePool) {
@@ -554,6 +560,7 @@ export function PurchasePoolPage({
         }]);
       }
       await onSaveRecords([...remainingRecords, nextRecord]);
+      setMobileEditingId((current) => current === record.id ? '' : current);
       setMessage(`已退回 ${record.sku || record.productName} 给采购人。`);
     } catch (error) {
       console.error(error);
@@ -783,16 +790,20 @@ export function PurchasePoolPage({
             <div className="mobile-order-topline"><strong>{record.assignedBuyerName || '未分配采购人'}</strong><span className="mobile-status-chip">{record.poolStatus === 'submitted_to_pool' ? '待发送' : record.poolStatus}</span></div>
             <div className="mobile-order-identity">
               {imageUrl ? <img className="sku-thumb" src={imageUrl} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : <div className="mobile-order-image-placeholder">无图</div>}
-              <div><strong>{record.productName || '-'}</strong><span>{record.sku || '-'}</span><small>{record.manufacturerName || '-'}</small></div>
+              <div><strong>{record.productName || '-'}</strong><span>{record.sku || '-'}</span><small>内部编码：{record.internalCode || '-'}</small><small>{record.manufacturerName || '-'}</small></div>
             </div>
             <dl className="mobile-record-metrics">
               <div><dt>{labels.containerDate}</dt><dd>{record.containerDate || record.purchaseBatchDate || '-'}</dd></div>
               <div><dt>{labels.purchaseTotalQuantity}</dt><dd>{effectivePurchaseQuantity(record)}</dd></div>
               <div><dt>{labels.totalCartonCount}</dt><dd>{packageCountFor(record)}</dd></div>
+              <div><dt>总金额</dt><dd>{record.totalAmount.toFixed(2)}</dd></div>
               <div><dt>{labels.totalCbm}</dt><dd>{record.totalCbm.toFixed(4)}</dd></div>
+              <div><dt>{labels.loadingType}</dt><dd>{record.loadingType || '整柜'}</dd></div>
             </dl>
-            <details className="mobile-order-details">
-              <summary>查看和编辑全部字段</summary>
+            {record.isMixed && <span className="mobile-order-mixed-chip">混装 · {packageCountFor(record)} 件</span>}
+            <details className={`mobile-order-details mobile-pool-order-details${mobileEditingId === record.id ? ' mobile-editing' : ''}`} open={mobileEditingId === record.id || undefined}>
+              <summary>查看全部字段</summary>
+              <div className="mobile-order-form-header"><button type="button" onClick={() => setMobileEditingId('')}>返回</button><strong>{isAdmin ? '编辑采购池订单' : '采购池订单详情'}</strong><span /></div>
               <div className="mobile-order-fields">
                 <label>厂家名{editableCell(record, 'manufacturerName')}</label>
                 <label>{labels.internalCode}<span>{record.internalCode || '-'}</span></label>
@@ -818,9 +829,11 @@ export function PurchasePoolPage({
                 <label>{labels.loadingType}{editableCell(record, 'loadingType')}</label>
                 <label className="mobile-order-field-wide">{labels.note}{editableCell(record, 'note')}</label>
               </div>
+              <div className="mobile-order-form-footer"><button className="primary" type="button" onClick={() => setMobileEditingId('')}>完成</button></div>
             </details>
             {childRows.length > 0 && <div className="mobile-record-note">{childRows.map(({ group, line }) => <span key={`${group.id}:${line.id}`}>{line.productName || line.sku}：{line.quantity} 个，{group.groupName} {group.cartonCount} 件</span>)}</div>}
             <div className="mobile-record-actions">
+              <button type="button" onClick={() => setMobileEditingId(record.id)}>{isAdmin ? '编辑' : '查看详情'}</button>
               {purchaseUrl ? <button type="button" onClick={() => openPurchaseUrl(purchaseUrl)}>1688下单</button> : <span className="muted-action">无采购链接</span>}
               {isAdmin && <button type="button" onClick={() => void returnToBuyer(record)}>退回采购人</button>}
             </div>
