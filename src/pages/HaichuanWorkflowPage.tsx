@@ -129,6 +129,7 @@ export function HaichuanWorkflowPage({
   const [quantityDraft, setQuantityDraft] = useState('');
   const [deleteLot, setDeleteLot] = useState<HaichuanWarehouseLot | null>(null);
   const [scanSku, setScanSku] = useState('');
+  const [scanCameraOpen, setScanCameraOpen] = useState(false);
   const scanResultsRef = useRef<HTMLDivElement>(null);
 
   const pendingInboundRecords = useMemo(() => data.inboundItems.filter((item) => item.status === 'pending_receipt'), [data.inboundItems]);
@@ -472,7 +473,7 @@ export function HaichuanWorkflowPage({
     : [['warehouse', '海川仓库库存'], ['review', '海川装柜审核'], ['loaded', '已装柜'], ['binding', '物流商绑定']] as const;
 
   return (
-    <section className="panel">
+    <section className={`panel haichuan-panel${scanCameraOpen ? ' scanner-camera-open' : ''}`}>
       <div className="section-heading">
         <div>
           <h2>{isLogistics ? '海川物流工作台' : '海川仓库管理'}</h2>
@@ -506,6 +507,7 @@ export function HaichuanWorkflowPage({
             targetLabel={scanMode === 'inbound' ? '待入仓' : '仓库存货'}
             onScan={setScanSku}
             onClear={() => setScanSku('')}
+            onCameraOpenChange={setScanCameraOpen}
             embeddedCamera
           />
           <div ref={scanResultsRef} className="barcode-scan-results-anchor" />

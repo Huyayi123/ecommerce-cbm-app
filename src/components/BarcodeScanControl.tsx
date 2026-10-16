@@ -9,9 +9,10 @@ type Props = {
   onScan: (sku: string) => void;
   onClear: () => void;
   embeddedCamera?: boolean;
+  onCameraOpenChange?: (open: boolean) => void;
 };
 
-export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onClear, embeddedCamera = false }: Props) {
+export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onClear, embeddedCamera = false, onCameraOpenChange }: Props) {
   const [input, setInput] = useState(value);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState('');
@@ -21,6 +22,12 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
   const scannerRef = useRef<BarcodeScannerSession | null>(null);
 
   useEffect(() => setInput(value), [value]);
+
+  useEffect(() => {
+    onCameraOpenChange?.(cameraOpen);
+  }, [cameraOpen, onCameraOpenChange]);
+
+  useEffect(() => () => onCameraOpenChange?.(false), [onCameraOpenChange]);
 
   useEffect(() => {
     if (!cameraOpen || !videoRef.current) return;
@@ -87,7 +94,7 @@ export function BarcodeScanControl({ value, matchCount, targetLabel, onScan, onC
   </div>;
 
   return <>
-    <div className={`barcode-scan-panel${embeddedCamera ? ' barcode-scan-workbench-control' : ''}`}>
+    <div className={`barcode-scan-panel${embeddedCamera ? ' barcode-scan-workbench-control' : ''}${cameraOpen ? ' camera-open' : ''}`}>
       <div className="barcode-scan-heading">
         <div><strong>扫描条形码定位{targetLabel}</strong><span>条形码内容为 SKU；扫描仅定位记录，不会自动提交。</span></div>
       </div>
