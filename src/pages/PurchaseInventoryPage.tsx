@@ -24,6 +24,32 @@ type MixedChildRow = {
   line: MixedCartonLine;
 };
 
+type InventoryFilters = {
+  manufacturerName: string;
+  shopName: string;
+  buyerName: string;
+  status: PurchaseStatus | 'all';
+  loadingType: PurchaseRecord['loadingType'] | 'all';
+  purchaseBatchKey: string;
+  search: string;
+  purchaseMonth: string;
+  purchaseDateFrom: string;
+  purchaseDateTo: string;
+};
+
+const defaultInventoryFilters: InventoryFilters = {
+  manufacturerName: '',
+  shopName: '',
+  buyerName: '',
+  status: 'all',
+  loadingType: 'all',
+  purchaseBatchKey: '',
+  search: '',
+  purchaseMonth: 'recent',
+  purchaseDateFrom: '',
+  purchaseDateTo: '',
+};
+
 const statusLabels: Record<PurchaseStatus, string> = {
   pending: '待采购',
   in_transit: '海运在途',
@@ -186,23 +212,14 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   const [isSaving, setIsSaving] = useState(false);
   const [mobileFormOpen, setMobileFormOpen] = useState(false);
   const [mobileDetailId, setMobileDetailId] = useState('');
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const canSaveDraft = Boolean(draft.sku.trim()) || Boolean(editingId && canSaveMissingSkuHistory);
   const draftRecordForAmount = { ...draft, totalAmount: editingOriginal?.totalAmount ?? 0 };
   const draftTotalAmount = editingOriginal && !purchaseAmountInputsChanged(editingOriginal, draftRecordForAmount)
     ? editingOriginal.totalAmount
     : calculatedPurchaseTotalAmount(draftRecordForAmount);
-  const [filters, setFilters] = useState({
-    manufacturerName: '',
-    shopName: '',
-    buyerName: '',
-    status: 'all' as PurchaseStatus | 'all',
-    loadingType: 'all' as PurchaseRecord['loadingType'] | 'all',
-    purchaseBatchKey: '',
-    search: '',
-    purchaseMonth: 'recent',
-    purchaseDateFrom: '',
-    purchaseDateTo: '',
-  });
+  const [filters, setFilters] = useState<InventoryFilters>({ ...defaultInventoryFilters });
+  const [mobileFilterDraft, setMobileFilterDraft] = useState<InventoryFilters>({ ...defaultInventoryFilters });
 
   const inventoryRecords = useMemo(
     () => records.filter((record) => record.poolStatus === 'sent_to_inventory' && isInventoryRecord(record) && record.status !== 'cancelled'),
@@ -278,10 +295,10 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   }, [totalPages]);
 
   useEffect(() => {
-    const panelOpen = mobileFormOpen || Boolean(mobileDetailId);
+    const panelOpen = mobileFormOpen || Boolean(mobileDetailId) || mobileFiltersOpen;
     document.body.classList.toggle('mobile-purchase-form-open', panelOpen);
     return () => document.body.classList.remove('mobile-purchase-form-open');
-  }, [mobileDetailId, mobileFormOpen]);
+  }, [mobileDetailId, mobileFiltersOpen, mobileFormOpen]);
 
   const inTransitRecords = inventoryRecords.filter((record) => record.status === 'in_transit');
   const inTransitSkuCount = new Set(inTransitRecords.flatMap((record) => {
@@ -364,6 +381,21 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
     setEditingId(null);
     setEditingOriginal(null);
     setMobileFormOpen(false);
+  }
+
+  function openMobileFilters() {
+    setMobileFilterDraft({ ...filters });
+    setMobileFiltersOpen(true);
+  }
+
+  function applyMobileFilters() {
+    setFilters({ ...mobileFilterDraft });
+    setSearchDraft(mobileFilterDraft.search);
+    setMobileFiltersOpen(false);
+  }
+
+  function resetMobileFilters() {
+    setMobileFilterDraft({ ...defaultInventoryFilters });
   }
 
   async function saveRecord() {
@@ -517,6 +549,31 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           </div>
         </div>
 
+        <div className="mobile-form-only mobile-inventory-filter-bar">
+          <label>
+            状态筛选
+            <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value as PurchaseStatus | 'all' })}>
+              <option value="pending">待采购</option>
+              <option value="in_transit">海运在途</option>
+              <option value="arrived">已到货</option>
+              <option value="all">全部历史</option>
+            </select>
+          </label>
+          <label className="mobile-inventory-search-field">
+            搜索
+            <input
+              value={searchDraft}
+              placeholder="搜索 SKU、产品或厂家"
+              onChange={(event) => setSearchDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') setFilters((current) => ({ ...current, search: searchDraft }));
+              }}
+            />
+          </label>
+          <button type="button" onClick={() => setFilters((current) => ({ ...current, search: searchDraft }))}>搜索</button>
+          <button type="button" onClick={openMobileFilters}>更多筛选</button>
+        </div>
+
         <div className="filter-grid inventory-filter-grid">
           <label>采购月份<select value={filters.purchaseMonth} onChange={(event) => setFilters({ ...filters, purchaseMonth: event.target.value })}><option value="recent">最近 3 个月</option><option value="">全部月份</option>{purchaseMonthOptions.map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>厂家名<select value={filters.manufacturerName} onChange={(event) => setFilters({ ...filters, manufacturerName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'manufacturerName').map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -541,6 +598,31 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           <button type="button" onClick={() => setFilters((current) => ({ ...current, search: searchDraft }))}>搜索</button>
         </div>
 
+        {mobileFiltersOpen && (
+          <div className="mobile-form-only mobile-inventory-filter-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-inventory-filter-title">
+            <div className="mobile-order-form-header">
+              <button type="button" onClick={() => setMobileFiltersOpen(false)}>返回</button>
+              <strong id="mobile-inventory-filter-title">更多筛选</strong>
+              <span />
+            </div>
+            <div className="mobile-inventory-filter-fields">
+              <label>采购月份<select value={mobileFilterDraft.purchaseMonth} onChange={(event) => setMobileFilterDraft({ ...mobileFilterDraft, purchaseMonth: event.target.value })}><option value="recent">最近 3 个月</option><option value="">全部月份</option>{purchaseMonthOptions.map((value) => <option key={value}>{value}</option>)}</select></label>
+              <label>厂家名<select value={mobileFilterDraft.manufacturerName} onChange={(event) => setMobileFilterDraft({ ...mobileFilterDraft, manufacturerName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'manufacturerName').map((value) => <option key={value}>{value}</option>)}</select></label>
+              <label>店铺<select value={mobileFilterDraft.shopName} onChange={(event) => setMobileFilterDraft({ ...mobileFilterDraft, shopName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'shopName').map((value) => <option key={value}>{value}</option>)}</select></label>
+              <label>采购人<select value={mobileFilterDraft.buyerName} onChange={(event) => setMobileFilterDraft({ ...mobileFilterDraft, buyerName: event.target.value })}><option value="">全部</option>{uniqueValues(inventoryRecords, 'buyerName').map((value) => <option key={value}>{value}</option>)}</select></label>
+              <label>批次<select value={mobileFilterDraft.purchaseBatchKey} onChange={(event) => setMobileFilterDraft({ ...mobileFilterDraft, purchaseBatchKey: event.target.value })}><option value="">全部批次</option>{batchOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+              <label>装货方式<select value={mobileFilterDraft.loadingType} onChange={(event) => setMobileFilterDraft({ ...mobileFilterDraft, loadingType: event.target.value as PurchaseRecord['loadingType'] | 'all' })}><option value="all">全部</option><option value="整柜">整柜</option><option value="冠通">冠通</option><option value="海川">海川</option></select></label>
+              <label>采购日期起<input type="date" value={mobileFilterDraft.purchaseDateFrom} onChange={(event) => setMobileFilterDraft({ ...mobileFilterDraft, purchaseDateFrom: event.target.value })} /></label>
+              <label>采购日期止<input type="date" value={mobileFilterDraft.purchaseDateTo} onChange={(event) => setMobileFilterDraft({ ...mobileFilterDraft, purchaseDateTo: event.target.value })} /></label>
+            </div>
+            <div className="mobile-inventory-filter-actions">
+              <button className="primary" type="button" onClick={applyMobileFilters}>应用筛选</button>
+              <button type="button" onClick={resetMobileFilters}>重置</button>
+              <button type="button" onClick={() => setMobileFiltersOpen(false)}>取消</button>
+            </div>
+          </div>
+        )}
+
         {canEditData && <div className={`record-form inventory-record-form${mobileFormOpen ? ' mobile-form-open' : ''}`}>
           <div className="mobile-form-only mobile-order-form-header"><button type="button" onClick={resetDraft}>返回</button><strong>{editingId ? '编辑在途库存' : '新增在途库存'}</strong><span /></div>
           <label>厂家名<input value={draft.manufacturerName} onChange={(event) => patchDraft('manufacturerName', event.target.value)} /></label>
@@ -554,19 +636,19 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
             patchDraft('assignedBuyerName', event.target.value);
           }} /></label>
           <label>采购数量<input type="number" min="0" value={draft.confirmedPurchaseQuantity ?? ''} onChange={(event) => patchDraft('confirmedPurchaseQuantity', event.target.value === '' ? null : Number(event.target.value))} /></label>
-          <label>采购单价<input type="number" min="0" step="0.01" value={draft.purchasePrice} onChange={(event) => patchDraft('purchasePrice', Number(event.target.value))} /></label>
-          <label>运费<input type="number" min="0" step="0.01" value={draft.freightCost} onChange={(event) => patchDraft('freightCost', Number(event.target.value))} /></label>
-          <label>总金额<input value={draftTotalAmount.toFixed(2)} readOnly /></label>
-          <label>采购日期<input type="date" value={draft.purchaseDate} onChange={(event) => patchDraft('purchaseDate', event.target.value)} /></label>
-          <label>批次日期<input type="date" value={draft.purchaseBatchDate} onChange={(event) => patchDraft('purchaseBatchDate', event.target.value)} /></label>
-          <label>批次<input value={draft.purchaseBatchName} onChange={(event) => patchDraft('purchaseBatchName', event.target.value)} /></label>
-          <label>单品CBM<input type="number" min="0" step="0.00000001" value={draft.unitCbm} onChange={(event) => patchDraft('unitCbm', Number(event.target.value))} /></label>
-          <label>总CBM<input type="number" min="0" step="0.0001" value={draft.totalCbm} onChange={(event) => patchDraft('totalCbm', Number(event.target.value))} /></label>
-          <label>装货方式<select value={draft.loadingType || '整柜'} onChange={(event) => patchDraft('loadingType', event.target.value as PurchaseRecord['loadingType'])}><option value="整柜">整柜</option><option value="冠通">冠通</option><option value="海川">海川</option></select></label>
-          <label>装柜日期<input type="date" value={draft.containerDate} onChange={(event) => patchDraft('containerDate', event.target.value)} /></label>
           <label>整箱件数<input type="number" min="0" value={draft.cartonCount ?? ''} onChange={(event) => patchDraft('cartonCount', event.target.value === '' ? null : Number(event.target.value))} /></label>
           <label>每箱数量<input type="number" min="0" value={draft.unitsPerCarton ?? ''} onChange={(event) => patchDraft('unitsPerCarton', event.target.value === '' ? null : Number(event.target.value))} /></label>
           <label>尾箱数量<input type="number" min="0" value={draft.tailQuantity} onChange={(event) => patchDraft('tailQuantity', Number(event.target.value))} /></label>
+          <label>采购单价<input type="number" min="0" step="0.01" value={draft.purchasePrice} onChange={(event) => patchDraft('purchasePrice', Number(event.target.value))} /></label>
+          <label>运费<input type="number" min="0" step="0.01" value={draft.freightCost} onChange={(event) => patchDraft('freightCost', Number(event.target.value))} /></label>
+          <label>总金额<input value={draftTotalAmount.toFixed(2)} readOnly /></label>
+          <label>单品CBM<input type="number" min="0" step="0.00000001" value={draft.unitCbm} onChange={(event) => patchDraft('unitCbm', Number(event.target.value))} /></label>
+          <label>总CBM<input type="number" min="0" step="0.0001" value={draft.totalCbm} onChange={(event) => patchDraft('totalCbm', Number(event.target.value))} /></label>
+          <label>采购日期<input type="date" value={draft.purchaseDate} onChange={(event) => patchDraft('purchaseDate', event.target.value)} /></label>
+          <label>批次日期<input type="date" value={draft.purchaseBatchDate} onChange={(event) => patchDraft('purchaseBatchDate', event.target.value)} /></label>
+          <label>批次<input value={draft.purchaseBatchName} onChange={(event) => patchDraft('purchaseBatchName', event.target.value)} /></label>
+          <label>装货方式<select value={draft.loadingType || '整柜'} onChange={(event) => patchDraft('loadingType', event.target.value as PurchaseRecord['loadingType'])}><option value="整柜">整柜</option><option value="冠通">冠通</option><option value="海川">海川</option></select></label>
+          <label>装柜日期<input type="date" value={draft.containerDate} onChange={(event) => patchDraft('containerDate', event.target.value)} /></label>
           {needsLogisticsMetrics(draft) && <>
             <label>总重量kg<input type="number" min="0" step="0.01" value={draft.totalWeightKg ?? ''} onChange={(event) => patchDraft('totalWeightKg', event.target.value === '' ? null : Number(event.target.value))} /></label>
             <label>物流总CBM<input type="number" min="0" step="0.0001" value={draft.logisticsTotalCbm ?? ''} onChange={(event) => patchDraft('logisticsTotalCbm', event.target.value === '' ? null : Number(event.target.value))} /></label>
