@@ -147,8 +147,22 @@ button.danger,
 .mobile-bottom-nav,
 .haichuan-mobile-bottom-nav,
 .mobile-more-menu,
-.mobile-data-view {
+.mobile-data-view,
+.mobile-form-only,
+.mobile-order-add-button,
+.mobile-order-bulk-bar {
   display: none;
+}
+
+.mobile-order-mixed-chip {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fff2c7;
+  color: #7a5200;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .mobile-card-list {
@@ -506,6 +520,123 @@ button.danger,
 
   .mobile-data-view {
     display: grid;
+  }
+
+  .mobile-form-only,
+  .mobile-order-add-button {
+    display: inline-flex;
+  }
+
+  .desktop-order-bulk-action {
+    display: none;
+  }
+
+  .my-orders-new-form,
+  .mobile-order-details {
+    display: none;
+  }
+
+  .my-orders-new-form.mobile-form-open,
+  .mobile-order-details.mobile-editing {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: grid;
+    align-content: start;
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    margin: 0;
+    padding: 0 14px calc(82px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0;
+    background: #f5f7f9;
+  }
+
+  .mobile-order-details.mobile-editing > summary {
+    display: none;
+  }
+
+  .mobile-order-form-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: 72px minmax(0, 1fr) 72px;
+    align-items: center;
+    gap: 8px;
+    margin: 0 -14px 14px;
+    padding: max(8px, env(safe-area-inset-top)) 14px 8px;
+    border-bottom: 1px solid #dce4ea;
+    background: rgba(255, 255, 255, 0.98);
+  }
+
+  .mobile-order-form-header strong {
+    text-align: center;
+  }
+
+  .mobile-order-form-header button {
+    padding: 0 10px;
+  }
+
+  .mobile-order-details.mobile-editing .mobile-order-fields {
+    grid-template-columns: minmax(0, 1fr);
+    padding-bottom: 12px;
+  }
+
+  .mobile-order-form-footer,
+  .my-orders-new-form.mobile-form-open .form-actions {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid #dce4ea;
+    background: rgba(255, 255, 255, 0.98);
+  }
+
+  .my-orders-new-form.mobile-form-open .form-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mobile-order-bulk-bar {
+    position: fixed;
+    right: 8px;
+    bottom: calc(70px + env(safe-area-inset-bottom));
+    left: 8px;
+    z-index: 910;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 7px;
+    padding: 9px;
+    border-radius: 11px;
+    background: #183b36;
+    color: #ffffff;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.24);
+  }
+
+  .mobile-order-bulk-bar button {
+    min-height: 40px;
+    padding: 0 10px;
+  }
+
+  .mobile-order-bulk-bar .danger {
+    background: #ffffff;
+  }
+
+  body.mobile-purchase-form-open {
+    overflow: hidden;
+  }
+
+  body.mobile-purchase-form-open .mobile-bottom-nav {
+    display: none;
   }
 
   .app-content {
@@ -3181,5 +3312,23 @@ tbody tr:last-child td {
   .haichuan-panel.scanner-camera-open .barcode-loading-submit,
   .haichuan-panel.scanner-camera-open .haichuan-mobile-bottom-nav {
     display: none;
+  }
+}
+
+/* Keep purchase full-screen forms above the final generic mobile form rules. */
+@media (max-width: 720px) {
+  .my-orders-new-form.mobile-form-open,
+  .mobile-order-details.mobile-editing {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0 14px calc(82px + env(safe-area-inset-bottom));
+  }
+
+  .my-orders-new-form.mobile-form-open .form-actions {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
   }
 }

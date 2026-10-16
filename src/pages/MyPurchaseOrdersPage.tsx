@@ -213,6 +213,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
   const [isDeletingRecords, setIsDeletingRecords] = useState(false);
   const [isSubmittingRecords, setIsSubmittingRecords] = useState(false);
+  const [mobileNewOrderOpen, setMobileNewOrderOpen] = useState(false);
+  const [mobileEditingId, setMobileEditingId] = useState('');
   const selectAllRef = useRef<HTMLInputElement | null>(null);
   const isAdmin = profile.role === 'admin' || profile.role === 'owner';
   const isViewer = profile.role === 'viewer';
@@ -285,6 +287,12 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
   useEffect(() => {
     setSelectedRecordIds(new Set());
   }, [orderSearch, statusFilter]);
+
+  useEffect(() => {
+    const formOpen = mobileNewOrderOpen || Boolean(mobileEditingId);
+    document.body.classList.toggle('mobile-purchase-form-open', formOpen);
+    return () => document.body.classList.remove('mobile-purchase-form-open');
+  }, [mobileEditingId, mobileNewOrderOpen]);
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -700,6 +708,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       if (onSaveRecords) await onSaveRecords([record]);
       else await onChange([record, ...records]);
       setNewOrder(createEmptyDraft());
+      setMobileNewOrderOpen(false);
       setMessage('已新增采购订单。');
     } catch (error) {
       console.error(error);
@@ -874,6 +883,22 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       else next.add(recordId);
       return next;
     });
+  }
+
+  async function finishMobileEdit(record: PurchaseRecord) {
+    if (isViewer) {
+      setMobileEditingId('');
+      return;
+    }
+    const timer = recordAutoSaveTimers.current.get(record.id);
+    if (timer !== undefined) window.clearTimeout(timer);
+    recordAutoSaveTimers.current.delete(record.id);
+    try {
+      if (Object.keys(normalDraftSnapshot(record.id)).length > 0) await saveRecord(record, false);
+      setMobileEditingId('');
+    } catch {
+      // saveRecord 已显示错误，并保留全屏表单中的草稿。
+    }
   }
 
   function toggleAllVisibleRecords() {
@@ -1156,6 +1181,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           </div>
         </div>
         <div className="export-actions">
+          {!isViewer && <button className="mobile-order-add-button" type="button" onClick={() => setMobileNewOrderOpen(true)}>新增订单</button>}
           {!isViewer && (
             <label className="secondary-file-button">
               导入订单
@@ -1171,8 +1197,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           )}
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'xlsx', '我的采购订单', skuItems)} disabled={visibleRecords.length === 0}>导出 Excel</button>
           <button type="button" onClick={() => exportPurchaseRecords(visibleRecords, 'csv', '我的采购订单', skuItems)} disabled={visibleRecords.length === 0}>导出 CSV</button>
-          {!isViewer && <button className="danger" type="button" disabled={selectedVisibleIds.length === 0 || isDeletingRecords} onClick={() => void deleteRecordsInBulk(selectedVisibleIds, '删除选中的订单')}>删除选中{selectedVisibleIds.length > 0 ? ` (${selectedVisibleIds.length})` : ''}</button>}
-          {!isViewer && <button className="primary" type="button" disabled={selectedVisibleIds.length === 0 || isSubmittingRecords} onClick={() => void confirmSelectedPurchases()}>提交选中{selectedVisibleIds.length > 0 ? ` (${selectedVisibleIds.length})` : ''}</button>}
+          {!isViewer && <button className="danger desktop-order-bulk-action" type="button" disabled={selectedVisibleIds.length === 0 || isDeletingRecords} onClick={() => void deleteRecordsInBulk(selectedVisibleIds, '删除选中的订单')}>删除选中{selectedVisibleIds.length > 0 ? ` (${selectedVisibleIds.length})` : ''}</button>}
+          {!isViewer && <button className="primary desktop-order-bulk-action" type="button" disabled={selectedVisibleIds.length === 0 || isSubmittingRecords} onClick={() => void confirmSelectedPurchases()}>提交选中{selectedVisibleIds.length > 0 ? ` (${selectedVisibleIds.length})` : ''}</button>}
         </div>
       </div>
       {message && <div className="inline-notice order-save-notice" role="status">{message}</div>}
@@ -1196,7 +1222,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       </div>
 
       {!isViewer && (
-        <div className="record-form">
+        <div className={`record-form my-orders-new-form${mobileNewOrderOpen ? ' mobile-form-open' : ''}`}>
+          <div className="mobile-form-only mobile-order-form-header"><button type="button" onClick={() => setMobileNewOrderOpen(false)}>返回</button><strong>新增采购订单</strong><span /></div>
           <label>厂家名<input value={newOrder.manufacturerName} onChange={(event) => patchNewOrder('manufacturerName', event.target.value)} /></label>
           <label>SKU<input value={newOrder.sku} onChange={(event) => patchNewOrder('sku', event.target.value)} /></label>
           <label>产品名称<input value={newOrder.productName} onChange={(event) => patchNewOrder('productName', event.target.value)} /></label>
@@ -1219,6 +1246,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <div className="form-actions">
             <button className="primary" type="button" onClick={() => void addNewOrder()}>新增采购订单</button>
             <button type="button" onClick={() => setNewOrder(createEmptyDraft())}>清空</button>
+            <button className="mobile-form-only" type="button" onClick={() => setMobileNewOrderOpen(false)}>取消</button>
           </div>
         </div>
       )}
@@ -1324,16 +1352,18 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
             </div>
             <div className="mobile-order-identity">
               {imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : <div className="mobile-order-image-placeholder">无图</div>}
-              <div><strong>{normalized.productName || '-'}</strong><span>{normalized.sku || '-'}</span><small>{normalized.manufacturerName || '-'}</small></div>
+              <div><strong>{normalized.productName || '-'}</strong><span>{normalized.sku || '-'}</span><small>内部编码：{normalized.internalCode || '-'}</small><small>{normalized.manufacturerName || '-'}</small></div>
             </div>
             <dl className="mobile-record-metrics">
               <div><dt>计划采购数量</dt><dd>{normalized.purchaseQuantity || 0}</dd></div>
               <div><dt>{labels.purchaseTotalQuantity}</dt><dd>{effectivePurchaseQuantity(normalized)}</dd></div>
-              <div><dt>总件数</dt><dd>{packageCountFor(normalized)}</dd></div>
+              <div><dt>总金额</dt><dd>{normalized.totalAmount.toFixed(2)}</dd></div>
               <div><dt>{labels.totalCbm}</dt><dd>{normalized.totalCbm.toFixed(4)}</dd></div>
             </dl>
-            <details className="mobile-order-details">
-              <summary>查看和编辑全部字段</summary>
+            {normalized.isMixed && <span className="mobile-order-mixed-chip">混装 · {packageCountFor(normalized)} 件</span>}
+            <details className={`mobile-order-details${mobileEditingId === record.id ? ' mobile-editing' : ''}`} open={mobileEditingId === record.id || undefined}>
+              <summary>查看全部字段</summary>
+              <div className="mobile-order-form-header"><button type="button" onClick={() => setMobileEditingId('')}>返回</button><strong>{isViewer ? '订单详情' : '编辑采购订单'}</strong><span /></div>
               <div className="mobile-order-fields">
                 <label>厂家名{input(normalized, 'manufacturerName')}</label>
                 <label>{labels.internalCode}<span>{normalized.internalCode || '-'}</span></label>
@@ -1359,8 +1389,10 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 <label>{labels.loadingType}{input(normalized, 'loadingType')}</label>
                 <label className="mobile-order-field-wide">{labels.note}{input(normalized, 'note')}</label>
               </div>
+              <div className="mobile-order-form-footer"><button className="primary" type="button" onClick={() => void finishMobileEdit(normalized)}>{isViewer ? '关闭' : '保存并完成'}</button></div>
             </details>
             <div className="mobile-record-actions">
+              <button type="button" onClick={() => setMobileEditingId(record.id)}>{isViewer ? '查看详情' : '编辑'}</button>
               {purchaseUrl ? <button type="button" onClick={() => openPurchaseUrl(purchaseUrl)}>1688下单</button> : <span className="muted-action">无采购链接</span>}
               <button type="button" onClick={() => toggleExpanded(record.id)}>{expandedRows.has(record.id) ? '收起混装' : '混装'}</button>
               {!isViewer && <button className="danger" type="button" disabled={isDeletingRecords} onClick={() => void deleteRecord(record.id)}>删除</button>}
@@ -1370,6 +1402,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         })}
         {visibleRecords.length === 0 && <div className="mobile-empty-state">暂无分配给你的采购订单。</div>}
       </div>
+      {!isViewer && selectedVisibleIds.length > 0 && <div className="mobile-order-bulk-bar">
+        <span>已选择 <strong>{selectedVisibleIds.length}</strong> 项</span>
+        <button className="danger" type="button" disabled={isDeletingRecords} onClick={() => void deleteRecordsInBulk(selectedVisibleIds, '删除选中的订单')}>{isDeletingRecords ? '删除中...' : '删除'}</button>
+        <button className="primary" type="button" disabled={isSubmittingRecords} onClick={() => void confirmSelectedPurchases()}>{isSubmittingRecords ? '提交中...' : '提交选中'}</button>
+      </div>}
     </section>
   );
 }
