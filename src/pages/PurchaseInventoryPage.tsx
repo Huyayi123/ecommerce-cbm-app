@@ -697,7 +697,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
                 <div><strong>{normalized.productName || '-'}</strong><span>{normalized.sku || '-'}</span><small>内部编码：{normalized.internalCode || '-'}</small><small>{normalized.manufacturerName || '-'}</small></div>
               </div>
               <dl className="mobile-record-metrics">
-                <div><dt>批次</dt><dd>{batchLabel(normalized)}</dd></div>
+                <div><dt>{labels.containerDate}</dt><dd>{normalized.containerDate || '未填写'}</dd></div>
                 <div><dt>{labels.purchaseTotalQuantity}</dt><dd>{effectivePurchaseQuantity(normalized)}</dd></div>
                 <div><dt>{labels.totalCartonCount}</dt><dd>{packageCountFor(normalized) || logisticsText(normalized.cartonCount)}</dd></div>
                 <div><dt>总金额</dt><dd>{normalized.totalAmount.toFixed(2)}</dd></div>
