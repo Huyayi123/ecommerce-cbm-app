@@ -3317,6 +3317,13 @@ tbody tr:last-child td {
 
 /* Keep purchase full-screen forms above the final generic mobile form rules. */
 @media (max-width: 720px) {
+  .mobile-order-add-button,
+  .my-orders-new-form.mobile-form-open .form-actions button {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
   .my-orders-new-form:not(.mobile-form-open) {
     display: none !important;
   }
