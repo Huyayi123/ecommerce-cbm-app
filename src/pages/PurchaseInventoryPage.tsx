@@ -184,6 +184,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   const [sortNowMs, setSortNowMs] = useState(() => Date.now());
   const [message, setMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [mobileFormOpen, setMobileFormOpen] = useState(false);
+  const [mobileDetailId, setMobileDetailId] = useState('');
   const canSaveDraft = Boolean(draft.sku.trim()) || Boolean(editingId && canSaveMissingSkuHistory);
   const draftRecordForAmount = { ...draft, totalAmount: editingOriginal?.totalAmount ?? 0 };
   const draftTotalAmount = editingOriginal && !purchaseAmountInputsChanged(editingOriginal, draftRecordForAmount)
@@ -275,6 +277,12 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
 
+  useEffect(() => {
+    const panelOpen = mobileFormOpen || Boolean(mobileDetailId);
+    document.body.classList.toggle('mobile-purchase-form-open', panelOpen);
+    return () => document.body.classList.remove('mobile-purchase-form-open');
+  }, [mobileDetailId, mobileFormOpen]);
+
   const inTransitRecords = inventoryRecords.filter((record) => record.status === 'in_transit');
   const inTransitSkuCount = new Set(inTransitRecords.flatMap((record) => {
     const normalized = withPurchaseTotals(record);
@@ -355,6 +363,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
     setDraft(emptyDraft);
     setEditingId(null);
     setEditingOriginal(null);
+    setMobileFormOpen(false);
   }
 
   async function saveRecord() {
@@ -439,6 +448,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
       note: record.note,
     });
     setEditingId(record.id);
+    setMobileFormOpen(true);
   }
 
   async function deleteRecord(id: string) {
@@ -497,6 +507,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           <p>只显示采购人已确认回传的数据；物流商字段为空时显示待回传，不影响采购确认。</p>
           </div>
           <div className="export-actions">
+            {canEditData && <button className="mobile-order-add-button" type="button" onClick={() => { resetDraft(); setMobileFormOpen(true); }}>新增记录</button>}
             <button type="button" onClick={() => exportPurchaseRecords(regularExportRecords, 'xlsx', '采购在途库存', skuItems)} disabled={regularExportRecords.length === 0}>导出 Excel{selectedRecords.length > 0 ? `（已选 ${selectedRecords.length}）` : ''}</button>
             <button type="button" onClick={() => exportPurchaseRecords(regularExportRecords, 'csv', '采购在途库存', skuItems)} disabled={regularExportRecords.length === 0}>导出 CSV{selectedRecords.length > 0 ? `（已选 ${selectedRecords.length}）` : ''}</button>
             <button type="button" onClick={() => exportBatchPurchaseOrder(selectedBatchRecords, 'xlsx')} disabled={selectedBatchRecords.length === 0}>导出本批次订货表</button>
@@ -530,7 +541,8 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           <button type="button" onClick={() => setFilters((current) => ({ ...current, search: searchDraft }))}>搜索</button>
         </div>
 
-        {canEditData && <div className="record-form">
+        {canEditData && <div className={`record-form inventory-record-form${mobileFormOpen ? ' mobile-form-open' : ''}`}>
+          <div className="mobile-form-only mobile-order-form-header"><button type="button" onClick={resetDraft}>返回</button><strong>{editingId ? '编辑在途库存' : '新增在途库存'}</strong><span /></div>
           <label>厂家名<input value={draft.manufacturerName} onChange={(event) => patchDraft('manufacturerName', event.target.value)} /></label>
           <label>SKU<input value={draft.sku} onChange={(event) => fillFromSku(event.target.value)} /></label>
           <label>产品名称<input value={draft.productName} onChange={(event) => patchDraft('productName', event.target.value)} /></label>
@@ -571,6 +583,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
               {isSaving ? '保存中...' : editingId ? '保存修改' : '新增采购记录'}
             </button>
             <button type="button" onClick={resetDraft}>清空</button>
+            <button className="mobile-form-only" type="button" onClick={resetDraft}>取消</button>
             <span className="muted-action">{message || (canSaveDraft ? '保存状态：可新增' : '保存状态：请先填写 SKU')}</span>
           </div>
         </div>}
@@ -681,16 +694,20 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
               </div>
               <div className="mobile-order-identity">
                 {imageUrlFor(normalized) ? <img className="sku-thumb" src={imageUrlFor(normalized)} alt={normalized.productName || normalized.sku || 'SKU'} loading="lazy" /> : <div className="mobile-order-image-placeholder">无图</div>}
-                <div><strong>{normalized.productName || '-'}</strong><span>{normalized.sku || '-'}</span><small>{normalized.manufacturerName || '-'}</small></div>
+                <div><strong>{normalized.productName || '-'}</strong><span>{normalized.sku || '-'}</span><small>内部编码：{normalized.internalCode || '-'}</small><small>{normalized.manufacturerName || '-'}</small></div>
               </div>
               <dl className="mobile-record-metrics">
                 <div><dt>批次</dt><dd>{batchLabel(normalized)}</dd></div>
                 <div><dt>{labels.purchaseTotalQuantity}</dt><dd>{effectivePurchaseQuantity(normalized)}</dd></div>
                 <div><dt>{labels.totalCartonCount}</dt><dd>{packageCountFor(normalized) || logisticsText(normalized.cartonCount)}</dd></div>
                 <div><dt>总金额</dt><dd>{normalized.totalAmount.toFixed(2)}</dd></div>
+                <div><dt>{labels.totalCbm}</dt><dd>{normalized.totalCbm.toFixed(4)}</dd></div>
+                <div><dt>{labels.loadingType}</dt><dd>{normalized.loadingType || '整柜'}</dd></div>
               </dl>
-              <details className="mobile-order-details">
+              {normalized.isMixed && <span className="mobile-order-mixed-chip">混装 · {packageCountFor(normalized)} 件</span>}
+              <details className={`mobile-order-details mobile-inventory-details${mobileDetailId === normalized.id ? ' mobile-editing' : ''}`} open={mobileDetailId === normalized.id || undefined}>
                 <summary>查看全部字段</summary>
+                <div className="mobile-order-form-header"><button type="button" onClick={() => setMobileDetailId('')}>返回</button><strong>在途库存详情</strong><span /></div>
                 <div className="mobile-order-fields mobile-readonly-fields">
                   <label>厂家名<span>{normalized.manufacturerName || '-'}</span></label>
                   <label>{labels.internalCode}<span>{normalized.internalCode || '-'}</span></label>
@@ -721,12 +738,14 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
                   <label>{labels.unitCbm}<span>{normalized.unitCbm.toFixed(8)}</span></label>
                   <label className="mobile-order-field-wide">{labels.note}<span>{normalized.note || '-'}</span></label>
                 </div>
+                <div className="mobile-order-form-footer"><button className="primary" type="button" onClick={() => setMobileDetailId('')}>关闭</button></div>
               </details>
               {childRows.length > 0 && <div className="mobile-record-note">{childRows.map(({ group, line }) => <span key={`${group.id}:${line.id}`}>{line.productName || line.sku}：{line.quantity} 个，{group.groupName} {group.cartonCount} 件</span>)}</div>}
-              {(canEditData || canDeleteData) && <div className="mobile-record-actions">
+              <div className="mobile-record-actions">
+                {!canEditData && <button type="button" onClick={() => setMobileDetailId(normalized.id)}>查看详情</button>}
                 {canEditData && <button type="button" onClick={() => editRecord(normalized)}>编辑</button>}
                 {canDeleteData && <button className="danger" type="button" onClick={() => void deleteRecord(normalized.id)}>删除</button>}
-              </div>}
+              </div>
             </article>;
           })}
           {filteredRecords.length === 0 && <div className="mobile-empty-state">暂无已确认采购记录。待采购任务请在“我的采购订单”中确认后再进入这里。</div>}
