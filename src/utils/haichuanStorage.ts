@@ -236,21 +236,24 @@ export async function deletePendingHaichuanInboundItems(purchaseRecordIds: strin
 }
 
 export async function syncPendingHaichuanInboundItems(records: PurchaseRecord[]): Promise<void> {
-  const haichuanRecords = records.filter((record) => record.loadingType === '海川');
+  const haichuanRecords = records.filter((record) => record.loadingType === '海川' && record.poolStatus === 'submitted_to_pool');
   if (haichuanRecords.length === 0) return;
   const now = new Date().toISOString();
-  const results = await Promise.all(haichuanRecords.map((record) => {
+  await Promise.all(haichuanRecords.map(async (record) => {
     const values = haichuanPendingInboundSyncValues(record);
-    return client().from('haichuan_inbound_items').update({
+    const { data, error } = await client().from('haichuan_inbound_items').update({
       purchase_total_quantity: values.purchaseTotalQuantity,
       declared_total_carton_count: values.declaredTotalCartonCount,
       declared_units_per_carton: values.declaredUnitsPerCarton,
       declared_tail_quantity: values.declaredTailQuantity,
       updated_at: now,
-    }).eq('purchase_record_id', record.id).eq('status', 'pending_receipt');
+    }).eq('purchase_record_id', record.id).eq('status', 'pending_receipt')
+      .select('purchase_record_id, declared_total_carton_count');
+    if (error) throw new Error(`采购记录已保存，海川待入库同步失败：${formatErrorMessage(error)}`);
+    if (data?.length !== 1 || Number(data[0].declared_total_carton_count) !== values.declaredTotalCartonCount) {
+      throw new Error(`采购记录已保存，但【${record.productName || record.sku}】的海川待入库总件数未同步成功。请检查对应待入库记录及账号更新权限。`);
+    }
   }));
-  const error = results.find((result) => result.error)?.error;
-  if (error) throw new Error(formatErrorMessage(error));
 }
 
 export async function syncApprovedHaichuanLoadingItems(records: PurchaseRecord[]): Promise<void> {
