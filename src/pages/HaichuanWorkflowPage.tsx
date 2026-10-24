@@ -1,3 +1,6 @@
+import { RefreshAllAlibabaLogistics } from '../components/RefreshAllAlibabaLogistics';
+import { PurchaseLogisticsBadge } from '../components/PurchaseLogisticsBadge';
+import { alibabaLogisticsEnabled, useAlibabaLogistics } from '../utils/alibabaLogistics';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { AppProfile, HaichuanData, HaichuanLoadingBatch, HaichuanLoadingItem, HaichuanProductDetail, HaichuanReceiptEvent, HaichuanReceiptType, HaichuanWarehouseLot } from '../types';
 import { formatErrorMessage } from '../utils/errors';
@@ -105,6 +108,8 @@ export function HaichuanWorkflowPage({
   onDeleteWarehouseLot,
   onSaveProfile,
 }: Props) {
+  const logistics = useAlibabaLogistics(profile);
+  const inboundLogistics = (recordId: string) => <PurchaseLogisticsBadge buyer="" link={logistics.links[recordId]} summary={logistics.summaries[recordId]} approvedAccount={logistics.access[recordId]?.account_code} unavailable={Boolean(logistics.error)} loading={logistics.loading} />;
   const isLogistics = profile.role === 'logistics';
   const [tab, setTab] = useState(isLogistics ? 'inbound' : 'warehouse');
   const [search, setSearch] = useState('');
@@ -458,6 +463,7 @@ export function HaichuanWorkflowPage({
           <p>采购数量保持不变；海川仅确认实际箱数，并按仓库批次分批装柜。</p>
         </div>
         <div className="section-heading-actions">
+          {alibabaLogisticsEnabled && logistics.canRefreshAll && <RefreshAllAlibabaLogistics onUpdated={logistics.reload}/>}
           {!isLogistics && tab === 'warehouse' && <button type="button" disabled={visibleLots.length === 0} onClick={exportWarehouse}>导出 Excel</button>}
           {!isLogistics && tab === 'review' && <button type="button" disabled={!activeBatch || activeBatch.items.length === 0} onClick={exportReviewBatch}>导出当前批次</button>}
           {!isLogistics && tab === 'loaded' && <button type="button" disabled={loadedProducts.length === 0} onClick={exportLoaded}>导出 Excel</button>}
@@ -476,7 +482,7 @@ export function HaichuanWorkflowPage({
       {tab === 'inbound' && isLogistics && (
         <div className="table-wrap haichuan-table-wrap">
           <table className="haichuan-table">
-            <thead><tr><th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>申报总件数</th><th>已入库件数</th><th>参考剩余件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCbm}</th><th>采购备注</th><th>本次入库件数</th><th>海川备注</th><th>{labels.status}</th><th>{labels.actions}</th></tr></thead>
+            <thead><tr><th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>申报总件数</th><th>已入库件数</th><th>参考剩余件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCbm}</th><th>采购备注</th><th>本次入库件数</th><th>海川备注</th><th>{labels.status}</th><th>{labels.actions}</th>{alibabaLogisticsEnabled && <th>1688物流状态</th>}</tr></thead>
             <tbody>
               {pendingInbound.map((item) => {
                 const mainDetail = mainProductDetail(item.productDetails);
@@ -490,13 +496,14 @@ export function HaichuanWorkflowPage({
                     <td><input value={receiptNotes[item.id] ?? ''} onChange={(event) => setReceiptNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="本次入库备注" /></td>
                     <td>{item.actualReceivedCartonCount > 0 ? '部分已入库' : '待入仓'}</td>
                     <td className="row-actions"><button type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id, 'partial')}>部分入库</button><button className="primary" type="button" disabled={Boolean(busyKey)} onClick={() => void confirmReceipt(item.id, 'complete')}>{busyKey === `receipt-${item.id}` ? '正在确认...' : '完成入库'}</button><button type="button" disabled={Boolean(busyKey)} onClick={() => void openReceiptHistory(item.id)}>入库历史</button></td>
+                    {alibabaLogisticsEnabled && <td>{inboundLogistics(item.purchaseRecordId)}</td>}
                   </tr>
                   {mixedProductDetails(item.productDetails).map((detail) => <tr className="mixed-child-row" key={`${item.id}:${detail.id}`}>
                     {productCells(detail, item)}<td>{valueText(detail.quantity)}</td><td /><td /><td /><td /><td /><td>{valueText(detail.totalCbm)}</td><td /><td /><td /><td>{mixedNote(detail)}</td><td />
                   </tr>)}
                 </Fragment>;
               })}
-              {pendingInbound.length === 0 && <tr><td colSpan={16}>暂无待入仓记录</td></tr>}
+              {pendingInbound.length === 0 && <tr><td colSpan={alibabaLogisticsEnabled ? 17 : 16}>暂无待入仓记录</td></tr>}
             </tbody>
           </table>
         </div>

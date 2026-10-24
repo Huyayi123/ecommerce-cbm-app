@@ -1,0 +1,18 @@
+.alibaba-logistics-summary { min-width: 180px; padding: 6px 0; }
+.alibaba-logistics-summary small, .alibaba-link-editor small { display: block; margin-top: 6px; color: #70818d; font-size: 11px; white-space: normal; }
+.alibaba-status { display: inline-block; padding: 4px 8px; border-radius: 5px; background: #edf2f5; font-size: 12px; color: #546975; }
+.alibaba-status-signed { background: #e5f5ec; color: #26734b; }
+.alibaba-status-transit { background: #e6f0ff; color: #1857a4; }
+.alibaba-status-accepted { background: #e0f5f5; color: #116969; }
+.alibaba-status-partial { background: #fff0d6; color: #925500; }
+.alibaba-status-error { background: #ffe7e7; color: #aa2424; }
+.alibaba-status-cancelled { background: #e3e5e8; color: #454b54; }
+.alibaba-order-field { min-width: 210px; max-width: 320px; }
+.alibaba-order-field textarea { width: 100%; padding: 7px; border: 1px solid #ccd9dc; border-radius: 5px; resize: vertical; font: inherit; font-size: 12px; }
+.alibaba-order-field small { display:block; margin-top:4px; color:#70818d; font-size:11px; white-space:normal; }
+.alibaba-account { margin-left: 8px; font-size: 11px; color: #70818d; }
+.alibaba-link-editor { width: 280px; max-width: 100%; padding: 12px; border: 1px solid #dce5e9; border-radius: 6px; white-space: normal; background: white; }
+.alibaba-link-editor strong { font-size: 12px; }
+.alibaba-link-editor textarea { width: 100%; min-height: 82px; display: block; margin: 8px 0; font: inherit; border: 1px solid #cad4dc; border-radius: 4px; }
+.alibaba-link-editor button { margin: 8px 4px 0 0; }
+.alibaba-logistics-summary .alibaba-error, .alibaba-link-editor .alibaba-error { color: #a95125; }

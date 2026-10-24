@@ -1,3 +1,8 @@
+import { Purchase1688OrderField } from '../components/Purchase1688OrderField';
+import { flushAlibabaDrafts } from '../utils/alibabaOrderDrafts';
+import { saveAlibabaOrderIds } from '../utils/alibabaLogistics';
+import { supabase } from '../lib/supabase';
+import { alibabaLogisticsEnabled, useAlibabaLogistics } from '../utils/alibabaLogistics';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppProfile, MixedCartonGroup, MixedCartonLine, PurchasePool, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
 import { formatErrorMessage } from '../utils/errors';
@@ -194,6 +199,7 @@ function createMixedGroup(index: number): MixedCartonGroup {
 }
 
 export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onSaveRecords, onDeleteRecords, onSubmitToPool }: Props) {
+  const logistics = useAlibabaLogistics(profile);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [mixedDrafts, setMixedDrafts] = useState<Record<string, string>>({});
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -815,6 +821,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     }
     setIsSubmittingRecords(true);
     try {
+      if (alibabaLogisticsEnabled) await flushAlibabaDrafts([...selectedIds]);
       const selectedRecords = records.filter((item) => selectedIds.has(item.id));
       const submittableRecords = selectedRecords.filter((item) => item.status === 'pending' && item.poolStatus === 'pending_purchase');
       const unavailableCount = selectedRecords.length - submittableRecords.length;
@@ -841,12 +848,24 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         }
       } else if (onSaveRecords) await onSaveRecords(confirmedRecords);
       else await onChange(records.map((item) => (submittedIds.has(item.id) ? confirmedRecord(item) : item)));
+      // Purchase submission is already committed. Logistics failures never undo it.
+      let logisticsFailures=0;
+      if(alibabaLogisticsEnabled&&supabase){
+        for(const record of confirmedRecords){
+          try{
+            const existing=await supabase.from('alibaba_purchase_links').select('order_ids,version').eq('purchase_record_id',record.id).maybeSingle();
+            if(existing.error)throw existing.error;
+            if(existing.data?.order_ids?.length)await saveAlibabaOrderIds(record.id,existing.data.order_ids,existing.data.version,'sync');
+          }catch{logisticsFailures++;}
+        }
+        logistics.reload();
+      }
       draftsRef.current = Object.fromEntries(Object.entries(draftsRef.current).filter(([key]) => !submittedIds.has(key.split(':')[0])));
       mixedDraftsRef.current = Object.fromEntries(Object.entries(mixedDraftsRef.current).filter(([key]) => !submittedIds.has(key.split(':')[0])));
       setDrafts(draftsRef.current);
       setMixedDrafts(mixedDraftsRef.current);
       setSelectedRecordIds((current) => new Set([...current].filter((id) => !submittedIds.has(id))));
-      setMessage(`已提交 ${confirmedRecords.length} 条选中订单到采购订单池；跳过 ${unavailableCount + missingQuantityCount + missingAmountCount} 条（非待采购或已提交：${unavailableCount} 条；实际数量为空或为 0：${missingQuantityCount} 条；总金额为空或为 0：${missingAmountCount} 条）。`);
+      setMessage(`${logisticsFailures ? `物流暂未更新${logisticsFailures}笔，可在采购池重试；` : ''}已提交 ${confirmedRecords.length} 条选中订单到采购订单池；跳过 ${unavailableCount + missingQuantityCount + missingAmountCount} 条（非待采购或已提交：${unavailableCount} 条；实际数量为空或为 0：${missingQuantityCount} 条；总金额为空或为 0：${missingAmountCount} 条）。`);
     } catch (error) {
       console.error(error);
       setMessage(`确认失败：${formatErrorMessage(error)}`);
@@ -1095,7 +1114,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     const normalized = withPurchaseTotals(record);
     return (
       <tr className="packing-detail-row">
-        <td colSpan={isViewer ? 25 : 26}>
+        <td colSpan={(isViewer ? 25 : 26) + (alibabaLogisticsEnabled ? 1 : 0)}>
           <div className="packing-panel">
             <div className="packing-summary">
               <strong>主商品数量：{effectivePurchaseQuantity(normalized)}</strong>
@@ -1217,12 +1236,13 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
         </div>
       )}
 
+      {alibabaLogisticsEnabled && logistics.error && <p role="status">{logistics.error}</p>}
       <div className="table-wrap my-orders-table-wrap" ref={tableWrapRef}>
         <table className={`my-orders-table${isViewer ? '' : ' has-selection'}`}>
           <thead>
             <tr>
               {!isViewer && <th className="selection-sticky-col"><input ref={selectAllRef} type="checkbox" aria-label="选择当前筛选全部订单" checked={allVisibleSelected} disabled={visibleRecords.length === 0 || isDeletingRecords} onChange={toggleAllVisibleRecords} /></th>}
-              <th className="image-sticky-col">图片</th><th>厂家名</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.productName}</th><th>英文名称</th><th className="my-orders-compact-text">店铺</th><th className="my-orders-compact-text">采购人</th><th>月销量</th><th>计划采购数量</th><th className="my-orders-narrow-number">{labels.cartonCount}</th><th className="my-orders-narrow-number">{labels.unitsPerCarton}</th><th className="my-orders-narrow-number">{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
+              <th className="image-sticky-col">图片</th><th>厂家名</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.productName}</th><th>英文名称</th><th className="my-orders-compact-text">店铺</th><th className="my-orders-compact-text">采购人</th><th>月销量</th><th>计划采购数量</th><th className="my-orders-narrow-number">{labels.cartonCount}</th><th className="my-orders-narrow-number">{labels.unitsPerCarton}</th><th className="my-orders-narrow-number">{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">{labels.unitCbm}</th><th>{labels.totalCbm}</th>{alibabaLogisticsEnabled && <th>1688单号（选填）</th>}<th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
             </tr>
           </thead>
           <tbody>
@@ -1254,7 +1274,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td className="my-orders-narrow-number my-orders-medium-number">{input(normalized, 'freightCost', 'number')}</td>
                     <td className="my-orders-narrow-number my-orders-medium-number">{input(normalized, 'totalAmount', 'number')}</td>
                     <td className="my-orders-narrow-number my-orders-medium-number">{input(normalized, 'unitCbm', 'number')}</td>
-                    <td>{normalized.totalCbm.toFixed(4)}</td>
+                    <td>{normalized.totalCbm.toFixed(4)}</td>{alibabaLogisticsEnabled && <td><Purchase1688OrderField recordId={record.id} link={logistics.links[record.id]} disabled={!logistics.canEnterOwnOrder(record.assignedBuyerName,record.assignedBuyerEmail)||logistics.loading||Boolean(logistics.error)} onSaved={logistics.reload}/></td>}
                     <td>{input(normalized, 'status')}</td>
                     <td>{input(normalized, 'loadingType')}</td>
                     <td>{input(normalized, 'note')}</td>
@@ -1292,7 +1312,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                       <td />
                       <td>{line.unitCbm.toFixed(8)}</td>
                       <td />
-                      <td>{statusLabels[normalized.status]}</td>
+                      {alibabaLogisticsEnabled && <td>见主行单号</td>}<td>{statusLabels[normalized.status]}</td>
                       <td>{normalized.loadingType || '整柜'}</td>
                       <td>{`${group.groupName} ${group.cartonCount}件，与 ${normalized.sku || normalized.productName || '主商品'} 混装`}</td>
                       <td />
@@ -1302,7 +1322,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 </Fragment>
               );
             })}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={isViewer ? 25 : 26}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={(isViewer ? 25 : 26) + (alibabaLogisticsEnabled ? 1 : 0)}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>

@@ -1,3 +1,6 @@
+import { RefreshAllAlibabaLogistics } from '../components/RefreshAllAlibabaLogistics';
+import { PurchaseLogisticsBadge } from '../components/PurchaseLogisticsBadge';
+import { alibabaLogisticsEnabled, useAlibabaLogistics } from '../utils/alibabaLogistics';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { AppProfile, LogisticsBatch, PurchasePool, PurchaseRecord, SkuItem } from '../types';
 import { exportBatchPurchaseOrder, exportPurchaseRecords } from '../utils/exporters';
@@ -231,6 +234,7 @@ export function PurchasePoolPage({
   onSaveLogisticsBatch,
   onOpenLogistics,
 }: Props) {
+  const logistics = useAlibabaLogistics(profile);
   const [selectedPoolId, setSelectedPoolId] = useState('');
   const [message, setMessage] = useState('');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -644,6 +648,7 @@ export function PurchasePoolPage({
           <p>buyer 提交后的订单先进入这里；分配物流商确认装柜，admin 审核通过后才进入采购 / 在途库存。</p>
         </div>
         <div className="export-actions">
+          {alibabaLogisticsEnabled && logistics.canRefreshAll && <RefreshAllAlibabaLogistics onUpdated={logistics.reload}/>}
           <button type="button" onClick={() => exportPurchaseRecords(submittedRecords, 'xlsx', '采购订单池', skuItems)} disabled={submittedRecords.length === 0}>导出池中订单</button>
           <button type="button" onClick={() => exportBatchPurchaseOrder(submittedRecords, 'xlsx')} disabled={submittedRecords.length === 0}>导出本池订货表</button>
         </div>
@@ -691,7 +696,7 @@ export function PurchasePoolPage({
         <table className="inventory-table">
           <thead>
             <tr>
-              <th className="pool-pin pool-pin-image">图片</th><th className="pool-pin pool-pin-manufacturer">厂家名</th><th className="pool-pin pool-pin-code">{labels.internalCode}</th><th className="pool-pin pool-pin-sku">{labels.sku}</th><th className="pool-pin pool-pin-product">{labels.productName}</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>{labels.containerDate}</th><th>计划采购数量</th><th>{labels.cartonCount}</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
+              <th className="pool-pin pool-pin-image">图片</th><th className="pool-pin pool-pin-manufacturer">厂家名</th><th className="pool-pin pool-pin-code">{labels.internalCode}</th><th className="pool-pin pool-pin-sku">{labels.sku}</th><th className="pool-pin pool-pin-product">{labels.productName}</th><th>英文名称</th><th>店铺</th><th>采购人</th><th>{labels.containerDate}</th><th>计划采购数量</th><th>{labels.cartonCount}</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th>采购单价</th><th>运费</th><th>总金额</th><th>{labels.unitCbm}</th><th>{labels.totalCbm}</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>{alibabaLogisticsEnabled && <th>1688物流状态</th>}
             </tr>
           </thead>
           <tbody>
@@ -726,14 +731,15 @@ export function PurchasePoolPage({
                     <td>{editableCell(record, 'status')}</td>
                     <td>{editableCell(record, 'loadingType')}</td>
                     <td>{editableCell(record, 'note')}</td>
-                    <td className="row-actions">
+                    <td className="pool-actions-cell"><div className="row-actions">
                       {purchaseUrl ? (
                         <button type="button" onClick={() => openPurchaseUrl(purchaseUrl)}>1688下单</button>
                       ) : (
                         <span className="muted-action">无采购链接</span>
                       )}
                       {isAdmin && <button type="button" onClick={() => void returnToBuyer(record)}>退回采购人</button>}
-                    </td>
+                    </div></td>
+                    {alibabaLogisticsEnabled && <td><PurchaseLogisticsBadge buyer={record.assignedBuyerName} link={logistics.links[record.id]} summary={logistics.summaries[record.id]} approvedAccount={logistics.access[record.id]?.account_code} unavailable={Boolean(logistics.error)} loading={logistics.loading} /></td>}
                   </tr>
                   {childRows.map(({ group, line }) => {
                     const childImageUrl = imageUrlBySku.get(skuLookupKey(line.sku)) || '';
@@ -764,13 +770,14 @@ export function PurchasePoolPage({
                         <td>{record.loadingType || '整柜'}</td>
                         <td>{`${group.groupName} ${group.cartonCount}件，与 ${record.sku || record.productName || '主商品'} 混装`}</td>
                         <td />
+                        {alibabaLogisticsEnabled && <td><span className="muted-action">参见主行；子行暂未单独关联</span></td>}
                       </tr>
                     );
                   })}
                 </Fragment>
               );
             })}
-            {submittedRecords.length === 0 && <tr><td className="empty" colSpan={25}>暂无待发送采购订单。</td></tr>}
+            {submittedRecords.length === 0 && <tr><td className="empty" colSpan={alibabaLogisticsEnabled ? 26 : 25}>暂无待发送采购订单。</td></tr>}
           </tbody>
         </table>
       </div>

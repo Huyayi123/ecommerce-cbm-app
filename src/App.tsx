@@ -1,4 +1,5 @@
-﻿import { useEffect, useState } from 'react';
+import { AlibabaSignedTimeCheck } from './components/AlibabaSignedTimeCheck';
+import { useEffect, useState } from 'react';
 import { AuthPanel } from './components/AuthPanel';
 import { PasswordResetPanel } from './components/PasswordResetPanel';
 import { ProfileBinding } from './components/ProfileBinding';
@@ -629,6 +630,8 @@ function App() {
   if (!isSupabaseConfigured || !profile) {
     return <AuthPanel onAuthed={loadSession} />;
   }
+
+  if (new URLSearchParams(window.location.search).get('check1688Logistics') === '1' || new URLSearchParams(window.location.search).get('check1688SignedTime') === '1') return <AlibabaSignedTimeCheck />;
 
   const editable = canEdit(profile.role);
   const deletable = canDelete(profile.role);

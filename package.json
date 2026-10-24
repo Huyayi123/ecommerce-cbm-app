@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test:repricing": "node scripts/test-repricing-alerts.mjs"
+    "test:repricing": "node scripts/test-repricing-alerts.mjs",
+    "test:alibaba": "node scripts/test-alibaba-acceptance-readonly.mjs && node scripts/test-alibaba-accounts.mjs && node scripts/test-alibaba-badge.mjs && node scripts/test-alibaba-correspondence.mjs && node scripts/test-alibaba-failure-probe.mjs && node scripts/test-alibaba-failure.mjs && node scripts/test-alibaba-no-courier.mjs && node scripts/test-alibaba-quantity.mjs && node scripts/test-alibaba-run-signature.mjs && node scripts/test-alibaba-self.mjs && node scripts/test-alibaba-server.mjs && node scripts/test-alibaba-signature-target.mjs && node scripts/test-alibaba-status.mjs && node scripts/test-alibaba-sync-progress.mjs && node scripts/test-alibaba-sync.mjs && node scripts/test-alibaba-trace-status.mjs && node scripts/test-alibaba-trace.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
