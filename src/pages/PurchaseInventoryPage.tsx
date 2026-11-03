@@ -60,7 +60,7 @@ const emptyDraft: DraftRecord = {
   status: 'pending',
   unitCbm: 0,
   totalCbm: 0,
-  loadingType: '整柜',
+  loadingType: '海川',
   containerDate: '',
   totalWeightKg: null,
   cartonCount: null,

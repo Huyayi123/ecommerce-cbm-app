@@ -63,7 +63,7 @@ function toPurchaseRecords(rows: CalculationRow[]): PurchaseRecord[] {
       status: 'pending',
       unitCbm: row.unitCbm ?? 0,
       totalCbm: row.totalCbm ?? 0,
-      loadingType: '整柜',
+      loadingType: '海川',
       containerDate: '',
       totalWeightKg: null,
       cartonCount: null,
