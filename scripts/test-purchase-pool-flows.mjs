@@ -123,6 +123,26 @@ try {
   assert.equal(membershipRepair.records.find((item) => item.id === 'stale-pool-record').poolStatus, 'submitted_to_pool');
   assert.equal(membershipRepair.records.find((item) => item.id === 'unrelated-pending').poolStatus, 'pending_purchase');
 
+  const duplicate = record('duplicate-submission', '海川');
+  const other = { ...record('other', '整柜'), poolStatus: 'sent_to_inventory' };
+  const originalPools = [
+    { id: 'pool-a', status: 'open', records: [duplicate, other, duplicate] },
+    { id: 'pool-b', status: 'open', records: [duplicate] },
+    { id: 'pool-history', status: 'sent', records: [duplicate, other] },
+    { id: 'unrelated', status: 'open', records: [other] },
+  ];
+  const clearedPools = flows.removeRecordFromPurchasePools(originalPools, duplicate.id);
+  assert.deepEqual(clearedPools.map((pool) => pool.id), ['pool-a', 'pool-b', 'pool-history']);
+  assert.ok(clearedPools.every((pool) => pool.records.every((item) => item.id !== duplicate.id)));
+  assert.equal(clearedPools[0].records[0], other);
+  assert.equal(originalPools[0].records.length, 3);
+  const changedById = new Map(clearedPools.map((pool) => [pool.id, pool]));
+  const savedPools = originalPools.map((pool) => changedById.get(pool.id) ?? pool);
+  const returned = { ...duplicate, poolStatus: 'pending_purchase', isConfirmed: false };
+  assert.deepEqual(flows.repairPurchasePoolMembership([returned], savedPools).repairedRecords, []);
+  assert.deepEqual(flows.removeRecordFromPurchasePools(savedPools, duplicate.id), []);
+  assert.deepEqual(flows.removeRecordFromPurchasePools([], duplicate.id), []);
+
   console.log('purchase pool loading flow tests passed');
 } finally {
   await rm(tempDir, { recursive: true, force: true });

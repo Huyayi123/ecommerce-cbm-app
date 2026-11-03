@@ -38,6 +38,15 @@ export type PoolMembershipRepairResult = {
   repairedRecords: PurchaseRecord[];
 };
 
+export function removeRecordFromPurchasePools(pools: PurchasePool[], recordId: string): PurchasePool[] {
+  return pools
+    .filter((pool) => pool.records.some((record) => record.id === recordId))
+    .map((pool) => ({
+      ...pool,
+      records: pool.records.filter((record) => record.id !== recordId),
+    }));
+}
+
 export function repairPurchasePoolMembership(
   records: PurchaseRecord[],
   pools: PurchasePool[],

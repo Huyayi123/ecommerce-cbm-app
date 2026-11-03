@@ -6,7 +6,7 @@ import type { AppProfile, LogisticsBatch, PurchasePool, PurchaseRecord, SkuItem 
 import { exportBatchPurchaseOrder, exportPurchaseRecords } from '../utils/exporters';
 import { formatErrorMessage } from '../utils/errors';
 import { buildLogisticsBatch, logisticsBatchLoadingType } from '../utils/logistics';
-import { applyContainerDateToPoolRecords, changePurchasePoolLoadingType, matchesLogisticsLoadingType, normalizeRecordForPurchasePool, prepareDatedGuantongForInventory, type LogisticsLoadingType } from '../utils/purchasePoolFlows';
+import { applyContainerDateToPoolRecords, changePurchasePoolLoadingType, matchesLogisticsLoadingType, normalizeRecordForPurchasePool, prepareDatedGuantongForInventory, removeRecordFromPurchasePools, type LogisticsLoadingType } from '../utils/purchasePoolFlows';
 import { openPurchaseUrl, purchaseUrlForRecord, skuLookupKey } from '../utils/purchaseLinks';
 import { calculatedPurchaseTotalAmount, effectivePurchaseQuantity, packageCountFor, purchaseQuantityWithMixed, withPurchaseTotals } from '../utils/purchaseRecords';
 import { purchaseColumnLabels as labels } from '../utils/purchaseColumns';
@@ -535,9 +535,6 @@ export function PurchasePoolPage({
     if (!isAdmin || !activePool) {
       return;
     }
-    const sourcePool = activePool.isAggregate
-      ? sourcePoolOptions.find((pool) => pool.records.some((item) => item.id === record.id))
-      : activePool;
     const nextRecord = withPurchaseTotals({
       ...record,
       isConfirmed: false,
@@ -546,18 +543,9 @@ export function PurchasePoolPage({
       poolStatus: 'pending_purchase',
     });
     try {
-      const remainingRecords = sourcePool
-        ? sourcePool.records
-          .filter((item) => item.id !== record.id)
-          .map(normalizeRecordForPurchasePool)
-        : [];
-      if (sourcePool) {
-        await onSavePools([{
-          ...sourcePool,
-          records: remainingRecords,
-        }]);
-      }
-      await onSaveRecords([...remainingRecords, nextRecord]);
+      const changedPools = removeRecordFromPurchasePools(pools, record.id);
+      if (changedPools.length > 0) await onSavePools(changedPools);
+      await onSaveRecords([nextRecord]);
       setMessage(`已退回 ${record.sku || record.productName} 给采购人。`);
     } catch (error) {
       console.error(error);
