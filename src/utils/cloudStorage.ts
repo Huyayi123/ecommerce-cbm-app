@@ -1105,13 +1105,22 @@ export async function fetchPurchasePools(): Promise<PurchasePool[]> {
 
 export async function upsertPurchasePools(pools: PurchasePool[]): Promise<void> {
   if (pools.length === 0) return;
-  const { error } = await requireSupabase().from('purchase_pools').upsert(pools.map(toPurchasePoolRow));
+  const { data, error } = await requireSupabase().from('purchase_pools').upsert(pools.map(toPurchasePoolRow)).select('id,records');
   if (error) {
     console.error(error);
     if (isMissingColumnError(error)) {
       throw new Error(`purchase_pools 表不存在或字段缺失。请先在 Supabase SQL Editor 执行采购订单池迁移 SQL。原始错误：${formatErrorMessage(error)}`);
     }
     throw new Error(formatErrorMessage(error));
+  }
+  const savedPools = new Map((data ?? []).map((row) => [String(row.id), row.records]));
+  for (const pool of pools) {
+    const savedRecords = savedPools.get(pool.id);
+    const expectedIds = pool.records.map((record) => record.id).sort();
+    const savedIds = Array.isArray(savedRecords) ? savedRecords.map((record: { id: string }) => record.id).sort() : null;
+    if (!savedIds || JSON.stringify(savedIds) !== JSON.stringify(expectedIds)) {
+      throw new Error('采购池保存未被云端确认，请刷新后重试，订单尚未完成退回。');
+    }
   }
 }
 
@@ -1194,7 +1203,7 @@ export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<
   const { data, error } = await requireSupabase()
     .from('purchase_records')
     .upsert(records.map(toPurchaseRecordRow))
-    .select('id');
+    .select('id,pool_status,is_confirmed');
   if (error) {
     console.error(error);
     if (isMissingColumnError(error)) {
@@ -1206,6 +1215,12 @@ export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<
   const missingIds = Array.from(expectedIds).filter((id) => !savedIds.has(id));
   if (missingIds.length > 0) {
     throw new Error(`采购订单保存未被云端确认：${missingIds.length} 条记录没有返回保存结果。请检查网络/VPN 或 Supabase RLS 写入权限后重试。`);
+  }
+  for (const record of records) {
+    const saved = data?.find((row) => String(row.id) === record.id);
+    if (!saved || saved.pool_status !== record.poolStatus || saved.is_confirmed !== record.isConfirmed) {
+      throw new Error('采购订单状态未被云端确认，请刷新后核对，勿重复提交。');
+    }
   }
 }
 
