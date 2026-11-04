@@ -10,6 +10,7 @@ type Props = {
   records: PurchaseRecord[];
   skuItems: SkuItem[];
   onChange: (records: PurchaseRecord[]) => void | Promise<void>;
+  onSaveRecords?: (records: PurchaseRecord[]) => void | Promise<void>;
   onSaveRecord?: (record: PurchaseRecord) => void | Promise<void>;
   onDeleteRecords?: (ids: string[]) => void | Promise<void>;
   canEditData?: boolean;
@@ -174,7 +175,7 @@ function skuKey(value: string): string {
   return value.trim().toUpperCase();
 }
 
-export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecord, onDeleteRecords, canEditData = true, canDeleteData = true, canSaveMissingSkuHistory = false }: Props) {
+export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecords, onSaveRecord, onDeleteRecords, canEditData = true, canDeleteData = true, canSaveMissingSkuHistory = false }: Props) {
   const [draft, setDraft] = useState<DraftRecord>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingOriginal, setEditingOriginal] = useState<PurchaseRecord | null>(null);
@@ -182,6 +183,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   const [searchDraft, setSearchDraft] = useState('');
   const [page, setPage] = useState(1);
   const [sortNowMs, setSortNowMs] = useState(() => Date.now());
+  const [isMarkingArrived, setIsMarkingArrived] = useState(false);
   const [message, setMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const canSaveDraft = Boolean(draft.sku.trim()) || Boolean(editingId && canSaveMissingSkuHistory);
@@ -457,18 +459,40 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
     }
   }
 
-  function markSelectedArrived() {
-    if (!canEditData) return;
-    onChange(records.map((record) => (selectedIds.has(record.id) ? { ...record, status: 'arrived' } : record)));
-    setSelectedIds(new Set());
+  async function markSelectedArrived() {
+    if (!canEditData || isMarkingArrived || selectedRecords.length === 0) return;
+    const ids = new Set(selectedRecords.map((record) => record.id));
+    setIsMarkingArrived(true);
+    setMessage('正在保存到货状态，请稍候…');
+    try {
+      const changed: PurchaseRecord[] = selectedRecords.map((record) => ({ ...record, status: 'arrived' }));
+      if (onSaveRecords) await onSaveRecords(changed);
+      else await onChange(records.map((record) => ids.has(record.id) ? { ...record, status: 'arrived' } : record));
+      setSelectedIds((current) => new Set([...current].filter((id) => !ids.has(id))));
+      setMessage('已将 ' + changed.length + ' 条记录标记为已到货。');
+    } catch (error) {
+      setMessage('批量到货保存失败：' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setIsMarkingArrived(false);
+    }
   }
 
-  function exportSelectedInspectionChecklist() {
-    if (selectedRecords.length === 0) return;
+  async function exportSelectedInspectionChecklist() {
+    if (selectedRecords.length === 0 || isMarkingArrived) return;
     exportInspectionChecklist(selectedRecords, 'xlsx', skuItems);
-    if (!canEditData) return;
-    onChange(records.map((record) => (selectedIds.has(record.id) ? { ...record, status: 'arrived' } : record)));
-    setSelectedIds(new Set());
+    if (canEditData) await markSelectedArrived();
+  }
+
+  function toggleCurrentPageSelection() {
+    const allSelected = pagedRecords.length > 0 && pagedRecords.every((record) => selectedIds.has(record.id));
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const record of pagedRecords) {
+        if (allSelected) next.delete(record.id);
+        else next.add(record.id);
+      }
+      return next;
+    });
   }
 
   function toggleSelection(id: string) {
@@ -502,7 +526,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
             <button type="button" onClick={() => exportBatchPurchaseOrder(selectedBatchRecords, 'xlsx')} disabled={selectedBatchRecords.length === 0}>导出本批次订货表</button>
             <button type="button" onClick={exportSelectedInspectionChecklist} disabled={selectedRecords.length === 0}>导出验货单（已选 {selectedRecords.length}）</button>
             <button type="button" onClick={() => setSelectedIds(new Set())} disabled={selectedRecords.length === 0}>清空勾选</button>
-            {canEditData && <button type="button" onClick={markSelectedArrived} disabled={selectedIds.size === 0}>批量标记已到货</button>}
+            {canEditData && <button type="button" onClick={markSelectedArrived} disabled={selectedIds.size === 0 || isMarkingArrived}>批量标记已到货</button>}
           </div>
         </div>
 
@@ -579,7 +603,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
           <table className="inventory-table">
             <thead>
               <tr>
-                <th className="pin-col pin-select">选择</th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">{labels.sku}</th><th className="pin-col pin-product">{labels.productName}</th><th>英文名称</th><th>{labels.internalCode}</th><th>批次</th><th>批次日期</th><th>{labels.cartonCount}</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>是否混装</th><th>混装组</th><th>物流确认</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>{labels.purchaseTotalQuantity}</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.containerDate}</th><th>{labels.unitCbm}</th><th>{labels.note}</th><th>{labels.actions}</th>
+                <th className="pin-col pin-select"><input type="checkbox" aria-label="全选当前页" title="全选／取消当前页" checked={pagedRecords.length > 0 && pagedRecords.every((record) => selectedIds.has(record.id))} ref={(element) => { if (element) element.indeterminate = pagedRecords.some((record) => selectedIds.has(record.id)) && !pagedRecords.every((record) => selectedIds.has(record.id)); }} onChange={toggleCurrentPageSelection} disabled={pagedRecords.length === 0 || isMarkingArrived} /></th><th className="pin-col pin-image">图片</th><th className="pin-col pin-manufacturer">厂家名</th><th className="pin-col pin-sku">{labels.sku}</th><th className="pin-col pin-product">{labels.productName}</th><th>英文名称</th><th>{labels.internalCode}</th><th>批次</th><th>批次日期</th><th>{labels.cartonCount}</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>是否混装</th><th>混装组</th><th>物流确认</th><th>总重量kg</th><th>物流总CBM</th><th>店铺</th><th>采购人</th><th>{labels.purchaseTotalQuantity}</th><th>采购单价</th><th>运费</th><th>总金额</th><th>采购日期</th><th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.containerDate}</th><th>{labels.unitCbm}</th><th>{labels.note}</th><th>{labels.actions}</th>
               </tr>
             </thead>
             <tbody>

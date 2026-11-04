@@ -725,7 +725,8 @@ function App() {
         <PurchaseInventoryPage
           records={purchaseRecords}
           skuItems={skuItems}
-          onChange={(records) => void persistPurchaseRecords(records)}
+          onChange={persistPurchaseRecords}
+          onSaveRecords={(records) => persistPurchaseRecordUpdates(records)}
           onSaveRecord={(record) => persistPurchaseRecordUpdates([record], 'approved-loading')}
           onDeleteRecords={persistPurchaseRecordDeletes}
           canEditData={editable}
