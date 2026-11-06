@@ -486,7 +486,10 @@ export function PurchasePoolPage({
     const key = draftKey(record.id, field);
     if (!canEditField(field) || !activePool) return;
     const previousValue = savedValueFor(record, field);
-    if (value === previousValue) {
+    const shouldRecalculateHaichuanCartons = record.loadingType === '海川'
+      && (field === 'cartonCount' || field === 'tailQuantity')
+      && record.manualTotalCartonCount != null;
+    if (value === previousValue && !shouldRecalculateHaichuanCartons) {
       setDrafts((current) => {
         const next = { ...current };
         delete next[key];
