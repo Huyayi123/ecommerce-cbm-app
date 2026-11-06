@@ -432,7 +432,9 @@ export function PurchasePoolPage({
     }
     const next: PurchaseRecord = confirmedEditFields.has(field) ? {
       ...record,
-      manualTotalCartonCount: record.manualTotalCartonCount ?? packageCountFor(record),
+      manualTotalCartonCount: record.loadingType === '海川'
+        ? (field === 'cartonCount' || field === 'tailQuantity' ? null : record.manualTotalCartonCount)
+        : record.manualTotalCartonCount ?? packageCountFor(record),
       manualPurchaseTotalQuantity: record.manualPurchaseTotalQuantity ?? effectivePurchaseQuantity(record),
       manualTotalAmount: record.manualTotalAmount ?? record.totalAmount,
       manualTotalCbm: record.manualTotalCbm ?? record.totalCbm,
