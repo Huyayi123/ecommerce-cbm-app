@@ -5,6 +5,7 @@ import { parseSalesFile } from '../utils/fileParsers';
 import { round } from '../utils/number';
 import { effectivePurchaseQuantity, isInventoryRecord, withPurchaseTotals } from '../utils/purchaseRecords';
 import { stockMonthsForMonthlySales, stockMonthsRuleDescription } from '../utils/stockMonths';
+import { useSeasonalSales } from '../utils/seasonalSales';
 import { fetchTakealotInventory, type TakealotInventoryRow } from '../utils/takealot';
 
 type Props = {
@@ -534,6 +535,8 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, haichuanWarehou
     if (canEditData && rows.length > 0) onSendToCalculator(rows, fileName ? `采购建议：${fileName}` : '采购建议');
   }
 
+  const seasonalSales = useSeasonalSales([...suggestions, ...purchasePool]);
+
   return (
     <section className="panel">
       <div className="section-heading">
@@ -590,20 +593,20 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, haichuanWarehou
             <table>
               <thead>
                 <tr>
-                  <th>SKU</th><th>产品名称</th><th>月销量</th><th>建议采购数量</th><th>预计 CBM</th><th>操作</th>
+                  <th>SKU</th><th>产品名称</th><th>月销量</th><th>{seasonalSales.label}</th><th>建议采购数量</th><th>预计 CBM</th><th>操作</th>
                 </tr>
               </thead>
               <tbody>
                 {groupedPurchasePool.map((group) => (
                   <Fragment key={group.store}>
                     <tr className="pool-store-row">
-                      <td colSpan={6}>{group.store}：{group.rows.length} 条，建议采购数量 {group.quantity}，预计 {group.cbm.toFixed(4)} CBM</td>
+                      <td colSpan={7}>{group.store}：{group.rows.length} 条，建议采购数量 {group.quantity}，预计 {group.cbm.toFixed(4)} CBM</td>
                     </tr>
                     {group.rows.map((row) => (
                       <tr key={row.rowId}>
                         <td>{row.sku || '-'}</td>
                         <td><div className="suggestion-name-text" title={row.productName || ''}>{row.productName || '-'}</div></td>
-                        <td>{row.monthlySales}</td>
+                        <td>{row.monthlySales}</td><td>{seasonalSales.value(row.shopName, row.sku)}</td>
                         <td>{row.suggestedQuantity}</td>
                         <td>{row.estimatedCbm?.toFixed(4) ?? '-'}</td>
                         <td><button type="button" onClick={() => removePoolRow(row.rowId)}>移除</button></td>
@@ -621,7 +624,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, haichuanWarehou
         <table className="suggestion-table">
           <thead>
             <tr>
-              <th className="suggestion-sticky suggestion-sticky-1">图片</th><th className="suggestion-sticky suggestion-sticky-2">SKU</th><th className="suggestion-sticky suggestion-sticky-3">产品名称</th><th>月销量</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>采购订单池</th><th>海川仓库库存</th><th>建议采购数量</th><th>采购人</th><th>预计 CBM</th><th>状态/备注</th><th>店铺</th>
+              <th className="suggestion-sticky suggestion-sticky-1">图片</th><th className="suggestion-sticky suggestion-sticky-2">SKU</th><th className="suggestion-sticky suggestion-sticky-3">产品名称</th><th>月销量</th><th>{seasonalSales.label}</th><th>南非本地库存</th><th>官方仓库存</th><th>送仓路上库存</th><th>海运在途数量</th><th>采购订单池</th><th>海川仓库库存</th><th>建议采购数量</th><th>采购人</th><th>预计 CBM</th><th>状态/备注</th><th>店铺</th>
             </tr>
           </thead>
           <tbody>
@@ -630,7 +633,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, haichuanWarehou
                 <td className="suggestion-sticky suggestion-sticky-1">{row.imageUrl ? <img className="sku-thumb" src={row.imageUrl} alt={row.productName || row.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                 <td className="suggestion-sticky suggestion-sticky-2">{row.sku || '-'}</td>
                 <td className="suggestion-sticky suggestion-sticky-3"><div className="suggestion-name-text" title={row.productName || ''}>{row.productName || '-'}</div></td>
-                <td>{row.monthlySales}</td>
+                <td>{row.monthlySales}</td><td>{seasonalSales.value(row.shopName, row.sku)}</td>
                 <td>{row.localStockQuantity}</td>
                 <td>{row.takealotStockQuantity}</td>
                 <td>{row.stockOnWayQuantity}</td>
@@ -658,7 +661,7 @@ export function SalesSuggestionPage({ skuItems, purchaseRecords, haichuanWarehou
                 <td>{row.shopName || '-'}</td>
               </tr>
             ))}
-            {suggestions.length === 0 && <tr><td colSpan={15} className="empty">上传月销量或手动同步 Takealot 库存后生成采购建议。</td></tr>}
+            {suggestions.length === 0 && <tr><td colSpan={16} className="empty">上传月销量或手动同步 Takealot 库存后生成采购建议。</td></tr>}
           </tbody>
         </table>
       </div>

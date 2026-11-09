@@ -4,6 +4,7 @@ import { saveAlibabaOrderIds } from '../utils/alibabaLogistics';
 import { supabase } from '../lib/supabase';
 import { alibabaLogisticsEnabled, useAlibabaLogistics } from '../utils/alibabaLogistics';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useSeasonalSales } from '../utils/seasonalSales';
 import type { AppProfile, MixedCartonGroup, MixedCartonLine, PurchasePool, PurchaseRecord, PurchaseStatus, SkuItem } from '../types';
 import { formatErrorMessage } from '../utils/errors';
 import { exportPurchaseRecords } from '../utils/exporters';
@@ -1114,7 +1115,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     const normalized = withPurchaseTotals(record);
     return (
       <tr className="packing-detail-row">
-        <td colSpan={(isViewer ? 25 : 26) + (alibabaLogisticsEnabled ? 1 : 0)}>
+        <td colSpan={(isViewer ? 26 : 27) + (alibabaLogisticsEnabled ? 1 : 0)}>
           <div className="packing-panel">
             <div className="packing-summary">
               <strong>主商品数量：{effectivePurchaseQuantity(normalized)}</strong>
@@ -1156,6 +1157,8 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       </tr>
     );
   }
+
+  const seasonalSales = useSeasonalSales(visibleRecords);
 
   return (
     <section className="panel my-orders-panel">
@@ -1242,7 +1245,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
           <thead>
             <tr>
               {!isViewer && <th className="selection-sticky-col"><input ref={selectAllRef} type="checkbox" aria-label="选择当前筛选全部订单" checked={allVisibleSelected} disabled={visibleRecords.length === 0 || isDeletingRecords} onChange={toggleAllVisibleRecords} /></th>}
-              <th className="image-sticky-col">图片</th><th>厂家名</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.productName}</th><th>英文名称</th><th className="my-orders-compact-text">店铺</th><th className="my-orders-compact-text">采购人</th><th>月销量</th><th>计划采购数量</th><th className="my-orders-narrow-number">{labels.cartonCount}</th><th className="my-orders-narrow-number">{labels.unitsPerCarton}</th><th className="my-orders-narrow-number">{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">{labels.unitCbm}</th><th>{labels.totalCbm}</th>{alibabaLogisticsEnabled && <th>1688单号（选填）</th>}<th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
+              <th className="image-sticky-col">图片</th><th>厂家名</th><th>{labels.internalCode}</th><th>{labels.sku}</th><th>{labels.productName}</th><th>英文名称</th><th className="my-orders-compact-text">店铺</th><th className="my-orders-compact-text">采购人</th><th>月销量</th><th>{seasonalSales.label}</th><th>计划采购数量</th><th className="my-orders-narrow-number">{labels.cartonCount}</th><th className="my-orders-narrow-number">{labels.unitsPerCarton}</th><th className="my-orders-narrow-number">{labels.tailQuantity}</th><th>{labels.totalCartonCount}</th><th>{labels.purchaseTotalQuantity}</th><th>是否混装</th><th className="my-orders-narrow-number">采购单价</th><th className="my-orders-narrow-number my-orders-medium-number">运费</th><th className="my-orders-narrow-number my-orders-medium-number">总金额</th><th className="my-orders-narrow-number my-orders-medium-number">{labels.unitCbm}</th><th>{labels.totalCbm}</th>{alibabaLogisticsEnabled && <th>1688单号（选填）</th>}<th>{labels.status}</th><th>{labels.loadingType}</th><th>{labels.note}</th><th>{labels.actions}</th>
             </tr>
           </thead>
           <tbody>
@@ -1262,7 +1265,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td>{input(normalized, 'englishName')}</td>
                     <td className="my-orders-compact-text">{input(normalized, 'shopName')}</td>
                     <td className="my-orders-compact-text">{isAdmin ? input(normalized, 'assignedBuyerName') : normalized.assignedBuyerName}</td>
-                    <td>{normalized.monthlySales ?? '-'}</td>
+                    <td>{normalized.monthlySales ?? '-'}</td><td>{seasonalSales.value(normalized.shopName, normalized.sku)}</td>
                     <td>{input(normalized, 'purchaseQuantity', 'number')}</td>
                     <td className="my-orders-narrow-number">{input(normalized, 'cartonCount', 'number')}</td>
                     <td className="my-orders-narrow-number">{input(normalized, 'unitsPerCarton', 'number')}</td>
@@ -1300,6 +1303,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                       <td>{normalized.shopName}</td>
                       <td>{normalized.assignedBuyerName}</td>
                       <td />
+                      <td>{seasonalSales.value(normalized.shopName, line.sku)}</td>
                       <td />
                       <td />
                       <td />
@@ -1322,7 +1326,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                 </Fragment>
               );
             })}
-            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={(isViewer ? 25 : 26) + (alibabaLogisticsEnabled ? 1 : 0)}>暂无分配给你的采购订单。</td></tr>}
+            {visibleRecords.length === 0 && <tr><td className="empty" colSpan={(isViewer ? 26 : 27) + (alibabaLogisticsEnabled ? 1 : 0)}>暂无分配给你的采购订单。</td></tr>}
           </tbody>
         </table>
       </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { CalculationRow } from '../types';
+import { useSeasonalSales } from '../utils/seasonalSales';
 import { exportResults } from '../utils/exporters';
 
 type Props = {
@@ -21,6 +22,7 @@ function parseQuantity(value: string): number | null {
 }
 
 export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChange, onDeleteRow, onClearRows, onRecalculate, onSyncSkuData }: Props) {
+  const seasonalSales = useSeasonalSales(rows);
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
   const [draftTotalCbms, setDraftTotalCbms] = useState<Record<string, string>>({});
   const totalPurchaseAmount = rows.reduce((sum, row) => sum + (row.totalAmount ?? 0), 0);
@@ -102,7 +104,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
               <th>产品名称</th>
               <th>店铺</th>
               <th>采购人</th>
-              <th>月销量</th>
+              <th>月销量</th><th>{seasonalSales.label}</th>
               <th>采购数量</th>
               <th>采购单价</th>
               <th>总金额</th>
@@ -122,7 +124,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
                 <td>{row.productName || '-'}</td>
                 <td>{row.shopName || '-'}</td>
                 <td>{row.buyerName || '-'}</td>
-                <td>{row.monthlySales ?? '-'}</td>
+                <td>{row.monthlySales ?? '-'}</td><td>{seasonalSales.value(row.shopName, row.sku)}</td>
                 <td>
                   <input
                     className="quantity-input"
@@ -168,7 +170,7 @@ export function ResultsTable({ rows, fileName, onQuantityChange, onTotalCbmChang
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={15} className="empty">暂无计算结果。</td>
+                <td colSpan={16} className="empty">暂无计算结果。</td>
               </tr>
             )}
           </tbody>

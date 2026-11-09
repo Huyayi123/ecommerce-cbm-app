@@ -1,4 +1,4 @@
-import { enrichOffersWithHistoricalSales } from './_lib/takealotHistoricalSales.js';
+import { enrichOffersWithHistoricalSales, fetchHistoricalMonthlySales, lastYearNextMonth } from './_lib/takealotHistoricalSales.js';
 
 function envStoreConfig() {
   try {
@@ -57,6 +57,20 @@ export default async function handler(request, response) {
   }
   if (!apiKey) {
     response.status(400).json({ error: `店铺 ${store} 未配置 Takealot API Key` });
+    return;
+  }
+
+  if (request.query.view === 'seasonal-sales') {
+    try {
+      const now = new Date();
+      const range = lastYearNextMonth(now);
+      const month = range.months[0];
+      const history = await fetchHistoricalMonthlySales(store, apiKey, now, range);
+      const sales = Object.fromEntries([...history.monthlyBySku].map(([sku, months]) => [sku, months.get(month)]));
+      response.status(200).json({ month, sales });
+    } catch (error) {
+      response.status(502).json({ error: error.message || '历史销量查询失败' });
+    }
     return;
   }
 

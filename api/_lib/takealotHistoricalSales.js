@@ -63,9 +63,19 @@ function salesRowsFromPayload(payload) {
   return [];
 }
 
-export async function fetchHistoricalMonthlySales(storeName, apiKey, referenceDate = new Date()) {
+export function lastYearNextMonth(referenceDate = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric',
+  }).formatToParts(referenceDate);
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const dateFrom = new Date(Date.UTC(year - 1, month, 1)).toISOString().slice(0, 10);
+  const dateTo = new Date(Date.UTC(year - 1, month + 1, 0)).toISOString().slice(0, 10);
+  return { dateFrom, dateTo, months: [dateFrom.slice(0, 7)] };
+}
+
+export async function fetchHistoricalMonthlySales(storeName, apiKey, referenceDate = new Date(), range = previousTwoCompleteMonths(referenceDate)) {
   if (!apiKey) throw new Error(`店铺 ${storeName} 未配置 Takealot API Key`);
-  const range = previousTwoCompleteMonths(referenceDate);
   const baseUrl = process.env.TAKEALOT_MARKETPLACE_API_BASE_URL || 'https://marketplace-api.takealot.com/v1';
   const maxPages = Math.max(1, Number(process.env.TAKEALOT_SALES_MAX_PAGES) || 500);
   const monthlyBySku = new Map();
