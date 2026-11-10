@@ -17,6 +17,22 @@ r=analyze([[step('送达【测试收件人】签收。')],[step('运输中')],[s
 assert.equal(r.snapshot.status,'partial_signed');assert.equal(r.snapshot.signed_count,1);assert.equal(r.snapshot.shipment_count,4);assert.equal(r.snapshot.exception_count,1);
 assert.equal(r.snapshot.evidence.signed_at,'2026-10-21T21:26:08.000Z');assert.doesNotMatch(JSON.stringify(r),/测试收件人|remark/);
 r=analyze([[step('已签收')]],'TRANSPORT');assert.equal(r.snapshot.status,'returned_signed');assert.equal(r.snapshot.signed_count,1);
+for (const [remark, expectedText] of [
+  ['【金华市】您的快件已由【本人】收取，如遇问题请联系派件员。', '【金华市】您的快件已由【本人】收取'],
+  ['【金华市】您的快件已投递，收件人:本人。如遇找不到包裹等问题，请联系客服。', '【金华市】您的快件已投递，收件人:本人'],
+]) {
+  r = analyze([[step(remark)]], 'TRANSPORT');
+  assert.equal(r.snapshot.status, 'returned_signed');
+  assert.equal(r.snapshot.evidence.signed_at, '2026-10-21T21:26:08.000Z');
+  assert.equal(r.snapshot.evidence.shipments[0].latestEvent.text, expectedText);
+}
+for (const remark of [
+  '如果您的快件已由【本人】收取，请忽略。',
+  '预计 【金华市】您的快件已投递，收件人：本人。',
+  '您的快件已投递，收件人：本人，实际未收到。',
+]) {
+  assert.equal(analyze([[step(remark)]], 'TRANSPORT').snapshot.signed_count, 0);
+}
 r=analyze([[step('已签收','2026-10-21 12:00:00'),step('运输中')]]);assert.equal(r.snapshot.status,'in_transit');assert.equal(r.parsed.shipments[0].signedAt,null);
 r=analyze([[step('已签收'),step('退回','2026-10-22 06:00:00')]]);assert.equal(r.snapshot.status,'sign_exception');assert.equal(r.snapshot.evidence.signed_at,null);
 r=analyze([[step('已签收'),step('如需联系转运中心请联系服务人员','2026-10-22 06:00:00')]]);assert.equal(r.snapshot.status,'returned_signed');

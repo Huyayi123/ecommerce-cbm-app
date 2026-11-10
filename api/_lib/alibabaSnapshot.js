@@ -21,7 +21,8 @@ export function createPurchaseSnapshot(results) {
         statusAt: parseTraceTime(shipment.statusAt), statusConflict: effectiveStatus !== shipment.rawStatus,
         signedAt: signedAt ?? previous?.signedAt ?? null,
         signedAtSource: signedAt ? shipment.signedAtSource ?? null : previous?.signedAtSource ?? null,
-        latestTraceAt: [latestTraceAt, previous?.latestTraceAt].filter(Boolean).sort().at(-1) ?? null });
+        latestTraceAt: [latestTraceAt, previous?.latestTraceAt].filter(Boolean).sort().at(-1) ?? null,
+        ...(shipment.latestEvent ? { latestEvent: shipment.latestEvent } : {}) });
     }
   }
   const shipments = [...seen.values()];

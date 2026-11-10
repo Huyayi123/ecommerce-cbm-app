@@ -1,5 +1,5 @@
 // buyerView's timezone-less domestic logistics timestamps use China Standard Time.
-// All retained times are normalized UTC; no remark/address/contact leaves here.
+// All retained times are normalized UTC. Display text excludes contact instructions.
 export function parseTraceTime(value, now = Date.now()) {
   if (typeof value !== 'string') return null;
   const local = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/.exec(value);
@@ -19,6 +19,7 @@ const knownStatuses = new Set(['WAITACCEPT','CANCEL','ACCEPT','TRANSPORT','NOGET
 // Completed recipient event, observed without an "已" prefix. Clause boundaries
 // exclude requests, future instructions and "签收后" advice.
 const recipientSignaturePattern = /(?:^|[，,。；;\s])(?:您的)?(?:快件|包裹)(?:已)?由本人签收(?:[。！!，,；;\s]|$)/;
+const completedReceiptPattern = /(?:^|[，,。；;\r\n])\s*(?:[【\[][^】\]\r\n]{1,60}[】\]]\s*)?(?:您的)?(?:快件|包裹)(?:已由\s*(?:【本人】|\[本人\]|本人)\s*收取|已投递[，,]\s*收件人\s*[:：]\s*本人)(?:[。！!，,；;\r\n]|\s*$)/;
 // Observed completed delivery restriction, not the bare word INVALID or
 // warehouse inspection alone. Conditional clauses are excluded during parsing.
 const deliveryRestrictionPattern = /导致投递受限/;
@@ -39,7 +40,7 @@ export function diagnoseLogisticsCorrespondence(result, payload, now = Date.now(
         if (!step || typeof step !== 'object') throw Error('INVALID_TRACE_RESPONSE');
         const text = typeof step.remark === 'string' ? step.remark : '';
         return { at: parseTraceTime(step.acceptTime ?? step.accept_time, now), statuses: diagnosticStatuses(step),
-          signedText: /已签收|签收成功|送达\s*[【\[][^】\]\r\n]{1,60}[】\]]\s*签收/.test(text)||recipientSignaturePattern.test(text),
+          signedText: /已签收|签收成功|送达\s*[【\[][^】\]\r\n]{1,60}[】\]]\s*签收/.test(text)||recipientSignaturePattern.test(text)||completedReceiptPattern.test(text),
           transportText: /运输中|运输途中|转运中心|分拨中心|快件已到达|快件离开/.test(text),
           deliveringText: /正在派送|派送中|正在派件|派件中/.test(text),
           exceptionText: /拒签|拒收|签收失败|退回|退件/.test(text)||deliveryRestrictionPattern.test(text),
@@ -71,6 +72,14 @@ export function attachLogisticsTrace(result, payload, now = Date.now(), diagnose
       if (!at) continue;
       if (!time.latestTraceAt || at > time.latestTraceAt) time.latestTraceAt = at;
       const remark = typeof step.remark === 'string' ? step.remark : '';
+      if (!diagnose && remark.trim() && (!time.latestEvent || at > time.latestEvent.at)) {
+        const text = remark.trim().split(/[，,](?!\s*收件人\s*[:：]\s*本人(?:[，,。；;！!\r\n]|\s*$))|[。；;\r\n]|\s*(?:请联系|派件员|网点电话|联系电话|收货地址)/, 1)[0]
+          .replace(/(送达)\s*[【\[][^】\]]+[】\]](?=\s*签收)/g, '$1【收件人】')
+          .replace(/(快件|包裹)(已?由)(?!本人)[^，,。；;\r\n]{1,40}(?=签收)/g, '$1$2【收件人】')
+          .replace(/(?:\+?86[ -]?)?\d(?:[ -]?\d){6,}/g, '***').trim().slice(0, 240);
+        const billNo = typeof trace.logisticsBillNo === 'string' && /^(?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{1,64}$/.test(trace.logisticsBillNo) ? trace.logisticsBillNo : null;
+        time.latestEvent = { at, text, billNo };
+      }
       const structured = step.action === 'SIGN';
       // Some carriers report the completed event as “送达【收件人】签收”.
       // Require a clause boundary so “待送达/预计送达” cannot match it.
@@ -78,10 +87,12 @@ export function attachLogisticsTrace(result, payload, now = Date.now(), diagnose
       const namedPattern = /(?:^|[，,。；;\s])(?:已)?送达\s*[【\[][^】\]\r\n]{1,60}[】\]]\s*签收(?:[。！!，,；;\s]|$)/;
       const namedSignature = namedPattern.test(remark);
       const recipientSignature=recipientSignaturePattern.test(remark);
-      const explicitText = /已签收|签收成功/.test(remark) || namedSignature || recipientSignature;
+      const completedReceipt = completedReceiptPattern.exec(remark);
+      const explicitText = /已签收|签收成功/.test(remark) || namedSignature || recipientSignature || Boolean(completedReceipt);
       const clauses = remark.split(/[，,。；;\r\n]/).map(clause => clause.trim()).filter(Boolean);
       const withoutNames = text => text.replace(/[【\[][^】\]\r\n]*[】\]]/g, '【收件人】');
       const signatureClauses = clauses.filter(clause => /已签收|签收成功/.test(clause) || namedPattern.test(clause)||recipientSignaturePattern.test(clause));
+      if (completedReceipt) signatureClauses.push(completedReceipt[0]);
       // Unrelated contact/advice clauses must not turn a completed signature
       // into a negative match (e.g. “如需反馈请联系…，送达【…】签收”).
       const broadNegative = /未签|未由本人签收|未被签收|未收到|未送达|没有签收|尚未|未能|无法|拒签|拒收|误签|错误|疑似|可能|反馈|显示.*已签收|签收失败|签收异常|待签收|等待签收|请.*签收|如.*签收|签收后/;
@@ -124,6 +135,7 @@ export function attachLogisticsTrace(result, payload, now = Date.now(), diagnose
       statusAt: time?.statusAt ?? null, statusConflict: effectiveStatus !== shipment.rawStatus} : {}),
       signedAt: effectiveStatus === 'SIGN' ? time?.signedAt ?? null : null,
       signedAtSource: effectiveStatus === 'SIGN' ? time?.signedAtSource ?? null : null,
-      latestTraceAt: time?.latestTraceAt ?? null };
+      latestTraceAt: time?.latestTraceAt ?? null,
+      ...(time?.latestEvent?.text ? { latestEvent: time.latestEvent } : {}) };
   }) };
 }

@@ -22,6 +22,7 @@ export type AlibabaSummary = {
   detail: string | null;
   signed_at?: string | null;
   latest_trace_at?: string | null;
+  trace_events?: Array<{ at: string; text: string; billNo: string | null }> | null;
 };
 
 type AlibabaAccess = { purchase_record_id: string; user_id: string; account_code: AlibabaAccount };
@@ -45,16 +46,23 @@ export function useAlibabaLogistics(profile: AppProfile) {
     async function readAll(table: string) {
       const summaryTable = table === 'purchase_logistics_summaries';
       let withTimes = summaryTable;
+      let withEvents = summaryTable;
       const columns: string = table === 'alibaba_purchase_links' ? 'purchase_record_id,account_code,order_ids,version,verification_status'
         : table === 'alibaba_purchase_access' ? 'purchase_record_id,user_id,account_code'
           : 'purchase_record_id,link_version,status,last_success_at,sync_error,detail';
       const rows: Array<AlibabaLink | AlibabaSummary | AlibabaAccess> = [];
       for (let offset = 0; ; offset += 500) {
-        let result = await client.from(table).select(columns + (withTimes ? ',signed_at,latest_trace_at' : '')).order('purchase_record_id').range(offset, offset + 499);
+        const timeColumns = ',signed_at,latest_trace_at';
+        let result = await client.from(table).select(columns + (withTimes ? timeColumns : '') + (withEvents ? ',trace_events' : '')).order('purchase_record_id').range(offset, offset + 499);
+        if (withEvents && result.error?.code === '42703' && result.error.message?.includes('trace_events')) {
+          withEvents = false;
+          result = await client.from(table).select(columns + timeColumns).order('purchase_record_id').range(offset, offset + 499);
+        }
         // Keep existing logistics usable while the incremental migration has
         // not yet been applied. Never fall back on permission/network failures.
         if (summaryTable && withTimes && result.error?.code === '42703') {
           withTimes = false;
+          withEvents = false;
           result = await client.from(table).select(columns).order('purchase_record_id').range(offset, offset + 499);
         }
         if (result.error) throw result.error;

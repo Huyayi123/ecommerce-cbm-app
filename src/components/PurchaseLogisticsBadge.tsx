@@ -19,12 +19,12 @@ export function logisticsDisplayDetail(_status: string, detail: string | null): 
   return detail;
 }
 
-export function formatLogisticsTime(value: string | null | undefined): string | null {
+export function formatLogisticsTime(value: string | null | undefined, includeSeconds = false): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return null;
   return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date);
+    hour: '2-digit', minute: '2-digit', second: includeSeconds ? '2-digit' : undefined, hourCycle: 'h23' }).format(date);
 }
 
 export function PurchaseLogisticsBadge({ link, summary, unavailable, loading }: {
@@ -32,6 +32,14 @@ export function PurchaseLogisticsBadge({ link, summary, unavailable, loading }: 
 }) {
   if (!link?.order_ids.length) return null;
   if (!link || summary?.link_version !== link.version) summary = undefined;
+  if (summary?.trace_events?.length) {
+    return <div className="alibaba-logistics-summary">
+      {summary.trace_events.map((event, index) => <div className="alibaba-trace-event" key={index}>
+        <small>{event.billNo ? `运单 ${event.billNo} · ` : ''}{formatLogisticsTime(event.at, true)}</small>
+        <small>{event.text}</small>
+      </div>)}
+    </div>;
+  }
   const signedStatus = summary && ['signed','returned_signed','partial_signed'].includes(summary.status);
   const signedTime = signedStatus ? formatLogisticsTime(summary?.signed_at) : null;
   const pendingSigned = signedStatus && !signedTime;
