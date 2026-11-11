@@ -1,6 +1,9 @@
+import { createSessionLoad, publishCloudTask } from './utils/cloudLoadTasks';
 import { AlibabaSignedTimeCheck } from './components/AlibabaSignedTimeCheck';
-import { useEffect, useState } from 'react';
+import { createCoalescedLoad } from './utils/coalescedLoad';
+import { useEffect, useRef, useState } from 'react';
 import { AuthPanel } from './components/AuthPanel';
+
 import { PasswordResetPanel } from './components/PasswordResetPanel';
 import { ProfileBinding } from './components/ProfileBinding';
 import { SkuManager } from './components/SkuManager';
@@ -62,7 +65,8 @@ import { withPurchaseTotals } from './utils/purchaseRecords';
 
 type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics' | 'haichuan-warehouse';
 
-const ACTIVE_PAGE_STORAGE_KEY = 'ecommerce-cbm-active-page';
+const signedTimeCheckRequested = new URLSearchParams(window.location.search).get('check1688SignedTime') === '1'
+  || new URLSearchParams(window.location.search).get('check1688Logistics') === '1';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'repricing', label: '价格预警' },
@@ -80,19 +84,12 @@ const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'sku', label: 'SKU 资料库' },
 ];
 
-const pageKeys = new Set<PageKey>(navItems.map((item) => item.key));
-
-function getInitialActivePage(): PageKey {
-  const stored = localStorage.getItem(ACTIVE_PAGE_STORAGE_KEY) as PageKey | null;
-  return stored && pageKeys.has(stored) ? stored : 'suggestions';
-}
-
 function isOptionalProfileLoadError(index: number, error: unknown): boolean {
   return (index === 3 || index === 4 || index === 5 || index === 7 || index === 11) && /failed to fetch|fetch|广告分析表|commission_runs/i.test(formatErrorMessage(error));
 }
 
 function App() {
-  const [activePage, setActivePage] = useState<PageKey>(getInitialActivePage);
+  const [activePage, setActivePage] = useState<PageKey>('my-orders');
   const [profile, setProfile] = useState<AppProfile | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
@@ -119,21 +116,65 @@ function App() {
 
   function openPage(page: PageKey) {
     setActivePage(page);
-    localStorage.setItem(ACTIVE_PAGE_STORAGE_KEY, page);
   }
 
-  async function loadCloudData(activeProfile = profile) {
-    if (!supabase) return;
+  const [readyModules, setReadyModules] = useState<Set<number>>(() => new Set());
+  const sessionLoader = useRef(createSessionLoad());
+  const sessionGeneration = useRef(0);
+  const sessionIdentity = useRef('');
+  function clearCloudData() {
+    setReadyModules(new Set());
+    setSkuItems([]);
+    setPurchaseRows([]);
+    setPurchaseRecords([]);
+    setPurchasePools([]);
+    setLogisticsBatches([]);
+    setHaichuanData({ inboundItems: [], warehouseLots: [], loadingBatches: [] });
+    setProfiles([]);
+    setRepricingAlerts([]);
+    setAdAnalysisRuns([]);
+    setProfitAnalysisRuns([]);
+    setMonthlyProfitSummaries([]);
+    setCommissionRuns([]);
+    setSavedSalesSuggestions([]);
+    setStatusMessage('');
+  }
+  const cloudLoader=useRef(createCoalescedLoad());
+  function loadCloudData(activeProfile = profile,queue=true, inventoryOnly = false) {
+    const generation = sessionGeneration.current;
+    const key = generation + ':' + (activeProfile ? activeProfile.id + ':' + activeProfile.role + ':' + activeProfile.email : 'none');
+    return cloudLoader.current(key, () => generation === sessionGeneration.current ? performCloudDataLoad(activeProfile, inventoryOnly) : Promise.resolve(), queue);
+  }
+  async function performCloudDataLoad(activeProfile: AppProfile | null, inventoryOnly: boolean) {
+    if (!supabase || !activeProfile) return;
+    const generation = sessionGeneration.current;
+    const current = () => generation === sessionGeneration.current && sessionIdentity.current.startsWith(activeProfile.id + ':');
+    if (!current()) return;
+    const publish = <T,>(index: number, read: Promise<T>, setter: (value: T) => void) =>
+      publishCloudTask(read, value => {
+        setter(value);
+        setReadyModules(previous => new Set([...previous, index]));
+      }, current).catch(error => {
+        if (current() && isOptionalProfileLoadError(index, error)) {
+          // Preserve the existing optional-module fallback during first load.
+          setReadyModules(previous => new Set([...previous, index]));
+        }
+        throw error;
+      });
     if (activeProfile?.role === 'logistics') {
       try {
         if (activeProfile.logisticsProviderType === 'haichuan') {
-          setHaichuanData(await fetchHaichuanData());
+          await publish(12, fetchHaichuanData(), setHaichuanData);
         } else {
           const batches = await fetchLogisticsBatches();
+          if (!current()) return;
           setLogisticsBatches(batches);
+          setReadyModules(previous => new Set([...previous, 8]));
         }
+        if (!current()) return;
         setProfiles((current) => (current.some((item) => item.id === activeProfile.id) ? current : [activeProfile, ...current]));
       } catch (error) {
+        if (!current()) return;
         console.error('物流批次加载失败', error);
         setStatusMessage(`物流批次加载失败：${formatErrorMessage(error)}`);
       }
@@ -155,45 +196,40 @@ function App() {
       '采购人提成历史',
       '海川仓库',
     ];
+    if (inventoryOnly) {
+      const results = await Promise.allSettled([
+        publish(0, fetchSkuItems(), setSkuItems),
+        publish(2, fetchPurchaseRecords(), setPurchaseRecords),
+      ]);
+      for (const result of results) {
+        if (result.status === 'rejected') console.error('采购库存刷新失败', result.reason);
+      }
+      return;
+    }
+    const purchaseRead = fetchPurchaseRecords();
+    const poolRead = fetchPurchasePools();
     const results = await Promise.allSettled([
-      fetchSkuItems(),
-      fetchContainerRows(),
-      fetchPurchaseRecords(),
-      fetchProfiles(),
-      fetchSalesSuggestions(),
-      fetchRepricingAlerts(),
-      fetchPurchasePools(),
-      fetchAdAnalysisRuns(),
-      fetchLogisticsBatches(),
-      activeProfile?.role === 'admin' || activeProfile?.role === 'owner' ? fetchProfitAnalysisRuns() : Promise.resolve([]),
-      activeProfile?.role === 'owner' ? fetchMonthlyProfitSummaries() : Promise.resolve([]),
-      activeProfile?.role === 'admin' ? fetchCommissionRuns() : Promise.resolve([]),
-      fetchHaichuanData(),
+      publish(0, fetchSkuItems(), setSkuItems),
+      publish(1, fetchContainerRows(), setPurchaseRows),
+      publish(2, purchaseRead, setPurchaseRecords),
+      publish(3, fetchProfiles(), setProfiles),
+      publish(4, fetchSalesSuggestions(), setSavedSalesSuggestions),
+      publish(5, fetchRepricingAlerts(), setRepricingAlerts),
+      publish(6, poolRead, setPurchasePools),
+      publish(7, fetchAdAnalysisRuns(), setAdAnalysisRuns),
+      publish(8, fetchLogisticsBatches(), setLogisticsBatches),
+      publish(9, activeProfile?.role === 'admin' || activeProfile?.role === 'owner' ? fetchProfitAnalysisRuns() : Promise.resolve([]), setProfitAnalysisRuns),
+      publish(10, activeProfile?.role === 'owner' ? fetchMonthlyProfitSummaries() : Promise.resolve([]), setMonthlyProfitSummaries),
+      publish(11, activeProfile?.role === 'admin' ? fetchCommissionRuns() : Promise.resolve([]), setCommissionRuns),
+      publish(12, fetchHaichuanData(), setHaichuanData),
     ]);
+    if (!current()) return;
     const errors = results.flatMap((result, index) => {
       if (result.status !== 'rejected') return [];
       console.error('云端数据加载失败', { index, error: result.reason });
       if (isOptionalProfileLoadError(index, result.reason)) return [];
       return [`${loadNames[index] ?? `模块${index + 1}`}：${formatErrorMessage(result.reason)}`];
     });
-
-    if (results[0].status === 'fulfilled') setSkuItems(results[0].value);
-    if (results[1].status === 'fulfilled') setPurchaseRows(results[1].value);
-    if (results[2].status === 'fulfilled') setPurchaseRecords(results[2].value);
-    if (results[3].status === 'fulfilled') {
-      setProfiles(results[3].value);
-    } else if (profile) {
-      setProfiles((current) => (current.some((item) => item.id === profile.id) ? current : [...current, profile]));
-    }
-    if (results[4].status === 'fulfilled') setSavedSalesSuggestions(results[4].value);
-    if (results[5].status === 'fulfilled') setRepricingAlerts(results[5].value);
-    if (results[6].status === 'fulfilled') setPurchasePools(results[6].value);
-    if (results[7].status === 'fulfilled') setAdAnalysisRuns(results[7].value);
-    if (results[8].status === 'fulfilled') setLogisticsBatches(results[8].value);
-    if (results[9].status === 'fulfilled') setProfitAnalysisRuns(results[9].value);
-    if (results[10].status === 'fulfilled') setMonthlyProfitSummaries(results[10].value);
-    if (results[11].status === 'fulfilled') setCommissionRuns(results[11].value);
-    if (results[12].status === 'fulfilled') setHaichuanData(results[12].value);
 
     if (results[2].status === 'fulfilled' && results[3].status === 'fulfilled' && results[8].status === 'fulfilled' && results[12].status === 'fulfilled') {
       const haichuanProfile = results[3].value.find((item) => item.role === 'logistics' && item.logisticsProviderType === 'haichuan');
@@ -209,9 +245,10 @@ function App() {
           && !legacyActiveRecordIds.has(record.id));
         if (missingInbound.length > 0) {
           try {
-            await createHaichuanInboundItems(missingInbound, haichuanProfile, skuItems);
-            setHaichuanData(await fetchHaichuanData());
+            await createHaichuanInboundItems(missingInbound, haichuanProfile, results[0].status === 'fulfilled' ? results[0].value : skuItems);
+            await publish(12, fetchHaichuanData(), setHaichuanData);
           } catch (error) {
+            if (!current()) return;
             console.error('海川待入仓任务补建失败', error);
             setStatusMessage(`海川待入仓任务补建失败：${formatErrorMessage(error)}`);
           }
@@ -219,8 +256,11 @@ function App() {
       }
     }
 
+    if (!current()) return;
     if (errors.length > 0) {
       setStatusMessage(`部分云端数据加载失败：${errors.join('；')}`);
+    } else {
+      setStatusMessage(current => current.startsWith('部分云端数据加载失败：') ? '' : current);
     }
   }
 
@@ -231,20 +271,42 @@ function App() {
         return;
       }
 
+      const generation = sessionGeneration.current;
       const { data } = await supabase.auth.getSession();
+      if (generation !== sessionGeneration.current) return;
       const user = data.session?.user;
       if (user) {
+        const identity = user.id + ':' + (user.email ?? '');
+        if (sessionIdentity.current && sessionIdentity.current !== identity) {
+          sessionGeneration.current++;
+          setProfile(null);
+          setAuthReady(false);
+          clearCloudData();
+          sessionLoader.current.reset();
+        }
+        sessionIdentity.current = identity;
+        const activeGeneration = sessionGeneration.current;
+        await sessionLoader.current.run(identity, async () => {
         let activeProfile: AppProfile;
         try {
           activeProfile = await fetchProfile(user.id, user.email ?? '');
+          if (activeGeneration !== sessionGeneration.current) return;
           setProfile(activeProfile);
+          setProfiles([activeProfile]);
         } catch (error) {
+          if (activeGeneration !== sessionGeneration.current) return;
           console.error(error);
           activeProfile = { id: user.id, email: user.email ?? '', role: 'viewer', displayName: user.email ?? '', buyerName: '', logisticsProviderType: '' };
           setProfile(activeProfile);
           setStatusMessage(`账号资料加载失败：${formatErrorMessage(error)}`);
         }
-        await loadCloudData(activeProfile);
+        if (activeGeneration !== sessionGeneration.current) return;
+        setAuthReady(true);
+        if (signedTimeCheckRequested) return;
+        void loadCloudData(activeProfile, false).catch(error => {
+          if (activeGeneration === sessionGeneration.current) setStatusMessage('云端数据加载失败：' + formatErrorMessage(error));
+        });
+        });
       } else {
         setProfile(null);
       }
@@ -269,43 +331,39 @@ function App() {
         sessionStorage.setItem('passwordRecovery', 'true');
         setPasswordRecovery(true);
       }
+      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
       const user = session?.user;
       if (!user) {
+        sessionGeneration.current++;
+        sessionIdentity.current = '';
+        sessionLoader.current.reset();
         setProfile(null);
-        setSkuItems([]);
-        setPurchaseRows([]);
-        setPurchaseRecords([]);
-        setPurchasePools([]);
-        setLogisticsBatches([]);
-        setHaichuanData({ inboundItems: [], warehouseLots: [], loadingBatches: [] });
-        setProfiles([]);
-        setRepricingAlerts([]);
-        setAdAnalysisRuns([]);
-        setProfitAnalysisRuns([]);
-        setMonthlyProfitSummaries([]);
-        setCommissionRuns([]);
+        clearCloudData();
         return;
       }
-      void fetchProfile(user.id, user.email ?? '').then((nextProfile) => {
-        setProfile(nextProfile);
-        void loadCloudData(nextProfile);
-      });
+      if (event === 'USER_UPDATED') {
+        sessionGeneration.current++;
+        sessionLoader.current.reset();
+        setReadyModules(new Set());
+      }
+      // Leave the synchronous auth callback before calling Supabase again.
+      setTimeout(() => { void loadSession(); }, 0);
     });
 
     return () => data.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!profile) return undefined;
+    if (!profile || signedTimeCheckRequested) return undefined;
     return subscribeToSharedTables(() => {
       void loadCloudData(profile);
     });
   }, [profile]);
 
   useEffect(() => {
-    if (!profile || activePage !== 'inventory') return undefined;
+    if (!profile || signedTimeCheckRequested || activePage !== 'inventory') return undefined;
     const refreshInventory = () => {
-      if (document.visibilityState === 'visible') void loadCloudData(profile);
+      if (document.visibilityState === 'visible') void loadCloudData(profile, false, true);
     };
     const timer = window.setInterval(refreshInventory, 10000);
     window.addEventListener('focus', refreshInventory);
@@ -617,7 +675,7 @@ function App() {
     return <AuthPanel onAuthed={loadSession} />;
   }
 
-  if (new URLSearchParams(window.location.search).get('check1688Logistics') === '1' || new URLSearchParams(window.location.search).get('check1688SignedTime') === '1') return <AlibabaSignedTimeCheck />;
+  if (signedTimeCheckRequested) return <AlibabaSignedTimeCheck />;
 
   const editable = canEdit(profile.role);
   const deletable = canDelete(profile.role);
@@ -637,6 +695,18 @@ function App() {
       && (item.key !== 'commission' || profile.role === 'admin')
       && (item.key !== 'monthly-profit' || profile.role === 'owner'));
   const currentPage = visibleNavItems.some((item) => item.key === activePage) ? activePage : visibleNavItems[0]?.key ?? 'logistics';
+
+  const dependencies: Record<PageKey, number[]> = {
+    sku: [0], calculator: [0, 1], inventory: [0, 2],
+    'purchase-pool': [0, 2, 3, 6, 8], 'my-orders': [0, 2, 6],
+    suggestions: [0, 1, 2, 4, 12], repricing: [0, 5],
+    'profit-analysis': [0, 9], 'monthly-profit': [0, 10],
+    'ad-analysis': [0, 7], commission: [0, 2, 3, 11],
+    logistics: profile.role === 'logistics' ? (profile.logisticsProviderType === 'haichuan' ? [12] : [8]) : [0, 2, 3, 8, 12],
+    'haichuan-warehouse': [3, 12],
+  };
+  const pageReady = dependencies[currentPage].every(index => readyModules.has(index));
+
 
   return (
     <main className="app-shell">
@@ -697,6 +767,10 @@ function App() {
 
       {statusMessage && <div className="inline-notice">{statusMessage}</div>}
 
+      {!pageReady ? <section className="panel" role="status">
+        <p>正在加载当前页面数据，请稍候…</p>
+        <button type="button" onClick={() => void loadCloudData(profile, false)}>重试加载</button>
+      </section> : <>
       {currentPage === 'sku' && (
         <SkuManager
           items={skuItems}
@@ -864,6 +938,7 @@ function App() {
           onSaveProfile={saveProfileBinding}
         />
       )}
+      </>}
       </div>
     </main>
   );
