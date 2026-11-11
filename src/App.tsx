@@ -140,12 +140,12 @@ function App() {
     setStatusMessage('');
   }
   const cloudLoader=useRef(createCoalescedLoad());
-  function loadCloudData(activeProfile = profile,queue=true, inventoryOnly = false) {
+  function loadCloudData(activeProfile = profile,queue=true, inventoryOnly = false, prioritizeOrders = false) {
     const generation = sessionGeneration.current;
     const key = generation + ':' + (activeProfile ? activeProfile.id + ':' + activeProfile.role + ':' + activeProfile.email : 'none');
-    return cloudLoader.current(key, () => generation === sessionGeneration.current ? performCloudDataLoad(activeProfile, inventoryOnly) : Promise.resolve(), queue);
+    return cloudLoader.current(key, () => generation === sessionGeneration.current ? performCloudDataLoad(activeProfile, inventoryOnly, prioritizeOrders) : Promise.resolve(), queue);
   }
-  async function performCloudDataLoad(activeProfile: AppProfile | null, inventoryOnly: boolean) {
+  async function performCloudDataLoad(activeProfile: AppProfile | null, inventoryOnly: boolean, prioritizeOrders: boolean) {
     if (!supabase || !activeProfile) return;
     const generation = sessionGeneration.current;
     const current = () => generation === sessionGeneration.current && sessionIdentity.current.startsWith(activeProfile.id + ':');
@@ -206,22 +206,45 @@ function App() {
       }
       return;
     }
-    const purchaseRead = fetchPurchaseRecords();
-    const poolRead = fetchPurchasePools();
+    const tasks = [
+      () => publish(0, fetchSkuItems(), setSkuItems),
+      () => publish(1, fetchContainerRows(), setPurchaseRows),
+      () => publish(2, fetchPurchaseRecords(), setPurchaseRecords),
+      () => publish(3, fetchProfiles(), setProfiles),
+      () => publish(4, fetchSalesSuggestions(), setSavedSalesSuggestions),
+      () => publish(5, fetchRepricingAlerts(), setRepricingAlerts),
+      () => publish(6, fetchPurchasePools(), setPurchasePools),
+      () => publish(7, fetchAdAnalysisRuns(), setAdAnalysisRuns),
+      () => publish(8, fetchLogisticsBatches(), setLogisticsBatches),
+      () => publish(9, activeProfile?.role === 'admin' || activeProfile?.role === 'owner' ? fetchProfitAnalysisRuns() : Promise.resolve([]), setProfitAnalysisRuns),
+      () => publish(10, activeProfile?.role === 'owner' ? fetchMonthlyProfitSummaries() : Promise.resolve([]), setMonthlyProfitSummaries),
+      () => publish(11, activeProfile?.role === 'admin' ? fetchCommissionRuns() : Promise.resolve([]), setCommissionRuns),
+      () => publish(12, fetchHaichuanData(), setHaichuanData),
+    ] as const;
+    const skuRead = prioritizeOrders ? tasks[0]() : undefined;
+    const ordersRead = prioritizeOrders ? tasks[2]() : undefined;
+    const profilesRead = prioritizeOrders ? tasks[3]() : undefined;
+    const poolsRead = prioritizeOrders ? tasks[6]() : undefined;
+    if (prioritizeOrders) {
+      await Promise.allSettled([skuRead, ordersRead, profilesRead, poolsRead]);
+      if (!current()) return;
+      await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+      if (!current()) return;
+    }
     const results = await Promise.allSettled([
-      publish(0, fetchSkuItems(), setSkuItems),
-      publish(1, fetchContainerRows(), setPurchaseRows),
-      publish(2, purchaseRead, setPurchaseRecords),
-      publish(3, fetchProfiles(), setProfiles),
-      publish(4, fetchSalesSuggestions(), setSavedSalesSuggestions),
-      publish(5, fetchRepricingAlerts(), setRepricingAlerts),
-      publish(6, poolRead, setPurchasePools),
-      publish(7, fetchAdAnalysisRuns(), setAdAnalysisRuns),
-      publish(8, fetchLogisticsBatches(), setLogisticsBatches),
-      publish(9, activeProfile?.role === 'admin' || activeProfile?.role === 'owner' ? fetchProfitAnalysisRuns() : Promise.resolve([]), setProfitAnalysisRuns),
-      publish(10, activeProfile?.role === 'owner' ? fetchMonthlyProfitSummaries() : Promise.resolve([]), setMonthlyProfitSummaries),
-      publish(11, activeProfile?.role === 'admin' ? fetchCommissionRuns() : Promise.resolve([]), setCommissionRuns),
-      publish(12, fetchHaichuanData(), setHaichuanData),
+      skuRead ?? tasks[0](),
+      tasks[1](),
+      ordersRead ?? tasks[2](),
+      profilesRead ?? tasks[3](),
+      tasks[4](),
+      tasks[5](),
+      poolsRead ?? tasks[6](),
+      tasks[7](),
+      tasks[8](),
+      tasks[9](),
+      tasks[10](),
+      tasks[11](),
+      tasks[12](),
     ]);
     if (!current()) return;
     const errors = results.flatMap((result, index) => {
@@ -303,7 +326,7 @@ function App() {
         if (activeGeneration !== sessionGeneration.current) return;
         setAuthReady(true);
         if (signedTimeCheckRequested) return;
-        void loadCloudData(activeProfile, false).catch(error => {
+        void loadCloudData(activeProfile, false, false, true).catch(error => {
           if (activeGeneration === sessionGeneration.current) setStatusMessage('云端数据加载失败：' + formatErrorMessage(error));
         });
         });
@@ -698,7 +721,7 @@ function App() {
 
   const dependencies: Record<PageKey, number[]> = {
     sku: [0], calculator: [0, 1], inventory: [0, 2],
-    'purchase-pool': [0, 2, 3, 6, 8], 'my-orders': [0, 2, 6],
+    'purchase-pool': [0, 2, 3, 6, 8], 'my-orders': [0, 2, 3, 6],
     suggestions: [0, 1, 2, 4, 12], repricing: [0, 5],
     'profit-analysis': [0, 9], 'monthly-profit': [0, 10],
     'ad-analysis': [0, 7], commission: [0, 2, 3, 11],
