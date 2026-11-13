@@ -18,6 +18,7 @@ import { MonthlyProfitPage } from './pages/MonthlyProfitPage';
 import { ProfitAnalysisPage } from './pages/ProfitAnalysisPage';
 import { PurchasePoolPage } from './pages/PurchasePoolPage';
 import { PurchaseInventoryPage } from './pages/PurchaseInventoryPage';
+import { NewProductLaunchPage } from './pages/NewProductLaunchPage';
 import { RepricingAlertsPage } from './pages/RepricingAlertsPage';
 import { SalesSuggestionPage } from './pages/SalesSuggestionPage';
 import type { AdAnalysisRun, AppProfile, CommissionRun, HaichuanData, LogisticsBatch, MonthlyProfitSummary, ProfitAnalysisRun, PurchasePool, PurchaseRecord, PurchaseRow, RepricingAlert, SalesSuggestionRow, SkuItem } from './types';
@@ -63,7 +64,7 @@ import { canDelete, canEdit } from './utils/permissions';
 import { shouldDeletePendingHaichuanInbound } from './utils/purchasePoolFlows';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics' | 'haichuan-warehouse';
+type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics' | 'haichuan-warehouse' | 'new-product-launch';
 
 const signedTimeCheckRequested = new URLSearchParams(window.location.search).get('check1688SignedTime') === '1'
   || new URLSearchParams(window.location.search).get('check1688Logistics') === '1';
@@ -82,6 +83,7 @@ const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'purchase-pool', label: '采购订单池' },
   { key: 'inventory', label: '采购 / 在途库存' },
   { key: 'sku', label: 'SKU 资料库' },
+  { key: 'new-product-launch', label: 'New Product Launch' },
 ];
 
 function isOptionalProfileLoadError(index: number, error: unknown): boolean {
@@ -716,6 +718,7 @@ function App() {
       && (item.key !== 'haichuan-warehouse' || profile.role === 'admin' || profile.role === 'owner')
       && (item.key !== 'profit-analysis' || profile.role === 'admin' || profile.role === 'owner')
       && (item.key !== 'commission' || profile.role === 'admin')
+      && (item.key !== 'new-product-launch' || ['owner', 'admin', 'buyer'].includes(profile.role))
       && (item.key !== 'monthly-profit' || profile.role === 'owner'));
   const currentPage = visibleNavItems.some((item) => item.key === activePage) ? activePage : visibleNavItems[0]?.key ?? 'logistics';
 
@@ -727,6 +730,7 @@ function App() {
     'ad-analysis': [0, 7], commission: [0, 2, 3, 11],
     logistics: profile.role === 'logistics' ? (profile.logisticsProviderType === 'haichuan' ? [12] : [8]) : [0, 2, 3, 8, 12],
     'haichuan-warehouse': [3, 12],
+    'new-product-launch': [],
   };
   const pageReady = dependencies[currentPage].every(index => readyModules.has(index));
 
@@ -875,6 +879,9 @@ function App() {
 
       {currentPage === 'repricing' && (
         <RepricingAlertsPage alerts={repricingAlerts} skuItems={skuItems} onRefresh={loadCloudData} />
+      )}
+      {currentPage === 'new-product-launch' && (
+        <NewProductLaunchPage userId={profile.id} admin={profile.role === 'admin' || profile.role === 'owner'} />
       )}
       {currentPage === 'profit-analysis' && (profile.role === 'admin' || profile.role === 'owner') && (
         <ProfitAnalysisPage
