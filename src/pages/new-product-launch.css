@@ -1,0 +1,19 @@
+.launch-page { display: grid; gap: 20px; min-width: 0; }
+.launch-page > h1 { margin: 0; }
+.launch-card { min-width: 0; padding: clamp(16px, 3vw, 28px); border: 1px solid #dbe3e9; border-radius: 16px; background: #fff; }
+.launch-card h2 { margin: 0 0 18px; font-size: 1.2rem; }
+.launch-card fieldset { min-width: 0; display: grid; gap: 16px; margin: 0; padding: 0; border: 0; }
+.launch-card label { display: grid; gap: 7px; color: #435363; font-weight: 600; }
+.launch-card input, .launch-card select { box-sizing: border-box; width: 100%; min-height: 44px; padding: 9px 12px; border: 1px solid #ccd7df; border-radius: 9px; background: #fff; color: #182634; font: inherit; }
+.launch-card :is(input, select, button):focus-visible { outline: 2px solid #2166a0; outline-offset: 2px; }
+.launch-card .launch-upload { justify-items: center; text-align: center; gap: 9px; padding: 24px 12px; border: 1px dashed #a8bbc9; border-radius: 12px; background: #f6f9fb; }
+.launch-upload strong { color: #192c3c; font-size: 1.1rem; }
+.launch-upload span { font-size: .86rem; font-weight: 400; }
+.launch-upload input { width: min(100%, 310px); font-size: .86rem; font-weight: 400; }
+.launch-actions, .launch-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.launch-actions { justify-content: flex-end; }
+.launch-page .launch-save { background: #215980; border-color: #215980; color: #fff; padding-inline: 24px; }
+.launch-filters input { flex: 2 1 200px; }
+.launch-filters select { flex: 1 1 140px; }
+.launch-empty { margin: 16px 0 0; padding: 28px 12px; text-align: center; background: #f6f9fb; border-radius: 10px; color: #526575; }
+.launch-table { overflow-x: auto; margin-block: 16px; }

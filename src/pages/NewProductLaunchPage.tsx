@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 import { CANONICAL_SHOP_NAMES } from '../utils/shops';
+import './new-product-launch.css';
 
 type Launch = {
   id: string; sku: string; product_name: string; image_path: string; live_store: string;
@@ -104,11 +105,13 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
   }
 
   const showDetails = !editing || editing.action === 'edit_details';
-  return <section>
+  return <section className="launch-page">
     <h1>New Product Launch</h1>
+    <div className="launch-card">
     <h2>{editing ? { edit_details: '修改新品资料', correct_sku: '纠正 SKU', undo_receipt: '撤销到货确认' }[editing.action] : 'Add New Product'}</h2>
     <form key={editing ? `${editing.row.id}-${editing.action}` : 'new'} onSubmit={save}>
       <fieldset disabled={busy}>
+        {showDetails && <label className="launch-upload"><strong>Upload Product Image</strong><span>上传一张产品主图</span><input aria-label="产品主图" name="image" type="file" accept={imageTypes} required={!editing} /></label>}
         {(!editing || editing.action === 'correct_sku') && <label>SKU <input name="sku" inputMode="numeric" pattern="[0-9]+" required defaultValue={editing?.row.sku} /></label>}
         {showDetails && <>
           <label>产品名称 <input name="product_name" required defaultValue={editing?.row.product_name} /></label>
@@ -116,16 +119,19 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
             <option value="">选择店铺</option>
             {CANONICAL_SHOP_NAMES.map((shop) => <option key={shop}>{shop}</option>)}
           </select></label>
-          <label>唛头名称 <input name="shipping_mark" defaultValue={editing?.row.shipping_mark ?? ''} /></label>
-          <label>主图 <input name="image" type="file" accept={imageTypes} required={!editing} /></label>
+          <label>唛头名称（选填） <input name="shipping_mark" defaultValue={editing?.row.shipping_mark ?? ''} /></label>
+
         </>}
         {editing && <label>操作原因 <input name="reason" required /></label>}
-        <button type="submit">{busy ? '保存中…' : '保存'}</button>
+        <button className="launch-save" type="submit">{busy ? '保存中…' : '保存'}</button>
         {editing && <button type="button" onClick={() => { setEditing(null); setError(''); }}>取消</button>}
       </fieldset>
     </form>
     {error && <p role="alert">{error}</p>}
+    </div>
+    <div className="launch-card">
     <h2>新品列表</h2>
+    <div className="launch-filters">
     <input aria-label="搜索新品" placeholder="SKU 或产品名称" value={search} onChange={(event) => { setPage(0); setSearch(event.target.value); }} />
     <select aria-label="到货状态" value={status} onChange={(event) => { setPage(0); setStatus(event.target.value); }}>
       <option value="">全部状态</option><option value="pending_arrival">Pending Arrival</option><option value="received">Received</option>
@@ -134,10 +140,11 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
       <option value="">全部店铺</option>{CANONICAL_SHOP_NAMES.map((shop) => <option key={shop}>{shop}</option>)}
     </select>
     <button type="button" onClick={() => void load()} disabled={loading}>刷新</button>
+    </div>
     {loadError && <p role="alert">{loadError}</p>}
     {loading && <p role="status">加载中…</p>}
-    {!loading && !loadError && !rows.length && <p>暂无新品记录</p>}
-    <div style={{ overflowX: 'auto' }}>
+    {!loading && !loadError && !rows.length && <p className="launch-empty">暂无新品记录</p>}
+    {rows.length > 0 && <div className="launch-table">
       <table>
         <thead><tr>{['主图', 'SKU', '产品名称', 'Live Store', '唛头名称', '状态', '确认人', '确认时间', '操作'].map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
         <tbody>{rows.map((row) => <tr key={row.id}>
@@ -152,9 +159,10 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
           </>}</td>
         </tr>)}</tbody>
       </table>
-    </div>
+    </div>}
     <button disabled={loading || page === 0} onClick={() => setPage(page - 1)}>上一页</button>
     <button disabled={loading || (page + 1) * 25 >= count} onClick={() => setPage(page + 1)}>下一页</button>
+    </div>
     {history && <section>
       <h2>操作历史</h2><button onClick={() => setHistory(null)}>关闭历史</button>
       {!history.length && <p>暂无操作记录</p>}
