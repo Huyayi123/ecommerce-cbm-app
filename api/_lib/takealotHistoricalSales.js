@@ -74,6 +74,24 @@ export function lastYearNextMonth(referenceDate = new Date()) {
   return { dateFrom, dateTo, months: [dateFrom.slice(0, 7)] };
 }
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchSalesPage(url, apiKey) {
+  const headers = { Accept: 'application/json', 'X-API-Key': apiKey };
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await fetch(url, { headers });
+    if (response.status !== 429 || attempt === 3) return response;
+
+    const retryAfter = response.headers.get('retry-after')?.trim();
+    const retryAfterMs = !retryAfter ? 0 : /^\d+$/.test(retryAfter)
+      ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now();
+    const delay = Math.max(1000 * 2 ** attempt, retryAfterMs || 0);
+    if (delay > 15000) return response;
+    await response.body?.cancel();
+    await wait(delay);
+  }
+}
+
 export async function fetchHistoricalMonthlySales(storeName, apiKey, referenceDate = new Date(), range = previousTwoCompleteMonths(referenceDate)) {
   if (!apiKey) throw new Error(`店铺 ${storeName} 未配置 Takealot API Key`);
   const baseUrl = process.env.TAKEALOT_MARKETPLACE_API_BASE_URL || 'https://marketplace-api.takealot.com/v1';
@@ -95,7 +113,8 @@ export async function fetchHistoricalMonthlySales(storeName, apiKey, referenceDa
       ['order_item_id', 'order_id', 'sku', 'order_date', 'sale_status', 'quantity'].forEach((field) => url.searchParams.append('fields', field));
     }
 
-    const response = await fetch(url, { headers: { Accept: 'application/json', 'X-API-Key': apiKey } });
+    if (page > 1) await wait(250);
+    const response = await fetchSalesPage(url, apiKey);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || payload.error || `Takealot 历史销量请求失败：${response.status}`);
     const rows = salesRowsFromPayload(payload);
