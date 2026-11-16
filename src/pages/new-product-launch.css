@@ -17,3 +17,12 @@
 .launch-filters select { flex: 1 1 140px; }
 .launch-empty { margin: 16px 0 0; padding: 28px 12px; text-align: center; background: #f6f9fb; border-radius: 10px; color: #526575; }
 .launch-table { overflow-x: auto; margin-block: 16px; }
+
+.launch-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.launch-tabs button[aria-pressed="true"] { background: #117e70; border-color: #117e70; color: #fff; }
+.launch-thumbnail { display: grid; place-items: center; width: 112px; height: 112px; border: 1px solid #e1e9ee; border-radius: 10px; overflow: hidden; background: #f7f9fb; }
+.launch-thumbnail img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.launch-table table { min-width: 850px; }
+.launch-table td { padding-block: 12px; vertical-align: middle; }
+.launch-status { display: inline-block; padding: 4px 8px; border-radius: 6px; background: #fff4dc; color: #795207; white-space: nowrap; }
+.launch-status.received { background: #e6f5ef; color: #17614e; }

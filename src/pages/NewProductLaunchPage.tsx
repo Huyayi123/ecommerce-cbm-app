@@ -13,6 +13,7 @@ const bucket = 'new-product-launch';
 const imageTypes = 'image/jpeg,image/png,image/webp';
 
 export function NewProductLaunchPage({ userId, admin }: { userId: string; admin: boolean }) {
+  const [view, setView] = useState<"list" | "add">("list");
   const [rows, setRows] = useState<Launch[]>([]);
   const requestNumber = useRef(0);
   const [search, setSearch] = useState('');
@@ -87,6 +88,7 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
       if (result.error) throw result.error;
       form.reset();
       setEditing(null);
+      setView("list");
       setHistory(null);
       await load();
     } catch (failure) {
@@ -107,7 +109,11 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
   const showDetails = !editing || editing.action === 'edit_details';
   return <section className="launch-page">
     <h1>New Product Launch</h1>
-    <div className="launch-card">
+    <nav className="launch-tabs" aria-label="新品管理">
+      <button type="button" disabled={busy} aria-pressed={view === "list"} onClick={() => { setView("list"); setEditing(null); setError(""); }}>新品列表</button>
+      <button type="button" disabled={busy} aria-pressed={view === "add"} onClick={() => { setView("add"); setEditing(null); setError(""); }}>新增新品</button>
+    </nav>
+    {view === "add" && <div className="launch-card">
     <h2>{editing ? { edit_details: '修改新品资料', correct_sku: '纠正 SKU', undo_receipt: '撤销到货确认' }[editing.action] : 'Add New Product'}</h2>
     <form key={editing ? `${editing.row.id}-${editing.action}` : 'new'} onSubmit={save}>
       <fieldset disabled={busy}>
@@ -124,12 +130,12 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
         </>}
         {editing && <label>操作原因 <input name="reason" required /></label>}
         <button className="launch-save" type="submit">{busy ? '保存中…' : '保存'}</button>
-        {editing && <button type="button" onClick={() => { setEditing(null); setError(''); }}>取消</button>}
+        {editing && <button type="button" onClick={() => { setEditing(null); setView("list"); setError(''); }}>取消</button>}
       </fieldset>
     </form>
     {error && <p role="alert">{error}</p>}
-    </div>
-    <div className="launch-card">
+    </div>}
+    {view === "list" && <div className="launch-card">
     <h2>新品列表</h2>
     <div className="launch-filters">
     <input aria-label="搜索新品" placeholder="SKU 或产品名称" value={search} onChange={(event) => { setPage(0); setSearch(event.target.value); }} />
@@ -148,13 +154,13 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
       <table>
         <thead><tr>{['主图', 'SKU', '产品名称', 'Live Store', '唛头名称', '状态', '确认人', '确认时间', '操作'].map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
         <tbody>{rows.map((row) => <tr key={row.id}>
-          <td>{row.imageUrl ? <img src={row.imageUrl} alt={row.product_name} width={56} height={56} style={{ objectFit: 'contain' }} /> : '—'}</td>
+          <td>{row.imageUrl ? <a className="launch-thumbnail" href={row.imageUrl} target="_blank" rel="noreferrer" aria-label={`查看 ${row.product_name} 主图`}><img src={row.imageUrl} alt={row.product_name} loading="lazy" /></a> : '—'}</td>
           <td>{row.sku}</td><td>{row.product_name}</td><td>{row.live_store}</td><td>{row.shipping_mark || '未填写'}</td>
-          <td>{row.status === 'received' ? 'Received' : 'Pending Arrival'}</td><td>{row.received_by_name ?? '—'}</td>
+          <td><span className={`launch-status ${row.status}`}>{row.status === 'received' ? 'Received' : 'Pending Arrival'}</span></td><td>{row.received_by_name ?? '—'}</td>
           <td>{row.received_at ? new Date(row.received_at).toLocaleString() : '—'}</td>
           <td>{(admin || row.created_by === userId) && <>
-            <button disabled={busy} onClick={() => setEditing({ row, action: 'correct_sku' })}>纠正 SKU</button>
-            <button disabled={busy} onClick={() => setEditing({ row, action: row.status === 'received' ? 'undo_receipt' : 'edit_details' })}>{row.status === 'received' ? '撤销确认' : '编辑资料'}</button>
+            <button disabled={busy} onClick={() => { setEditing({ row, action: 'correct_sku' }); setView("add"); }}>纠正 SKU</button>
+            <button disabled={busy} onClick={() => { setEditing({ row, action: row.status === 'received' ? 'undo_receipt' : 'edit_details' }); setView("add"); }}>{row.status === 'received' ? '撤销确认' : '编辑资料'}</button>
             <button onClick={() => void showHistory(row.id)}>操作历史</button>
           </>}</td>
         </tr>)}</tbody>
@@ -162,8 +168,8 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
     </div>}
     <button disabled={loading || page === 0} onClick={() => setPage(page - 1)}>上一页</button>
     <button disabled={loading || (page + 1) * 25 >= count} onClick={() => setPage(page + 1)}>下一页</button>
-    </div>
-    {history && <section>
+    </div>}
+    {view === "list" && history && <section>
       <h2>操作历史</h2><button onClick={() => setHistory(null)}>关闭历史</button>
       {!history.length && <p>暂无操作记录</p>}
       <ul>{history.map((entry) => <li key={`${entry.created_at}-${entry.action}`}>
