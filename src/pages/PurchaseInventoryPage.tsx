@@ -184,6 +184,7 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
   const [page, setPage] = useState(1);
   const [sortNowMs, setSortNowMs] = useState(() => Date.now());
   const [isMarkingArrived, setIsMarkingArrived] = useState(false);
+  const [arrivalMessage, setArrivalMessage] = useState('');
   const [message, setMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const canSaveDraft = Boolean(draft.sku.trim()) || Boolean(editingId && canSaveMissingSkuHistory);
@@ -463,15 +464,15 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
     if (!canEditData || isMarkingArrived || selectedRecords.length === 0) return;
     const ids = new Set(selectedRecords.map((record) => record.id));
     setIsMarkingArrived(true);
-    setMessage('正在保存到货状态，请稍候…');
+    setArrivalMessage('正在保存到货状态，请稍候…');
     try {
       const changed: PurchaseRecord[] = selectedRecords.map((record) => ({ ...record, status: 'arrived' }));
       if (onSaveRecords) await onSaveRecords(changed);
       else await onChange(records.map((record) => ids.has(record.id) ? { ...record, status: 'arrived' } : record));
       setSelectedIds((current) => new Set([...current].filter((id) => !ids.has(id))));
-      setMessage('已将 ' + changed.length + ' 条记录标记为已到货。');
+      setArrivalMessage(`已将 ${changed.length} 条记录标记为已到货。`);
     } catch (error) {
-      setMessage('批量到货保存失败：' + (error instanceof Error ? error.message : String(error)));
+      setArrivalMessage(`批量标记失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsMarkingArrived(false);
     }
@@ -524,11 +525,21 @@ export function PurchaseInventoryPage({ records, skuItems, onChange, onSaveRecor
             <button type="button" onClick={() => exportPurchaseRecords(regularExportRecords, 'xlsx', '采购在途库存', skuItems)} disabled={regularExportRecords.length === 0}>导出 Excel{selectedRecords.length > 0 ? `（已选 ${selectedRecords.length}）` : ''}</button>
             <button type="button" onClick={() => exportPurchaseRecords(regularExportRecords, 'csv', '采购在途库存', skuItems)} disabled={regularExportRecords.length === 0}>导出 CSV{selectedRecords.length > 0 ? `（已选 ${selectedRecords.length}）` : ''}</button>
             <button type="button" onClick={() => exportBatchPurchaseOrder(selectedBatchRecords, 'xlsx')} disabled={selectedBatchRecords.length === 0}>导出本批次订货表</button>
-            <button type="button" onClick={exportSelectedInspectionChecklist} disabled={selectedRecords.length === 0}>导出验货单（已选 {selectedRecords.length}）</button>
+            <button type="button" onClick={exportSelectedInspectionChecklist} disabled={selectedRecords.length === 0 || isMarkingArrived}>导出验货单（已选 {selectedRecords.length}）</button>
             <button type="button" onClick={() => setSelectedIds(new Set())} disabled={selectedRecords.length === 0}>清空勾选</button>
-            {canEditData && <button type="button" onClick={markSelectedArrived} disabled={selectedIds.size === 0 || isMarkingArrived}>批量标记已到货</button>}
+            {canEditData && (
+              <button type="button" onClick={markSelectedArrived} disabled={selectedRecords.length === 0 || isMarkingArrived} aria-describedby="bulk-arrival-status">
+                {isMarkingArrived ? '正在标记…' : '批量标记已到货'}
+              </button>
+            )}
           </div>
         </div>
+
+        {canEditData && (
+          <p id="bulk-arrival-status" role="status" className="muted-action">
+            {arrivalMessage}
+          </p>
+        )}
 
         <div className="filter-grid inventory-filter-grid">
           <label>采购月份<select value={filters.purchaseMonth} onChange={(event) => setFilters({ ...filters, purchaseMonth: event.target.value })}><option value="recent">最近 3 个月</option><option value="">全部月份</option>{purchaseMonthOptions.map((value) => <option key={value}>{value}</option>)}</select></label>

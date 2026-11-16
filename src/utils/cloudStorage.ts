@@ -1203,7 +1203,7 @@ export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<
   const { data, error } = await requireSupabase()
     .from('purchase_records')
     .upsert(records.map(toPurchaseRecordRow))
-    .select('id,pool_status,is_confirmed');
+    .select('id,pool_status,is_confirmed,status');
   if (error) {
     console.error(error);
     if (isMissingColumnError(error)) {
@@ -1220,6 +1220,9 @@ export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<
     const saved = data?.find((row) => String(row.id) === record.id);
     if (!saved || saved.pool_status !== record.poolStatus || saved.is_confirmed !== record.isConfirmed) {
       throw new Error('采购订单状态未被云端确认，请刷新后核对，勿重复提交。');
+    }
+    if (saved.status !== record.status) {
+      throw new Error(`SKU ${record.sku} 的库存状态未被云端确认，请刷新后核对。`);
     }
   }
 }
