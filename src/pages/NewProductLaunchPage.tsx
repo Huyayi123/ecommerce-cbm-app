@@ -152,7 +152,7 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
     {!loading && !loadError && !rows.length && <p className="launch-empty">暂无新品记录</p>}
     {rows.length > 0 && <div className="launch-table">
       <table>
-        <thead><tr>{['主图', 'SKU', '产品名称', 'Live Store', '唛头名称', '状态', '确认人', '确认时间', '操作'].map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
+        <thead><tr>{['Product Image', 'SKU', 'Product Name', 'Live Store', 'Shipping Mark', 'Status', 'Received By', 'Received At', 'Actions'].map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
         <tbody>{rows.map((row) => <tr key={row.id}>
           <td>{row.imageUrl ? <a className="launch-thumbnail" href={row.imageUrl} target="_blank" rel="noreferrer" aria-label={`查看 ${row.product_name} 主图`}><img src={row.imageUrl} alt={row.product_name} loading="lazy" /></a> : '—'}</td>
           <td>{row.sku}</td><td>{row.product_name}</td><td>{row.live_store}</td><td>{row.shipping_mark || '未填写'}</td>
