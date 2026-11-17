@@ -426,7 +426,7 @@ function App() {
   }
 
   async function persistPurchaseRecordUpdates(changedRecords: PurchaseRecord[], haichuanSync: 'none' | 'pending-inbound' | 'approved-loading' = 'none') {
-    const normalized = normalizePurchaseRecords(assignBuyerEmails(changedRecords)).records;
+    let normalized = normalizePurchaseRecords(assignBuyerEmails(changedRecords)).records;
     const existingById = new Map(purchaseRecords.map((record) => [record.id, record]));
     const newlyHaichuan = normalized.filter((record) => record.loadingType === '海川'
       && record.poolStatus === 'submitted_to_pool'
@@ -439,7 +439,8 @@ function App() {
       throw new Error('尚未绑定海川物流商账号，不能将采购池记录改为海川。');
     }
     try {
-      await upsertPurchaseRecords(normalized);
+      const savedSkus = await upsertPurchaseRecords(normalized);
+      normalized = normalized.map((record) => ({ ...record, sku: savedSkus.get(record.id) ?? record.sku }));
       if (haichuanProfile && newlyHaichuan.length > 0) await createHaichuanInboundItems(newlyHaichuan, haichuanProfile, skuItems);
       if (removedFromHaichuan.length > 0) await deletePendingHaichuanInboundItems(removedFromHaichuan.map((record) => record.id));
       if (haichuanSync === 'pending-inbound') await syncPendingHaichuanInboundItems(normalized);
@@ -881,7 +882,7 @@ function App() {
         <RepricingAlertsPage alerts={repricingAlerts} skuItems={skuItems} onRefresh={loadCloudData} />
       )}
       {currentPage === 'new-product-launch' && (
-        <NewProductLaunchPage userId={profile.id} admin={profile.role === 'admin' || profile.role === 'owner'} />
+        <NewProductLaunchPage purchaseRecords={purchaseRecords} onRefreshPurchases={loadCloudData} userId={profile.id} admin={profile.role === 'admin' || profile.role === 'owner'} />
       )}
       {currentPage === 'profit-analysis' && (profile.role === 'admin' || profile.role === 'owner') && (
         <ProfitAnalysisPage

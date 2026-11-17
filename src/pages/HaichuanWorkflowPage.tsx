@@ -1,3 +1,5 @@
+import { BarcodeScanControl } from '../components/BarcodeScanControl';
+import { filterByBarcodeSku } from '../utils/barcodeMatching';
 import { RefreshAllAlibabaLogistics } from '../components/RefreshAllAlibabaLogistics';
 import { PurchaseLogisticsBadge } from '../components/PurchaseLogisticsBadge';
 import { alibabaLogisticsEnabled, useAlibabaLogistics } from '../utils/alibabaLogistics';
@@ -131,10 +133,12 @@ export function HaichuanWorkflowPage({
   const [quantityDraft, setQuantityDraft] = useState('');
   const [deleteLot, setDeleteLot] = useState<HaichuanWarehouseLot | null>(null);
 
+  const [scanSku, setScanSku] = useState('');
   const pendingInbound = useMemo(() => data.inboundItems.filter((item) => item.status === 'pending_receipt' && includesSearch([
     item.sku, item.productName, item.englishName, item.internalCode, item.purchaseNote,
     ...item.productDetails.flatMap((detail) => [detail.sku, detail.productName, detail.englishName, detail.internalCode]),
   ], search)), [data.inboundItems, search]);
+  const scannedInbound = filterByBarcodeSku(pendingInbound, scanSku);
   const visibleLots = useMemo(() => data.warehouseLots.filter((lot) => lot.remainingCartonCount > 0 && includesSearch([
     lot.sku, lot.productName, lot.englishName, lot.internalCode,
     ...lot.productDetails.flatMap((detail) => [detail.sku, detail.productName, detail.englishName, detail.internalCode]),
@@ -479,12 +483,19 @@ export function HaichuanWorkflowPage({
         <div className="search-bar"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索 SKU、产品名称、英文名称、内部编号" /></div>
       )}
 
+      {tab === 'inbound' && isLogistics && <BarcodeScanControl
+        value={scanSku}
+        matchCount={scannedInbound.length}
+        targetLabel="待入仓"
+        onScan={(sku) => { setSearch(''); setScanSku(sku); }}
+        onClear={() => setScanSku('')}
+      />}
       {tab === 'inbound' && isLogistics && (
         <div className="table-wrap haichuan-table-wrap">
           <table className="haichuan-table">
             <thead><tr><th className="haichuan-pin haichuan-pin-product">{labels.productName}</th><th className="haichuan-pin haichuan-pin-english">英文名称</th><th className="haichuan-pin haichuan-pin-code">{labels.internalCode}</th><th className="haichuan-pin haichuan-pin-sku">{labels.sku}</th><th>{labels.purchaseTotalQuantity}</th><th>申报总件数</th><th>已入库件数</th><th>参考剩余件数</th><th>{labels.unitsPerCarton}</th><th>{labels.tailQuantity}</th><th>{labels.totalCbm}</th><th>采购备注</th><th>本次入库件数</th><th>海川备注</th><th>{labels.status}</th><th>{labels.actions}</th>{alibabaLogisticsEnabled && <th>1688物流状态</th>}</tr></thead>
             <tbody>
-              {pendingInbound.map((item) => {
+              {scannedInbound.map((item) => {
                 const mainDetail = mainProductDetail(item.productDetails);
                 return <Fragment key={item.id}>
                   <tr>
@@ -503,7 +514,7 @@ export function HaichuanWorkflowPage({
                   </tr>)}
                 </Fragment>;
               })}
-              {pendingInbound.length === 0 && <tr><td colSpan={alibabaLogisticsEnabled ? 17 : 16}>暂无待入仓记录</td></tr>}
+              {scannedInbound.length === 0 && <tr><td colSpan={alibabaLogisticsEnabled ? 17 : 16}>暂无待入仓记录</td></tr>}
             </tbody>
           </table>
         </div>

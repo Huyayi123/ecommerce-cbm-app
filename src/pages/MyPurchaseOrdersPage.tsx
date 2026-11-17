@@ -641,8 +641,11 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
     };
   }, [mixedDrafts]);
 
+  const newOrderId = useRef<string | null>(null);
+  const savingNewOrder = useRef(false);
+
   async function addNewOrder() {
-    if (isViewer) return;
+    if (isViewer || savingNewOrder.current) return;
     if (!profile.buyerName.trim()) {
       setMessage('请先在“账号采购人绑定”里填写采购人，再新增个人采购订单。');
       return;
@@ -654,11 +657,12 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       return;
     }
 
+    const id = newOrderId.current ??= crypto.randomUUID();
     const record: PurchaseRecord = withPurchaseTotals({
-      id: crypto.randomUUID(),
+      id,
       internalCode: '',
       manufacturerName: newOrder.manufacturerName.trim(),
-      sku,
+      sku: isNewSkuValue(sku) ? `new${id.replaceAll("-", "")}` : sku,
       productName: newOrder.productName.trim(),
       englishName: newOrder.englishName.trim(),
       imageUrl: newOrder.imageUrl.trim(),
@@ -703,14 +707,18 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
       note: newOrder.note.trim(),
     });
 
+    savingNewOrder.current = true;
     try {
       if (onSaveRecords) await onSaveRecords([record]);
       else await onChange([record, ...records]);
+      newOrderId.current = null;
       setNewOrder(createEmptyDraft());
       setMessage('已新增采购订单。');
     } catch (error) {
       console.error(error);
       setMessage(`新增失败：${formatErrorMessage(error)}`);
+    } finally {
+      savingNewOrder.current = false;
     }
   }
 

@@ -708,7 +708,9 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     id: normalized.id,
     internal_code: normalized.internalCode || null,
     manufacturer_name: normalized.manufacturerName,
-    sku: normalized.sku,
+    sku: /^new[0-9]{5}$/i.test(normalized.sku) && !normalized.logisticsSourceRecordId
+      ? `new${normalized.id.replaceAll('-', '')}`
+      : normalized.sku,
     product_name: normalized.productName,
     image_url: normalized.imageUrl,
     shop_name: normalized.shopName,
@@ -1197,13 +1199,13 @@ export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise
   }
 }
 
-export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<void> {
-  if (records.length === 0) return;
+export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<Map<string, string>> {
+  if (records.length === 0) return new Map();
   const expectedIds = new Set(records.map((record) => record.id));
   const { data, error } = await requireSupabase()
     .from('purchase_records')
     .upsert(records.map(toPurchaseRecordRow))
-    .select('id,pool_status,is_confirmed,status');
+    .select('id,sku,pool_status,is_confirmed,status');
   if (error) {
     console.error(error);
     if (isMissingColumnError(error)) {
@@ -1225,6 +1227,7 @@ export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<
       throw new Error(`SKU ${record.sku} 的库存状态未被云端确认，请刷新后核对。`);
     }
   }
+  return new Map((data ?? []).map((row) => [String(row.id), String(row.sku)]));
 }
 
 export async function deletePurchaseRecords(ids: string[]): Promise<void> {

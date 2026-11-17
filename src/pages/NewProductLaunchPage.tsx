@@ -1,3 +1,4 @@
+import type { PurchaseRecord } from '../types';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 import { CANONICAL_SHOP_NAMES } from '../utils/shops';
@@ -12,7 +13,9 @@ type Action = 'correct_sku' | 'undo_receipt' | 'edit_details';
 const bucket = 'new-product-launch';
 const imageTypes = 'image/jpeg,image/png,image/webp';
 
-export function NewProductLaunchPage({ userId, admin }: { userId: string; admin: boolean }) {
+export function NewProductLaunchPage({ userId, admin, purchaseRecords, onRefreshPurchases }: {
+  userId: string; admin: boolean; purchaseRecords: PurchaseRecord[]; onRefreshPurchases: () => Promise<void>;
+}) {
   const [view, setView] = useState<"list" | "add">("list");
   const [rows, setRows] = useState<Launch[]>([]);
   const requestNumber = useRef(0);
@@ -56,6 +59,30 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
   }, [page, search, status, store]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const shipmentsByPurchase = new Map<string, PurchaseRecord[]>();
+  for (const record of purchaseRecords) {
+    if (!record.logisticsSourceRecordId || record.status === 'cancelled') continue;
+    const shipments = shipmentsByPurchase.get(record.logisticsSourceRecordId) ?? [];
+    shipments.push(record);
+    shipmentsByPurchase.set(record.logisticsSourceRecordId, shipments);
+  }
+
+  function arrivalStatus(record: PurchaseRecord) {
+    const shipments = shipmentsByPurchase.get(record.id);
+    if (!shipments?.length) return record.status;
+    if (shipments.every((shipment) => shipment.status === 'arrived')) return 'arrived';
+    if (shipments.some((shipment) => shipment.status === 'arrived' || shipment.status === 'in_transit')) return 'in_transit';
+    return record.status;
+  }
+
+  const purchaseTerm = search.trim().toLowerCase();
+  const newPurchases = purchaseRecords.filter((record) => {
+    if (!/^new[0-9]{5}$/i.test(record.sku) || record.logisticsSourceRecordId || record.status === 'cancelled') return false;
+    if (store && record.shopName !== store) return false;
+    if (status && (status === 'received') !== (arrivalStatus(record) === 'arrived')) return false;
+    return [record.sku, record.productName, record.englishName].some((value) => value.toLowerCase().includes(purchaseTerm));
+  });
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -138,24 +165,29 @@ export function NewProductLaunchPage({ userId, admin }: { userId: string; admin:
     {view === "list" && <div className="launch-card">
     <h2>新品列表</h2>
     <div className="launch-filters">
-    <input aria-label="搜索新品" placeholder="SKU 或产品名称" value={search} onChange={(event) => { setPage(0); setSearch(event.target.value); }} />
+    <input aria-label="搜索新品" placeholder="SKU、入仓单码或产品名称" value={search} onChange={(event) => { setPage(0); setSearch(event.target.value); }} />
     <select aria-label="到货状态" value={status} onChange={(event) => { setPage(0); setStatus(event.target.value); }}>
       <option value="">全部状态</option><option value="pending_arrival">Pending Arrival</option><option value="received">Received</option>
     </select>
     <select aria-label="店铺" value={store} onChange={(event) => { setPage(0); setStore(event.target.value); }}>
       <option value="">全部店铺</option>{CANONICAL_SHOP_NAMES.map((shop) => <option key={shop}>{shop}</option>)}
     </select>
-    <button type="button" onClick={() => void load()} disabled={loading}>刷新</button>
+    <button type="button" onClick={() => { void load(); void onRefreshPurchases(); }} disabled={loading}>刷新</button>
     </div>
     {loadError && <p role="alert">{loadError}</p>}
     {loading && <p role="status">加载中…</p>}
-    {!loading && !loadError && !rows.length && <p className="launch-empty">暂无新品记录</p>}
-    {rows.length > 0 && <div className="launch-table">
+    {!loading && !loadError && !rows.length && !newPurchases.length && <p className="launch-empty">暂无新品记录</p>}
+    {(rows.length > 0 || (page === 0 && newPurchases.length > 0)) && <div className="launch-table">
       <table>
-        <thead><tr>{['Product Image', 'SKU', 'Product Name', 'Live Store', 'Shipping Mark', 'Status', 'Received By', 'Received At', 'Actions'].map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
-        <tbody>{rows.map((row) => <tr key={row.id}>
+        <thead><tr>{['Product Image', 'SKU', '新品入仓单码', 'Product Name', 'Live Store', 'Shipping Mark', 'Status', 'Received By', 'Received At', 'Actions'].map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
+        <tbody>{page === 0 && newPurchases.map((record) => <tr key={record.id}>
+          <td>{record.imageUrl ? <img className="launch-thumbnail" src={record.imageUrl} alt={record.productName || record.englishName} loading="lazy" /> : '—'}</td>
+          <td>—</td><td>{record.sku}</td><td>{record.productName || record.englishName}</td><td>{record.shopName || '—'}</td><td>—</td>
+          <td>{arrivalStatus(record) === 'arrived' ? '已到货' : arrivalStatus(record) === 'in_transit' ? '海运在途' : '待到货'}</td>
+          <td>—</td><td>—</td><td>—</td>
+        </tr>)}{rows.map((row) => <tr key={row.id}>
           <td>{row.imageUrl ? <a className="launch-thumbnail" href={row.imageUrl} target="_blank" rel="noreferrer" aria-label={`查看 ${row.product_name} 主图`}><img src={row.imageUrl} alt={row.product_name} loading="lazy" /></a> : '—'}</td>
-          <td>{row.sku}</td><td>{row.product_name}</td><td>{row.live_store}</td><td>{row.shipping_mark || '未填写'}</td>
+          <td>{row.sku}</td><td>—</td><td>{row.product_name}</td><td>{row.live_store}</td><td>{row.shipping_mark || '未填写'}</td>
           <td><span className={`launch-status ${row.status}`}>{row.status === 'received' ? 'Received' : 'Pending Arrival'}</span></td><td>{row.received_by_name ?? '—'}</td>
           <td>{row.received_at ? new Date(row.received_at).toLocaleString() : '—'}</td>
           <td>{(admin || row.created_by === userId) && <>
