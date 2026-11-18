@@ -32,6 +32,24 @@
 .force-haichuan-handheld .haichuan-handheld-shell .handheld-workflow-tabs button { min-height: 44px; padding: 4px; }
 .force-haichuan-handheld .haichuan-handheld-shell > .app-content { padding-bottom: 76px; }
 
+.force-haichuan-handheld .haichuan-handheld-shell .app-header { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-bottom: 18px; }
+.force-haichuan-handheld .haichuan-handheld-shell .app-header h1 { font-size: 25px; line-height: 1.2; }
+.force-haichuan-handheld .haichuan-handheld-shell .user-panel { width: 100%; justify-content: flex-end; gap: 8px; padding: 8px; }
+.force-haichuan-handheld .haichuan-handheld-shell .section-heading { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.force-haichuan-handheld .haichuan-handheld-shell .section-heading-actions { width: 100%; display: grid; gap: 8px; }
+.force-haichuan-handheld .haichuan-handheld-shell .section-heading-actions button, .force-haichuan-handheld .haichuan-handheld-shell .search-bar input { width: 100%; min-height: 44px; }
+.force-haichuan-handheld .haichuan-handheld-shell .search-bar input, .force-haichuan-handheld .haichuan-handheld-shell .mobile-record-form input { padding: 9px 10px; min-height: 44px; border: 1px solid #aebdc7; border-radius: 7px; font-size: 16px; }
+.force-haichuan-handheld .haichuan-handheld-shell .mobile-record-card { background: #fff; border-radius: 12px; padding: 14px; }
+.force-haichuan-handheld .haichuan-handheld-shell .mobile-record-heading { justify-content: space-between; align-items: flex-start; }
+.force-haichuan-handheld .haichuan-handheld-shell .mobile-record-heading strong { font-size: 17px; line-height: 1.35; }
+.force-haichuan-handheld .haichuan-handheld-shell .mobile-record-heading span, .force-haichuan-handheld .haichuan-handheld-shell .mobile-record-metrics dt { color: #586977; font-size: 13px; }
+.force-haichuan-handheld .haichuan-handheld-shell .mobile-record-heading .mobile-status-chip { padding: 4px 8px; border-radius: 20px; background: #eaf7f3; color: #126d60; font-weight: 700; }
+.force-haichuan-handheld .haichuan-handheld-shell .mobile-record-metrics > div { background: #f1f6f8; border-radius: 9px; padding: 9px; }
+.force-haichuan-handheld .haichuan-handheld-shell .mobile-record-metrics dd { font-size: 17px; margin-top: 3px; }
+.force-haichuan-handheld .haichuan-handheld-shell .mobile-record-form label { display: grid; gap: 5px; color: #465561; }
+.force-haichuan-handheld .haichuan-handheld-shell .mobile-record-actions button, .force-haichuan-handheld .haichuan-handheld-shell .barcode-mode-switch button { min-height: 44px; }
+.force-haichuan-handheld .haichuan-handheld-shell .handheld-workflow-tabs button.active { background: #e7f2f0; color: #126d60; font-weight: 700; }
+
 @media (max-width: 760px), (max-device-width: 600px) {
   .haichuan-handheld-shell { display:block; width:100%; }
   .haichuan-handheld-shell > .side-nav { display:none; }
@@ -58,4 +76,21 @@
   .haichuan-handheld-shell .handheld-workflow-tabs { position: fixed; z-index: 10; bottom: 0; left: 0; right: 0; margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 6px; background: #fff; border-top: 1px solid #dce4ea; }
   .haichuan-handheld-shell .handheld-workflow-tabs button { min-height: 44px; padding: 4px; }
   .haichuan-handheld-shell > .app-content { padding-bottom: 76px; }
+  .haichuan-handheld-shell .app-header { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-bottom: 18px; }
+  .haichuan-handheld-shell .app-header h1 { font-size: 25px; line-height: 1.2; }
+  .haichuan-handheld-shell .user-panel { width: 100%; justify-content: flex-end; gap: 8px; padding: 8px; }
+  .haichuan-handheld-shell .section-heading { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .haichuan-handheld-shell .section-heading-actions { width: 100%; display: grid; gap: 8px; }
+  .haichuan-handheld-shell .section-heading-actions button, .haichuan-handheld-shell .search-bar input { width: 100%; min-height: 44px; }
+  .haichuan-handheld-shell .search-bar input, .haichuan-handheld-shell .mobile-record-form input { padding: 9px 10px; min-height: 44px; border: 1px solid #aebdc7; border-radius: 7px; font-size: 16px; }
+  .haichuan-handheld-shell .mobile-record-card { background: #fff; border-radius: 12px; padding: 14px; }
+  .haichuan-handheld-shell .mobile-record-heading { justify-content: space-between; align-items: flex-start; }
+  .haichuan-handheld-shell .mobile-record-heading strong { font-size: 17px; line-height: 1.35; }
+  .haichuan-handheld-shell .mobile-record-heading span, .haichuan-handheld-shell .mobile-record-metrics dt { color: #586977; font-size: 13px; }
+  .haichuan-handheld-shell .mobile-record-heading .mobile-status-chip { padding: 4px 8px; border-radius: 20px; background: #eaf7f3; color: #126d60; font-weight: 700; }
+  .haichuan-handheld-shell .mobile-record-metrics > div { background: #f1f6f8; border-radius: 9px; padding: 9px; }
+  .haichuan-handheld-shell .mobile-record-metrics dd { font-size: 17px; margin-top: 3px; }
+  .haichuan-handheld-shell .mobile-record-form label { display: grid; gap: 5px; color: #465561; }
+  .haichuan-handheld-shell .mobile-record-actions button, .haichuan-handheld-shell .barcode-mode-switch button { min-height: 44px; }
+  .haichuan-handheld-shell .handheld-workflow-tabs button.active { background: #e7f2f0; color: #126d60; font-weight: 700; }
 }
