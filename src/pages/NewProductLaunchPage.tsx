@@ -1,3 +1,4 @@
+import { BarcodeGenerator } from '../components/BarcodeGenerator';
 import type { PurchaseRecord } from '../types';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
@@ -16,7 +17,7 @@ const imageTypes = 'image/jpeg,image/png,image/webp';
 export function NewProductLaunchPage({ userId, admin, purchaseRecords, onRefreshPurchases }: {
   userId: string; admin: boolean; purchaseRecords: PurchaseRecord[]; onRefreshPurchases: () => Promise<void>;
 }) {
-  const [view, setView] = useState<"list" | "add">("list");
+  const [view, setView] = useState<"list" | "add" | "barcode">("list");
   const [rows, setRows] = useState<Launch[]>([]);
   const requestNumber = useRef(0);
   const [search, setSearch] = useState('');
@@ -139,7 +140,9 @@ export function NewProductLaunchPage({ userId, admin, purchaseRecords, onRefresh
     <nav className="launch-tabs" aria-label="新品管理">
       <button type="button" disabled={busy} aria-pressed={view === "list"} onClick={() => { setView("list"); setEditing(null); setError(""); }}>新品列表</button>
       <button type="button" disabled={busy} aria-pressed={view === "add"} onClick={() => { setView("add"); setEditing(null); setError(""); }}>新增新品</button>
+      <button type="button" disabled={busy} aria-pressed={view === "barcode"} onClick={() => { setView("barcode"); setEditing(null); setError(""); }}>条形码生成</button>
     </nav>
+    {view === "barcode" && <BarcodeGenerator />}
     {view === "add" && <div className="launch-card">
     <h2>{editing ? { edit_details: '修改新品资料', correct_sku: '纠正 SKU', undo_receipt: '撤销到货确认' }[editing.action] : 'Add New Product'}</h2>
     <form key={editing ? `${editing.row.id}-${editing.action}` : 'new'} onSubmit={save}>

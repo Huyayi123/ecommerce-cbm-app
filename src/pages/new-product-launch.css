@@ -26,3 +26,14 @@
 .launch-table td { padding-block: 12px; vertical-align: middle; }
 .launch-status { display: inline-block; padding: 4px 8px; border-radius: 6px; background: #fff4dc; color: #795207; white-space: nowrap; }
 .launch-status.received { background: #e6f5ef; color: #17614e; }
+
+.launch-barcode-generator input { display: block; width: min(100%, 24rem); }
+.launch-barcode-preview { margin: 1rem 0; }
+.launch-barcode-preview img, .launch-barcode-print img { max-width: 100%; height: auto; }
+.launch-barcode-actions { display: flex; align-items: center; gap: 1rem; }
+.launch-barcode-print { display: none; }
+
+@media print {
+  body:has(> .launch-barcode-print) > :not(.launch-barcode-print) { display: none !important; }
+  .launch-barcode-print { display: block; text-align: center; }
+}
