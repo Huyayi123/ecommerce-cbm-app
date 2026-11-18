@@ -737,7 +737,7 @@ function App() {
 
 
   return (
-    <main className="app-shell">
+    <main className={profile.role === 'logistics' && profile.logisticsProviderType === 'haichuan' ? 'app-shell haichuan-handheld-shell' : 'app-shell'}>
       <aside className="side-nav" aria-label="主导航">
         <div className="side-nav-title">
           <strong>电商工作台</strong>
