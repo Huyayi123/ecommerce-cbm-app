@@ -10,6 +10,7 @@ type Launch = {
   shipping_mark: string | null; status: 'pending_arrival' | 'received'; created_by: string;
   received_by_name: string | null; received_at: string | null; version: number; imageUrl?: string;
 };
+type InboundDetails = { inbound_code: string; official_sku: string; live_store: string; shipping_mark: string; image_path: string | null; imageUrl?: string };
 type Action = 'correct_sku' | 'undo_receipt' | 'edit_details';
 const bucket = 'new-product-launch';
 const imageTypes = 'image/jpeg,image/png,image/webp';
@@ -17,7 +18,9 @@ const imageTypes = 'image/jpeg,image/png,image/webp';
 export function NewProductLaunchPage({ userId, admin, purchaseRecords, onRefreshPurchases }: {
   userId: string; admin: boolean; purchaseRecords: PurchaseRecord[]; onRefreshPurchases: () => Promise<void>;
 }) {
-  const [view, setView] = useState<"list" | "add" | "barcode">("list");
+  const [inboundDetails, setInboundDetails] = useState<Record<string, InboundDetails>>({});
+  const [editingInbound, setEditingInbound] = useState<PurchaseRecord | null>(null);
+  const [view, setView] = useState<"list" | "add" | "barcode" | "inbound-edit">("list");
   const [rows, setRows] = useState<Launch[]>([]);
   const requestNumber = useRef(0);
   const [search, setSearch] = useState('');
@@ -77,12 +80,68 @@ export function NewProductLaunchPage({ userId, admin, purchaseRecords, onRefresh
     return record.status;
   }
 
+  const loadInboundDetails = useCallback(async () => {
+    if (!supabase) return;
+    const result = await supabase.from('new_product_inbound_details').select('*');
+    if (result.error) throw result.error;
+    const details = result.data as InboundDetails[];
+    const paths = details.flatMap((detail) => detail.image_path ? [detail.image_path] : []);
+    const images = paths.length ? await supabase.storage.from(bucket).createSignedUrls(paths, 3600) : null;
+    const urls = new Map(images?.data?.map((image) => [image.path, image.signedUrl]));
+    setInboundDetails(Object.fromEntries(details.map((detail) => [
+      detail.inbound_code, { ...detail, imageUrl: detail.image_path ? urls.get(detail.image_path) ?? undefined : undefined },
+    ])));
+  }, []);
+
+  useEffect(() => {
+    void loadInboundDetails().catch((failure) => setError(failure.message));
+  }, [loadInboundDetails]);
+
+  async function saveInboundDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !editingInbound || busy) return;
+    const data = new FormData(event.currentTarget);
+    const value = (field: string) => String(data.get(field) ?? '').trim();
+    const code = editingInbound.sku.toLowerCase();
+    let imagePath = inboundDetails[code]?.image_path ?? null;
+    setBusy(true);
+    setError('');
+    try {
+      const file = data.get('image');
+      if (file instanceof File && file.size) {
+        if (!imageTypes.split(',').includes(file.type) || file.size > 5 * 1024 * 1024) {
+          throw new Error('请选择 5 MB 以内的 JPG、PNG 或 WebP 图片');
+        }
+        imagePath = userId + '/' + crypto.randomUUID();
+        const uploaded = await supabase.storage.from(bucket).upload(imagePath, file);
+        if (uploaded.error) throw uploaded.error;
+      }
+      const result = await supabase.from('new_product_inbound_details').upsert({
+        inbound_code: code,
+        official_sku: value('sku'),
+        live_store: value('store'),
+        shipping_mark: value('mark'),
+        image_path: imagePath,
+      });
+      if (result.error) throw result.error;
+      await loadInboundDetails();
+      setEditingInbound(null);
+      setView("list");
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const purchaseTerm = search.trim().toLowerCase();
   const newPurchases = purchaseRecords.filter((record) => {
     if (!/^new[0-9]{5}$/i.test(record.sku) || record.logisticsSourceRecordId || record.status === 'cancelled') return false;
-    if (store && record.shopName !== store) return false;
+    if (record.poolStatus !== 'submitted_to_pool' && record.poolStatus !== 'sent_to_inventory') return false;
+    const details = inboundDetails[record.sku.toLowerCase()];
+    if (store && (details?.live_store ?? record.shopName) !== store) return false;
     if (status && (status === 'received') !== (arrivalStatus(record) === 'arrived')) return false;
-    return [record.sku, record.productName, record.englishName].some((value) => value.toLowerCase().includes(purchaseTerm));
+    return [record.sku, record.productName, record.englishName, details?.official_sku ?? '', details?.shipping_mark ?? ''].some((value) => value.toLowerCase().includes(purchaseTerm));
   });
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -143,6 +202,18 @@ export function NewProductLaunchPage({ userId, admin, purchaseRecords, onRefresh
       <button type="button" disabled={busy} aria-pressed={view === "barcode"} onClick={() => { setView("barcode"); setEditing(null); setError(""); }}>条形码生成</button>
     </nav>
     {view === "barcode" && <BarcodeGenerator />}
+    {view === "inbound-edit" && editingInbound && <form className="launch-card launch-form" onSubmit={saveInboundDetails}>
+      <h2>编辑资料 · {editingInbound.sku}</h2>
+      <label>产品图片<input name="image" type="file" accept={imageTypes} /></label>
+      <label>正式 SKU<input name="sku" inputMode="numeric" pattern="[0-9]*" defaultValue={inboundDetails[editingInbound.sku.toLowerCase()]?.official_sku} /></label>
+      <label>上架店铺<select name="store" defaultValue={inboundDetails[editingInbound.sku.toLowerCase()]?.live_store ?? editingInbound.shopName}>
+        <option value="">未填写</option>{CANONICAL_SHOP_NAMES.map((name) => <option key={name}>{name}</option>)}
+      </select></label>
+      <label>Shipping Mark<input name="mark" defaultValue={inboundDetails[editingInbound.sku.toLowerCase()]?.shipping_mark} /></label>
+      {error && <p role="alert">{error}</p>}
+      <button type="submit" disabled={busy}>保存</button>
+      <button type="button" disabled={busy} onClick={() => { setEditingInbound(null); setView("list"); setError(""); }}>取消</button>
+    </form>}
     {view === "add" && <div className="launch-card">
     <h2>{editing ? { edit_details: '修改新品资料', correct_sku: '纠正 SKU', undo_receipt: '撤销到货确认' }[editing.action] : 'Add New Product'}</h2>
     <form key={editing ? `${editing.row.id}-${editing.action}` : 'new'} onSubmit={save}>
@@ -183,12 +254,15 @@ export function NewProductLaunchPage({ userId, admin, purchaseRecords, onRefresh
     {(rows.length > 0 || (page === 0 && newPurchases.length > 0)) && <div className="launch-table">
       <table>
         <thead><tr>{['Product Image', 'SKU', '新品入仓单码', 'Product Name', 'Live Store', 'Shipping Mark', 'Status', 'Received By', 'Received At', 'Actions'].map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
-        <tbody>{page === 0 && newPurchases.map((record) => <tr key={record.id}>
-          <td>{record.imageUrl ? <img className="launch-thumbnail" src={record.imageUrl} alt={record.productName || record.englishName} loading="lazy" /> : '—'}</td>
-          <td>—</td><td>{record.sku}</td><td>{record.productName || record.englishName}</td><td>{record.shopName || '—'}</td><td>—</td>
+        <tbody>{page === 0 && newPurchases.map((record) => {
+          const details = inboundDetails[record.sku.toLowerCase()];
+          const imageUrl = details?.imageUrl || record.imageUrl;
+          return <tr key={record.id}>
+          <td>{imageUrl ? <img className="launch-thumbnail" src={imageUrl} alt={record.productName || record.englishName} loading="lazy" /> : '—'}</td>
+          <td>{details?.official_sku || '—'}</td><td>{record.sku}</td><td>{record.productName || record.englishName}</td><td>{(details?.live_store ?? record.shopName) || '—'}</td><td>{details?.shipping_mark || '—'}</td>
           <td>{arrivalStatus(record) === 'arrived' ? '已到货' : arrivalStatus(record) === 'in_transit' ? '海运在途' : '待到货'}</td>
-          <td>—</td><td>—</td><td>—</td>
-        </tr>)}{rows.map((row) => <tr key={row.id}>
+          <td>—</td><td>—</td><td><button type="button" onClick={() => { setEditingInbound(record); setError(""); setView("inbound-edit"); }}>编辑资料</button></td>
+        </tr>; })}{rows.map((row) => <tr key={row.id}>
           <td>{row.imageUrl ? <a className="launch-thumbnail" href={row.imageUrl} target="_blank" rel="noreferrer" aria-label={`查看 ${row.product_name} 主图`}><img src={row.imageUrl} alt={row.product_name} loading="lazy" /></a> : '—'}</td>
           <td>{row.sku}</td><td>—</td><td>{row.product_name}</td><td>{row.live_store}</td><td>{row.shipping_mark || '未填写'}</td>
           <td><span className={`launch-status ${row.status}`}>{row.status === 'received' ? 'Received' : 'Pending Arrival'}</span></td><td>{row.received_by_name ?? '—'}</td>
