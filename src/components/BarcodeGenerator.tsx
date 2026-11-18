@@ -19,7 +19,7 @@ export function BarcodeGenerator() {
       try {
         const writer = await import('zxing-wasm/writer');
         writer.prepareZXingModule(writerOptions);
-        const { image } = await writer.writeBarcode(input, { format: 'Code128', scale: 3, addHRT: true, addQuietZones: true });
+        const { image } = await writer.writeBarcode(input, { format: 'Code128', scale: 5, addHRT: true, addQuietZones: true });
         if (!image) throw new Error('Barcode image unavailable');
         if (!active) return;
         url = URL.createObjectURL(image);
