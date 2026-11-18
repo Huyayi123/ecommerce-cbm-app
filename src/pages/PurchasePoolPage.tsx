@@ -476,15 +476,19 @@ export function PurchasePoolPage({
     return confirmedEditFields.has(field) ? next : withPurchaseTotals(next);
   }
 
+  function canEditRecordField(record: PurchaseRecord, field: EditablePoolField) {
+    return canEditField(field) && (field !== 'sku' || !/^new[0-9]{5}$/i.test(record.sku));
+  }
+
   async function savePoolRecord(record: PurchaseRecord, field: EditablePoolField) {
     const key = draftKey(record.id, field);
-    if (!(key in drafts) || !canEditField(field) || !activePool) return;
+    if (!(key in drafts) || !canEditRecordField(record, field) || !activePool) return;
     await savePoolRecordValue(record, field, drafts[key]);
   }
 
   async function savePoolRecordValue(record: PurchaseRecord, field: EditablePoolField, value: string) {
     const key = draftKey(record.id, field);
-    if (!canEditField(field) || !activePool) return;
+    if (!canEditRecordField(record, field) || !activePool) return;
     const previousValue = savedValueFor(record, field);
     const shouldRecalculateHaichuanCartons = record.loadingType === '海川'
       && (field === 'cartonCount' || field === 'tailQuantity')
@@ -559,7 +563,7 @@ export function PurchasePoolPage({
   }
 
   function editableCell(record: PurchaseRecord, field: EditablePoolField, type = 'text') {
-    if (!canEditField(field)) return <span>{valueFor(record, field)}</span>;
+    if (!canEditRecordField(record, field)) return <span>{valueFor(record, field)}</span>;
     if (field === 'status') {
       return (
         <select
