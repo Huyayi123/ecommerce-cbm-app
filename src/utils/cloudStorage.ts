@@ -708,9 +708,7 @@ function toPurchaseRecordRow(record: PurchaseRecord): PurchaseRecordRow {
     id: normalized.id,
     internal_code: normalized.internalCode || null,
     manufacturer_name: normalized.manufacturerName,
-    sku: /^new[0-9]{5}$/i.test(normalized.sku) && !normalized.logisticsSourceRecordId
-      ? `new${normalized.id.replaceAll('-', '')}`
-      : normalized.sku,
+    sku: normalized.sku,
     product_name: normalized.productName,
     image_url: normalized.imageUrl,
     shop_name: normalized.shopName,
@@ -1184,11 +1182,31 @@ export async function appendPurchaseRecordsToPool(pool: PurchasePool, records: P
   return nextPool;
 }
 
-export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise<void> {
+async function writePurchaseRecords(records: PurchaseRecord[]) {
   const client = requireSupabase();
+  const columns = 'id,sku,pool_status,is_confirmed,status';
+  const rows = records.map(toPurchaseRecordRow);
+  const existingNewRows = rows.filter((row) => /^new[0-9]{5}$/i.test(row.sku) && !row.logistics_source_record_id);
+  const existingNewIds = new Set(existingNewRows.map((row) => row.id));
+  const upsertRows = rows.filter((row) => !existingNewIds.has(row.id));
+  const batch = upsertRows.length
+    ? await client.from('purchase_records').upsert(upsertRows).select(columns)
+    : { data: [], error: null };
+  if (batch.error) return batch;
 
+  const data = [...(batch.data ?? [])];
+  for (const row of existingNewRows) {
+    const { id, sku, ...changes } = row;
+    const result = await client.from('purchase_records').update(changes).eq('id', id).eq('sku', sku).select(columns).single();
+    if (result.error) return { data: null, error: result.error };
+    data.push(result.data);
+  }
+  return { data, error: null };
+}
+
+export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise<void> {
   if (records.length > 0) {
-    const { error } = await client.from('purchase_records').upsert(records.map(toPurchaseRecordRow));
+    const { error } = await writePurchaseRecords(records);
     if (error) {
       console.error(error);
       if (isMissingColumnError(error)) {
@@ -1202,10 +1220,7 @@ export async function replacePurchaseRecords(records: PurchaseRecord[]): Promise
 export async function upsertPurchaseRecords(records: PurchaseRecord[]): Promise<Map<string, string>> {
   if (records.length === 0) return new Map();
   const expectedIds = new Set(records.map((record) => record.id));
-  const { data, error } = await requireSupabase()
-    .from('purchase_records')
-    .upsert(records.map(toPurchaseRecordRow))
-    .select('id,sku,pool_status,is_confirmed,status');
+  const { data, error } = await writePurchaseRecords(records);
   if (error) {
     console.error(error);
     if (isMissingColumnError(error)) {

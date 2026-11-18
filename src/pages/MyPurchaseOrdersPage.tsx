@@ -1268,7 +1268,7 @@ export function MyPurchaseOrdersPage({ records, skuItems, profile, onChange, onS
                     <td className="image-sticky-col">{imageUrlFor(record) ? <img className="sku-thumb" src={imageUrlFor(record)} alt={record.productName || record.sku || 'SKU'} loading="lazy" /> : '-'}</td>
                     <td>{input(normalized, 'manufacturerName')}</td>
                     <td><strong>{normalized.internalCode || '-'}</strong></td>
-                    <td>{isAdmin ? input(normalized, 'sku') : normalized.sku}</td>
+                    <td>{isAdmin && !/^new[0-9]{5}$/i.test(normalized.sku) ? input(normalized, 'sku') : normalized.sku}</td>
                     <td>{input(normalized, 'productName')}</td>
                     <td>{input(normalized, 'englishName')}</td>
                     <td className="my-orders-compact-text">{input(normalized, 'shopName')}</td>
