@@ -73,7 +73,9 @@ export function attachLogisticsTrace(result, payload, now = Date.now(), diagnose
       if (!time.latestTraceAt || at > time.latestTraceAt) time.latestTraceAt = at;
       const remark = typeof step.remark === 'string' ? step.remark : '';
       if (!diagnose && remark.trim() && (!time.latestEvent || at > time.latestEvent.at)) {
-        const text = remark.trim().split(/[，,](?!\s*收件人\s*[:：]\s*本人(?:[，,。；;！!\r\n]|\s*$))|[。；;\r\n]|\s*(?:请联系|派件员|网点电话|联系电话|收货地址)/, 1)[0]
+        const completedNamedReceipt = /(?:^|[，,。；;\s])(?:已)?送达\s*[【\[][^】\]\r\n]{1,60}[】\]]\s*签收(?:[。！!，,；;\s]|$)/.test(remark)
+          && !/未签收|拒签|拒收|如果|可能已签收|待送达|预计送达/.test(remark);
+        const text = completedNamedReceipt ? '送达【收件人】签收' : remark.trim().split(/[，,](?!\s*收件人\s*[:：]\s*本人(?:[，,。；;！!\r\n]|\s*$))|[。；;\r\n]|\s*(?:请联系|派件员|网点电话|联系电话|收货地址)/, 1)[0]
           .replace(/(送达)\s*[【\[][^】\]]+[】\]](?=\s*签收)/g, '$1【收件人】')
           .replace(/(快件|包裹)(已?由)(?!本人)[^，,。；;\r\n]{1,40}(?=签收)/g, '$1$2【收件人】')
           .replace(/(?:\+?86[ -]?)?\d(?:[ -]?\d){6,}/g, '***').trim().slice(0, 240);

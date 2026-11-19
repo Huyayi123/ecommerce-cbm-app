@@ -75,3 +75,7 @@ assert.equal(batchCalls,2);
 await assert.rejects(queryAlibabaLogistics({account:'B',orderId},env,async url=>url.includes('getLogisticsInfos')?Response.json({success:true,result:[{logisticsId:'LP1',status:'SIGN'}]}):Response.json({success:false})),error=>error.code==='ALIBABA_TRACE_UNAVAILABLE'&&error.phase==='trace');
 await assert.rejects(queryAlibabaLogistics({account:'B',orderId,deadline:0},env,async()=>{throw Error('must not fetch');}),error=>error.code==='ALIBABA_NETWORK_ERROR'&&error.phase==='details');
 console.log('PASS: trace matching, conservative signature evidence, Shanghai dates, invalid/future dates, missing times, multi-parcel aggregation, redaction, opt-in calls, deadline and trace failures.');
+
+const courierReceipt = attach([step('包裹已由派件员安排：测试员，派件员电话：13812345678，送达【仓库】签收。')]);
+assert.equal(courierReceipt.shipments[0].latestEvent.text, '送达【收件人】签收');
+assert.doesNotMatch(JSON.stringify(courierReceipt), /测试员|13812345678|仓库/);
