@@ -1,3 +1,4 @@
+import { PurchasedProductsPage } from './pages/PurchasedProductsPage';
 import { createSessionLoad, publishCloudTask } from './utils/cloudLoadTasks';
 import { AlibabaSignedTimeCheck } from './components/AlibabaSignedTimeCheck';
 import { createCoalescedLoad } from './utils/coalescedLoad';
@@ -64,12 +65,13 @@ import { canDelete, canEdit } from './utils/permissions';
 import { shouldDeletePendingHaichuanInbound } from './utils/purchasePoolFlows';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics' | 'haichuan-warehouse' | 'new-product-launch';
+type PageKey = 'purchased-products' | 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics' | 'haichuan-warehouse' | 'new-product-launch';
 
 const signedTimeCheckRequested = new URLSearchParams(window.location.search).get('check1688SignedTime') === '1'
   || new URLSearchParams(window.location.search).get('check1688Logistics') === '1';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
+  { key: 'purchased-products', label: '已采购商品查询' },
   { key: 'repricing', label: '价格预警' },
   { key: 'profit-analysis', label: '利润分析' },
   { key: 'monthly-profit', label: '月度利润' },
@@ -724,7 +726,7 @@ function App() {
   const currentPage = visibleNavItems.some((item) => item.key === activePage) ? activePage : visibleNavItems[0]?.key ?? 'logistics';
 
   const dependencies: Record<PageKey, number[]> = {
-    sku: [0], calculator: [0, 1], inventory: [0, 2],
+    'purchased-products': [0, 2, 12], sku: [0], calculator: [0, 1], inventory: [0, 2],
     'purchase-pool': [0, 2, 3, 6, 8], 'my-orders': [0, 2, 3, 6],
     suggestions: [0, 1, 2, 4, 12], repricing: [0, 5],
     'profit-analysis': [0, 9], 'monthly-profit': [0, 10],
@@ -823,6 +825,7 @@ function App() {
         />
       )}
 
+      {currentPage === 'purchased-products' && <PurchasedProductsPage records={purchaseRecords} skuItems={skuItems} lots={haichuanData.warehouseLots} />}
       {currentPage === 'inventory' && (
         <PurchaseInventoryPage
           records={purchaseRecords}
