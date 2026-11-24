@@ -1,3 +1,4 @@
+import { PurchasedProductsPage } from './pages/PurchasedProductsPage';
 ﻿import { useEffect, useState } from 'react';
 import { AuthPanel } from './components/AuthPanel';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -60,11 +61,12 @@ import { canDelete, canEdit } from './utils/permissions';
 import { repairPurchasePoolMembership, shouldDeletePendingHaichuanInbound } from './utils/purchasePoolFlows';
 import { withPurchaseTotals } from './utils/purchaseRecords';
 
-type PageKey = 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics' | 'haichuan-warehouse';
+type PageKey = 'purchased-products' | 'sku' | 'calculator' | 'inventory' | 'purchase-pool' | 'my-orders' | 'suggestions' | 'repricing' | 'profit-analysis' | 'monthly-profit' | 'ad-analysis' | 'commission' | 'logistics' | 'haichuan-warehouse';
 
 const ACTIVE_PAGE_STORAGE_KEY = 'ecommerce-cbm-active-page';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
+  { key: 'purchased-products', label: '已采购商品查询' },
   { key: 'repricing', label: '价格预警' },
   { key: 'profit-analysis', label: '利润分析' },
   { key: 'monthly-profit', label: '月度利润' },
@@ -732,6 +734,8 @@ function App() {
           canEditData={true}
         />
       )}
+
+      {currentPage === 'purchased-products' && <PurchasedProductsPage records={purchaseRecords} skuItems={skuItems} lots={haichuanData.warehouseLots} />}
 
       {currentPage === 'inventory' && (
         <PurchaseInventoryPage
