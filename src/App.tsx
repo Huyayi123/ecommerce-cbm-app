@@ -71,7 +71,6 @@ const signedTimeCheckRequested = new URLSearchParams(window.location.search).get
   || new URLSearchParams(window.location.search).get('check1688Logistics') === '1';
 
 const navItems: Array<{ key: PageKey; label: string }> = [
-  { key: 'purchased-products', label: '已采购商品查询' },
   { key: 'repricing', label: '价格预警' },
   { key: 'profit-analysis', label: '利润分析' },
   { key: 'monthly-profit', label: '月度利润' },
@@ -80,6 +79,7 @@ const navItems: Array<{ key: PageKey; label: string }> = [
   { key: 'logistics', label: '物流装柜确认' },
   { key: 'haichuan-warehouse', label: '海川仓库库存' },
   { key: 'suggestions', label: '月销量采购建议' },
+  { key: 'purchased-products', label: '已采购商品查询' },
   { key: 'calculator', label: '装柜计算' },
   { key: 'my-orders', label: '我的采购订单' },
   { key: 'purchase-pool', label: '采购订单池' },
