@@ -207,18 +207,24 @@ export function NewProductLaunchPage({ userId, admin, purchaseRecords, onRefresh
       <button type="button" disabled={busy} aria-pressed={view === "barcode"} onClick={() => { setView("barcode"); setEditing(null); setError(""); }}>条形码生成</button>
     </nav>
     {view === "barcode" && <BarcodeGenerator />}
-    {view === "inbound-edit" && editingInbound && <form className="launch-card launch-form" onSubmit={saveInboundDetails}>
-      <h2>编辑资料 · {editingInbound.sku}</h2>
-      <label>产品图片<input name="image" type="file" accept={imageTypes} /></label>
-      <label>正式 SKU<input name="sku" inputMode="numeric" pattern="[0-9]*" defaultValue={inboundDetails[editingInbound.sku.toLowerCase()]?.official_sku} /></label>
-      <label>上架店铺<select name="store" defaultValue={inboundDetails[editingInbound.sku.toLowerCase()]?.live_store ?? editingInbound.shopName}>
-        <option value="">未填写</option>{CANONICAL_SHOP_NAMES.map((name) => <option key={name}>{name}</option>)}
-      </select></label>
-      <label>Shipping Mark<input name="mark" defaultValue={inboundDetails[editingInbound.sku.toLowerCase()]?.shipping_mark} /></label>
+    {view === "inbound-edit" && editingInbound && <div className="launch-card">
+      <h2>修改新品资料</h2>
+      <form key={editingInbound.id} onSubmit={saveInboundDetails}>
+        <fieldset disabled={busy}>
+          <label className="launch-upload"><strong>Upload Product Image</strong><span>上传一张产品主图</span><input aria-label="产品主图" name="image" type="file" accept={imageTypes} /></label>
+          <label>SKU <input name="sku" inputMode="numeric" pattern="[0-9]*" defaultValue={inboundDetails[editingInbound.sku.toLowerCase()]?.official_sku} /></label>
+          <label>产品名称 <input readOnly value={editingInbound.productName || editingInbound.englishName} /></label>
+          <label>新品入仓单码 <input readOnly value={editingInbound.sku} /></label>
+          <label>Live Store <select name="store" defaultValue={inboundDetails[editingInbound.sku.toLowerCase()]?.live_store ?? editingInbound.shopName}>
+            <option value="">选择店铺</option>{CANONICAL_SHOP_NAMES.map((name) => <option key={name}>{name}</option>)}
+          </select></label>
+          <label>唛头名称（选填） <input name="mark" defaultValue={inboundDetails[editingInbound.sku.toLowerCase()]?.shipping_mark} /></label>
+          <button className="launch-save" type="submit">{busy ? '保存中…' : '保存'}</button>
+          <button type="button" onClick={() => { setEditingInbound(null); setView("list"); setError(""); }}>取消</button>
+        </fieldset>
+      </form>
       {error && <p role="alert">{error}</p>}
-      <button type="submit" disabled={busy}>保存</button>
-      <button type="button" disabled={busy} onClick={() => { setEditingInbound(null); setView("list"); setError(""); }}>取消</button>
-    </form>}
+    </div>}
     {view === "add" && <div className="launch-card">
     <h2>{editing ? { edit_details: '修改新品资料', correct_sku: '纠正 SKU', undo_receipt: '撤销到货确认' }[editing.action] : 'Add New Product'}</h2>
     <form key={editing ? `${editing.row.id}-${editing.action}` : 'new'} onSubmit={save}>
