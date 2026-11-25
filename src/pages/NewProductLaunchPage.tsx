@@ -15,6 +15,10 @@ type Action = 'correct_sku' | 'undo_receipt' | 'edit_details';
 const bucket = 'new-product-launch';
 const imageTypes = 'image/jpeg,image/png,image/webp';
 
+function isMuchBetterStore(value: string) {
+  return value.replace(/\s+/g, '').toLowerCase() === 'muchbetter';
+}
+
 export function NewProductLaunchPage({ userId, admin, purchaseRecords, onRefreshPurchases }: {
   userId: string; admin: boolean; purchaseRecords: PurchaseRecord[]; onRefreshPurchases: () => Promise<void>;
 }) {
@@ -41,7 +45,7 @@ export function NewProductLaunchPage({ userId, admin, purchaseRecords, onRefresh
     setLoading(true);
     setLoadError('');
     try {
-      let query = supabase.from('new_product_launches').select('*', { count: 'exact' });
+      let query = supabase.from('new_product_launches').select('*', { count: 'exact' }).not('live_store', 'ilike', 'MuchBetter');
       if (status) query = query.eq('status', status);
       if (store) query = query.eq('live_store', store);
       const term = search.trim();
@@ -139,6 +143,7 @@ export function NewProductLaunchPage({ userId, admin, purchaseRecords, onRefresh
     if (!/^new[0-9]{5}$/i.test(record.sku) || record.logisticsSourceRecordId || record.status === 'cancelled') return false;
     if (record.poolStatus !== 'submitted_to_pool' && record.poolStatus !== 'sent_to_inventory') return false;
     const details = inboundDetails[record.sku.toLowerCase()];
+    if (isMuchBetterStore(record.shopName) || isMuchBetterStore(details?.live_store ?? '')) return false;
     if (store && (details?.live_store ?? record.shopName) !== store) return false;
     if (status && (status === 'received') !== (arrivalStatus(record) === 'arrived')) return false;
     return [record.sku, record.productName, record.englishName, details?.official_sku ?? '', details?.shipping_mark ?? ''].some((value) => value.toLowerCase().includes(purchaseTerm));

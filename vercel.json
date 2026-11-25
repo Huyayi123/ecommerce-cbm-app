@@ -9,5 +9,11 @@
     "api/alibaba-sync.js": {
       "maxDuration": 120
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/cron/sync-new-skus",
+      "destination": "/api/sync-new-skus"
+    }
+  ]
 }
